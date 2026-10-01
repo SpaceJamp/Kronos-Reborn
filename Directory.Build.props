@@ -1,0 +1,84 @@
+<Project>
+
+  <!--
+  Settings shared by every project in this repository.
+
+  Deliberately few. Each value here is one that a wrong answer produces a subtly broken build
+  rather than a compile error, which is why each carries a note.
+  -->
+
+  <PropertyGroup>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+
+    <!--
+    x64 only, and permanently.
+
+    The purpose of this program is to place 64-bit graphics runtime DLLs into game installations:
+    nvngx_dlss.dll, nvngx_dlssg.dll, nvngx_dlss_d.dll, amd_fidelityfx_dx12.dll and so on. Those exist
+    only as x86_64 binaries, so a 32-bit build could not do anything useful even if it started.
+
+    This is a hardware limit rather than a preference. Declared in one place so the restriction is
+    visible and cannot be lifted by accident in one project and forgotten in another.
+    -->
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Prefer32Bit>false</Prefer32Bit>
+
+    <!--
+    Dependency auditing across the whole graph, transitive packages included.
+
+    The default, NuGetAuditMode=direct, only inspects the PackageReference entries in a project file.
+    Advisories overwhelmingly arrive through transitive dependencies, so auditing only the direct ones
+    misses most of what it exists to catch.
+
+    Audits stay warnings rather than errors on purpose. Turning them into errors would let a
+    transitive advisory inside a package that cannot be updated here block every build, and a guard
+    that blocks everything gets switched off. They appear in the CI log where they can be read.
+
+    packages.lock.json is committed so that a build resolves to the package versions it was verified
+    against, and so the transitive graph is reviewable. Restore in locked mode so that changing a
+    PackageReference without committing the updated lock fails loudly instead of quietly rewriting
+    it on one machine.
+    -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+
+    <!-- One place for the version, so the app, the installer and the repository agree. -->
+    <Version>0.1.0</Version>
+
+    <!--
+    Build metadata injected into the assembly and read back at runtime.
+
+    This has to be a target rather than a bare ItemGroup. A bare ItemGroup is evaluated when the
+    project loads, which is before the SDK has run InitializeSourceControlInformation and assigned
+    SourceRevisionId, so the commit expands to nothing and is written as an empty string. The
+    informational version still shows the commit, because that is assembled much later during
+    GenerateAssemblyInfo. Injecting immediately before the assembly attributes are generated is what
+    makes it actually work.
+
+    The timestamp is ToString("o") rather than Unix seconds because MSBuild property functions cannot
+    call DateTimeOffset.UtcNow.ToUnixTimeSeconds(); that fails the build with MSB4212.
+
+    Branch and tag are not stamped here. MSBuild cannot run git while evaluating properties, so they
+    are passed in with -p: by the packaging scripts, and are absent for a plain build. Absence has to
+    be handled as normal rather than as an error.
+    -->
+  </PropertyGroup>
+
+  <Target Name="AddBuildMetadata" BeforeTargets="GetAssemblyAttributes">
+    <ItemGroup>
+      <AssemblyMetadata Include="KronosRebornGitBranch" Value="$(GitBranch)" />
+      <AssemblyMetadata Include="KronosRebornGitCommit" Value="$(SourceRevisionId)" />
+      <AssemblyMetadata Include="KronosRebornGitTag" Value="$(GitTag)" />
+      <AssemblyMetadata Include="KronosRebornBuildTimestamp" Value="$([System.DateTime]::UtcNow.ToString(&quot;o&quot;))" />
+    </ItemGroup>
+  </Target>
+
+</Project>

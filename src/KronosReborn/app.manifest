@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="KronosReborn.app" />
+
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and 11. Declaring support here is what stops Windows applying compatibility
+           shims meant for older programs, which can change DPI and layout behaviour. -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <!--
+      Per-monitor v2 rather than system DPI awareness.
+
+      The app's whole surface is a scrolling grid of cover images at varying sizes, which is exactly
+      the case per-monitor scaling exists for. A monitor-aware but not per-monitor-aware app gets
+      bitmap-stretched by Windows when dragged between displays of different scaling, which looks
+      broken rather than blurry.
+      -->
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+    </windowsSettings>
+  </application>
+
+  <!--
+  The app never needs elevation. It writes to its own per-user data directory and reads game
+  installations. Declaring asInvoker makes that explicit, so a UAC prompt appearing would be a bug
+  rather than something to explain away.
+  -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+</assembly>

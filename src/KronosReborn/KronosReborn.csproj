@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+
+    <!--
+    RootNamespace and AssemblyName are kept equal deliberately. Embedded resource names are derived
+    from the root namespace, so if the two drift apart a resource looked up by name silently stops
+    being found. That class of bug produces an empty list or a startup failure rather than a compile
+    error, so the coupling is worth stating rather than leaving to convention.
+    -->
+    <AssemblyName>KronosReborn</AssemblyName>
+    <RootNamespace>KronosReborn</RootNamespace>
+
+    <!-- The name shown to users. Distinct from the assembly name, which cannot contain a space. -->
+    <Product>Kronos Reborn</Product>
+    <Company>Kronos Reborn</Company>
+    <Authors>Kronos Reborn contributors</Authors>
+
+    <!--
+    Not TreatWarningsAsErrors. Auditing and analyzers are configured to warn, and promoting those to
+    errors would make an unfixable transitive advisory block all work. Compile warnings are still
+    visible, and CI treats the build as failed on them via the workflow rather than globally.
+    -->
+
+    <!--
+    No ApplicationIcon yet. An icon is a binary asset, and a placeholder in the first commit tends to
+    outlive its usefulness. Set it here once real artwork exists, together with SetupIconFile in
+    package/Installer.iss so the executable and the installer agree.
+    -->
+
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="KronosReborn.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="app.manifest" />
+  </ItemGroup>
+
+</Project>

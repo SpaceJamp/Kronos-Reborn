@@ -1,0 +1,56 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Restore in locked mode before building anything.
+      #
+      # A plain restore updates packages.lock.json instead of failing, so without this the lock would
+      # drift on whichever machine built last and a broken package reference would only surface as an
+      # unrelated build error much later. --locked-mode fails immediately and says what is wrong.
+      #
+      # The restore also runs the NuGet audit configured in Directory.Build.props, with mode "all" so
+      # transitive packages are covered. Findings come back as warnings on purpose: a transitive
+      # advisory inside a package that cannot be updated here should not be able to block every
+      # build, because that is how a guard gets switched off. They are worth reading in this log.
+      - name: Restore with the committed dependency lock
+        run: dotnet restore KronosReborn.sln -r win-x64 --locked-mode
+
+      - name: Build
+        run: dotnet build KronosReborn.sln -c Release -r win-x64 --no-restore
+
+      # dotnet run rather than dotnet test, because `dotnet test` reports "Zero tests ran" against
+      # xUnit v4's in-process console runner on this SDK. The same tests pass when the test
+      # executable runs, which is what this does. Reason recorded in the test project file.
+      - name: Test
+        run: dotnet run --project .\tests\KronosReborn.Tests -c Release -r win-x64 --no-build
+
+      - name: Package
+        working-directory: .\package
+        run: cmd /c build.cmd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kronos-artifacts
+          path: |
+            package\Output\Kronos-*-portable.zip
+            package\Output\Kronos-*-installer.exe
+          if-no-files-found: error

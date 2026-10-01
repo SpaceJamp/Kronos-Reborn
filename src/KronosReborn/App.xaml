@@ -1,0 +1,11 @@
+<Application x:Class="KronosReborn.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <!--
+        No theme resources yet. This project is scaffolding: the point is to prove the toolchain,
+        the packaging and the test harness work before any of it has behaviour to style.
+        -->
+    </Application.Resources>
+</Application>

@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+
+    <!--
+    xUnit v4 generates its own entry point, so the test project is an executable and is run with the
+    dotnet run command given in the README, not with `dotnet test`.
+
+    `dotnet test` reports "Zero tests ran" here and exits 5. That is not a symptom of anything being
+    wrong with the tests: running the test executable directly finds and passes all of them. The
+    cause is that `dotnet test` reaches xUnit's in-process console runner rather than its
+    Microsoft.Testing.Platform runner, and the two do not share a protocol on this SDK.
+
+    The obvious fixes were tried and are recorded so nobody repeats them. Setting
+    TestingPlatformDotnetTestSupport on this project changes the error but still reports zero tests.
+    Adding a "test" section to global.json to select the Testing.Platform runner does not help either.
+    Keeping xunit.runner.visualstudio alongside xunit.v3 does not help, and is the wrong execution
+    model regardless, so it is deliberately absent.
+
+    Revisit when the SDK or xUnit ships a combination that works. Until then the README's command is
+    the supported one and CI uses it.
+    -->
+    <OutputType>Exe</OutputType>
+
+    <!--
+    No UseWPF, deliberately.
+
+    The test project tests logic, not markup. Leaving WPF out keeps the test host free of a UI
+    dispatcher, so tests stay fast and, more usefully, cannot accidentally depend on a running
+    Application. Anything that genuinely needs a window or an XamlRoot cannot be unit tested, and
+    pretending otherwise is how a suite ends up quietly asserting nothing.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+    Pinned to a version that exists. An earlier draft asked for xunit.v3 3.1.5, which was never
+    published; NuGet resolved upward and reported NU1601. Harmless in itself, but a floor loose enough
+    to resolve to something other than what was asked for is exactly how a build stops being
+    reproducible.
+    -->
+    <PackageReference Include="xunit.v3" Version="4.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\KronosReborn\KronosReborn.csproj" />
+  </ItemGroup>
+
+</Project>
