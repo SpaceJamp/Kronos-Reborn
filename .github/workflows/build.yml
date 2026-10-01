@@ -46,8 +46,18 @@ jobs:
       - name: Restore with the committed dependency lock
         run: dotnet restore KronosReborn.sln --locked-mode
 
-      - name: Build
+      - name: Build (x64)
         run: dotnet build KronosReborn.sln -c Release --no-restore
+
+      # The ARM64 build is verified rather than assumed. WPF supports win-arm64, which was confirmed
+      # by building it, but nothing keeps that true across SDK or package updates, and an ARM64
+      # regression would otherwise only appear in a release.
+      #
+      # Tests run for x64 only. They are architecture independent by construction: the test project
+      # deliberately does not reference WPF, so there is nothing in it that behaves differently on
+      # ARM64. Building both is the check that matters.
+      - name: Build (ARM64)
+        run: dotnet build KronosReborn.sln -c Release -p:KronosRid=win-arm64 --no-restore
 
       # dotnet run rather than dotnet test, because `dotnet test` reports "Zero tests ran" against
       # xUnit v4's in-process console runner on this SDK. The same tests pass when the test

@@ -19,35 +19,66 @@ game runs can be changed without the game itself updating.
 It is a from-scratch implementation. There is no code carried over from any previous version of this
 program or from any other project.
 
+## Architectures
+
+The program is built for **x64** and **ARM64**, chosen at build time. Both are produced from one
+source tree.
+
+An important detail about what ARM64 support actually means here, because it is not what it might
+look like. **The DLLs this program places are x64 binaries, on ARM64 machines too.** Windows on ARM
+runs x64 applications under emulation, so games on such a machine are x64 games and the DLLs in their
+folders are x64. There is no need for an ARM64 build of a runtime, and none exists.
+
+The practical difference between the two architectures is therefore the hardware, not the payload:
+
+| | x64 | ARM64 |
+| --- | --- | --- |
+| **The program itself** | native x64 | native ARM64 |
+| **Game DLLs it manages** | x64 | x64, via emulation |
+| **DLSS** | applies | **not applicable** — no ARM64 DLSS, and no NVIDIA GPU on Windows on ARM |
+| **FSR, XeSS** | applies | applies — neither is tied to a GPU vendor |
+
+So ARM64 support is real and worth having, but the runtimes worth offering there are FSR and XeSS
+rather than DLSS.
+
 ## Status
 
 | | |
 | --- | --- |
 | Version | `0.1.0`, scaffolding only |
 | Framework | .NET 10, WPF |
-| Architecture | x64 only |
+| Architectures | x64 and ARM64 |
 | Features | None yet |
-| Tests | 6, covering build metadata parsing |
+| Tests | 14, covering build metadata, version consistency and specification structure |
 
 ## Requirements
 
 | | |
 | --- | --- |
-| **OS** | Windows 10 (build 19041) or newer, **x64** |
-| **CPU** | **64-bit** (x64 or ARM64) |
+| **OS** | Windows 10 (build 19041) or newer, x64 or ARM64 |
+| **CPU** | 64-bit, either x64 or ARM64 |
 | **To build** | .NET 10 SDK |
 | **To package** | Inno Setup 6 |
 
-**x64 only, permanently.** The DLLs this program exists to place are 64-bit binaries, so a 32-bit
-build could not do anything useful even if it started. That is a hardware limit rather than a
-preference, and it is declared once in `Directory.Build.props` so it cannot be lifted in one project
-and forgotten in another.
+**No 32-bit support.** A 32-bit Windows cannot run a 64-bit program, and the DLLs involved are 64-bit
+binaries. A 32-bit Windows installation is the only case where this is fixable, by installing 64-bit
+Windows.
 
 ## Building
 
 ```powershell
-dotnet build .\KronosReborn.sln -c Release
+dotnet build .\KronosReborn.sln -c Release                        # x64, the default
+dotnet build .\KronosReborn.sln -c Release -p:KronosRid=win-arm64  # ARM64
 ```
+
+`KronosRid` is declared once in `Directory.Build.props` and both the runtime identifier and the
+platform target are derived from it, so a build cannot produce a binary whose architecture disagrees
+with the runtime it was published for.
+
+The committed `packages.lock.json` covers **both** architectures. That is what lets CI restore in
+locked mode whichever it happens to be building: the lock records which runtimes it covers and
+refuses a restore whose set does not match, so a single-architecture lock would fail the other
+architecture with `NU1004` rather than quietly re-resolving to something unreviewed.
 
 ## Testing
 
@@ -56,10 +87,10 @@ dotnet run --project .\tests\KronosReborn.Tests -c Release
 ```
 
 **Not `dotnet test`.** That reports "Zero tests ran" and exits 5 on this SDK. The tests themselves are
-fine — the same six pass when the test executable runs — but `dotnet test` reaches xUnit's in-process
-console runner rather than its Microsoft.Testing.Platform runner, and the two do not share a protocol
-here. The reasons this was not simply fixed are recorded in `KronosReborn.Tests.csproj`; revisit when
-the SDK or xUnit ships a combination that works.
+fine — the same fourteen pass when the test executable runs — but `dotnet test` reaches xUnit's
+in-process console runner rather than its Microsoft.Testing.Platform runner, and the two do not share a
+protocol here. The reasons this was not simply fixed are recorded in `KronosReborn.Tests.csproj`;
+revisit when the SDK or xUnit ships a combination that works.
 
 ## Packaging
 

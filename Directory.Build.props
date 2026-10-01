@@ -15,19 +15,47 @@
     <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
 
     <!--
-    x64 only, and permanently.
+    Architecture: x64 and ARM64, chosen at build time.
 
-    The purpose of this program is to place 64-bit graphics runtime DLLs into game installations:
-    nvngx_dlss.dll, nvngx_dlssg.dll, nvngx_dlss_d.dll, amd_fidelityfx_dx12.dll and so on. Those exist
-    only as x86_64 binaries, so a 32-bit build could not do anything useful even if it started.
+    KronosRid is the single place this is decided, so the runtime identifier and the platform target
+    cannot drift apart. Setting one without the other is not possible, which is the mistake that would
+    otherwise produce a binary whose architecture disagrees with the runtime it was published for.
 
-    This is a hardware limit rather than a preference. Declared in one place so the restriction is
-    visible and cannot be lifted by accident in one project and forgotten in another.
+      dotnet build  (defaults to win-x64)
+      dotnet build -p:KronosRid=win-arm64
+
+    Note on what ARM64 means for this program, because it is not what it might appear. The DLLs it
+    places into game folders - nvngx_dlss.dll, nvngx_dlssg.dll and the rest - exist only as x86_64
+    binaries. There is no ARM64 build of DLSS, because there is no ARM64 DLSS.
+
+    Windows on ARM runs x64 applications under emulation, and games on such a machine are x64 games,
+    so the DLLs sitting in their folders are x64 and are managed normally. The application itself
+    being native ARM64 is about the application, not about the payloads.
+
+    The practical consequence is which runtimes are worth offering on ARM64. DLSS is moot, because
+    there is no NVIDIA GPU. FSR and XeSS are not tied to a GPU vendor and do apply, so they are the
+    ones that matter there.
+
+    Prefer32Bit is set false so an AnyCPU project cannot quietly become 32-bit preferred.
     -->
-    <Platforms>x64</Platforms>
-    <PlatformTarget>x64</PlatformTarget>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <KronosRid Condition="'$(KronosRid)' == ''">win-x64</KronosRid>
+    <RuntimeIdentifier>$(KronosRid)</RuntimeIdentifier>
+    <PlatformTarget>$(KronosRid.Replace('win-', ''))</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
+
+    <!--
+    Every architecture the project supports, for the package lock only.
+
+    Restore is told about both so the committed packages.lock.json covers both, which is what lets CI
+    restore in locked mode whichever architecture it happens to be building. The lock records which
+    runtimes it covers and refuses a restore whose set does not match, so a lock covering only one
+    architecture makes the other fail with NU1004 rather than quietly re-resolving to something
+    unreviewed.
+
+    KronosRid above still chooses the one being built. RuntimeIdentifiers is plural and affects restore
+    resolution rather than the build.
+    -->
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
 
     <!--
     Dependency auditing across the whole graph, transitive packages included.
