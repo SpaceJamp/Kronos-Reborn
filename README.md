@@ -21,25 +21,21 @@ program or from any other project.
 
 ## Architectures
 
-The program is built for **x64** and **ARM64**, chosen at build time. Both are produced from one
-source tree.
+**x64 only.** ARM64 was supported and has been taken out again for now, so this is the whole build
+matrix rather than the x64 half of it.
 
-An important detail about what ARM64 support actually means here, because it is not what it might
-look like. **The DLLs this program places are x64 binaries, on ARM64 machines too.** Windows on ARM
-runs x64 applications under emulation, so games on such a machine are x64 games and the DLLs in their
-folders are x64. There is no need for an ARM64 build of a runtime, and none exists.
+It is a small piece of scaffolding rather than a rewrite. `KronosRid` still decides the architecture in
+one place, so putting ARM64 back is a value in `Directory.Build.props`, an entry in
+`RuntimeIdentifiers`, a CI step, and a regenerated lock file — with no code untangled to make room
+for it.
 
-The practical difference between the two architectures is therefore the hardware, not the payload:
-
-| | x64 | ARM64 |
-| --- | --- | --- |
-| **The program itself** | native x64 | native ARM64 |
-| **Game DLLs it manages** | x64 | x64, via emulation |
-| **DLSS** | applies | **not applicable** — no ARM64 DLSS, and no NVIDIA GPU on Windows on ARM |
-| **FSR, XeSS** | applies | applies — neither is tied to a GPU vendor |
-
-So ARM64 support is real and worth having, but the runtimes worth offering there are FSR and XeSS
-rather than DLSS.
+What ARM64 would have meant is worth recording, because it is the reason it was cheap to support and
+it is still true if it returns. **The DLLs this program places are x64 binaries, on ARM64 machines
+too.** Windows on ARM runs x64 applications under emulation, so games on such a machine are x64 games
+and the DLLs in their folders are x64. There is no need for an ARM64 build of a runtime, and none
+exists. The practical difference between the architectures is therefore the hardware rather than the
+payload — DLSS would not apply on ARM64 at all, since there is no ARM64 DLSS and no NVIDIA GPU on
+Windows on ARM, while FSR and XeSS would.
 
 ## Status
 
@@ -47,16 +43,16 @@ rather than DLSS.
 | --- | --- |
 | Version | `0.1.0`, scaffolding only |
 | Framework | .NET 10, WPF |
-| Architectures | x64 and ARM64 |
+| Architectures | x64 |
 | Features | None yet |
-| Tests | 14, covering build metadata, version consistency and specification structure |
+| Tests | 37, covering build metadata, version consistency, specification structure and the Valve key-values reader |
 
 ## Requirements
 
 | | |
 | --- | --- |
-| **OS** | Windows 10 (build 19041) or newer, x64 or ARM64 |
-| **CPU** | 64-bit, either x64 or ARM64 |
+| **OS** | Windows 10 (build 19041) or newer, x64 |
+| **CPU** | 64-bit x64 |
 | **To build** | .NET 10 SDK |
 | **To package** | Inno Setup 6 |
 
@@ -67,18 +63,20 @@ Windows.
 ## Building
 
 ```powershell
-dotnet build .\KronosReborn.sln -c Release                        # x64, the default
-dotnet build .\KronosReborn.sln -c Release -p:KronosRid=win-arm64  # ARM64
+dotnet build .\KronosReborn.sln -c Release
 ```
 
 `KronosRid` is declared once in `Directory.Build.props` and both the runtime identifier and the
 platform target are derived from it, so a build cannot produce a binary whose architecture disagrees
 with the runtime it was published for.
 
-The committed `packages.lock.json` covers **both** architectures. That is what lets CI restore in
-locked mode whichever it happens to be building: the lock records which runtimes it covers and
-refuses a restore whose set does not match, so a single-architecture lock would fail the other
-architecture with `NU1004` rather than quietly re-resolving to something unreviewed.
+The committed `packages.lock.json` must cover every architecture listed in `RuntimeIdentifiers`, or
+CI fails to restore with `NU1004` rather than quietly re-resolving to something unreviewed. Adding or
+removing an entry there therefore means regenerating the lock and committing it in the same change:
+
+```powershell
+dotnet restore .\KronosReborn.sln --force-evaluate
+```
 
 ## Testing
 
@@ -87,7 +85,7 @@ dotnet run --project .\tests\KronosReborn.Tests -c Release
 ```
 
 **Not `dotnet test`.** That reports "Zero tests ran" and exits 5 on this SDK. The tests themselves are
-fine — the same fourteen pass when the test executable runs — but `dotnet test` reaches xUnit's
+fine — the same thirty-seven pass when the test executable runs — but `dotnet test` reaches xUnit's
 in-process console runner rather than its Microsoft.Testing.Platform runner, and the two do not share a
 protocol here. The reasons this was not simply fixed are recorded in `KronosReborn.Tests.csproj`;
 revisit when the SDK or xUnit ships a combination that works.
@@ -101,10 +99,14 @@ winget install JRSoftware.InnoSetup
 From `package\`:
 
 ```powershell
-.\build.cmd
+.\build.cmd     # portable zip
+.\package.cmd   # installer
 ```
 
-Produces `Output\Kronos-<version>-portable.zip` and `Output\Kronos-<version>-installer.exe`.
+Produces `Output\KronosReborn-<version>-portable.zip` and
+`Output\KronosReborn-<version>-installer.exe`. The name comes from `config.cmd` and nowhere else;
+each script prints the path it produced and, under CI, also writes it to `GITHUB_OUTPUT` so the
+workflow uploads exactly those files rather than re-deriving the name from a pattern.
 
 Builds are **unsigned**, so Windows SmartScreen will warn. The installer asks whether to install for
 the current user only or for everyone; the install location, registry hive and Start Menu entry all

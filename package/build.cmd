@@ -57,6 +57,12 @@ echo.
 echo Built %output_zip%
 echo.
 
+REM Hand the path back to GitHub Actions when running there. The workflow uploads exactly what was
+REM produced rather than re-deriving the filename from a pattern, which is what used to break: the
+REM name in config.cmd and the glob in the workflow disagreed, nothing compared them, and the upload
+REM step failed on a file that existed. Guarded so a local run writes nothing.
+if defined GITHUB_OUTPUT >>"%GITHUB_OUTPUT%" echo portable=%output_zip%
+
 exit /b 0
 
 :error

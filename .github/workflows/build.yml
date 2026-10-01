@@ -49,30 +49,45 @@ jobs:
       - name: Build (x64)
         run: dotnet build KronosReborn.sln -c Release --no-restore
 
-      # The ARM64 build is verified rather than assumed. WPF supports win-arm64, which was confirmed
-      # by building it, but nothing keeps that true across SDK or package updates, and an ARM64
-      # regression would otherwise only appear in a release.
+      # Only one architecture is built and tested. ARM64 was supported here and has been taken out
+      # again for now, so this is the whole build matrix rather than the x64 half of it.
       #
-      # Tests run for x64 only. They are architecture independent by construction: the test project
-      # deliberately does not reference WPF, so there is nothing in it that behaves differently on
-      # ARM64. Building both is the check that matters.
-      - name: Build (ARM64)
-        run: dotnet build KronosReborn.sln -c Release -p:KronosRid=win-arm64 --no-restore
-
+      # Tests are architecture independent by construction anyway: the test project deliberately does
+      # not reference WPF, so there is nothing in it that would behave differently elsewhere.
+      #
       # dotnet run rather than dotnet test, because `dotnet test` reports "Zero tests ran" against
       # xUnit v4's in-process console runner on this SDK. The same tests pass when the test
       # executable runs, which is what this does. Reason recorded in the test project file.
       - name: Test
         run: dotnet run --project .\tests\KronosReborn.Tests -c Release --no-build
 
-      - name: Package
+      # Each packaging script reports the exact path it produced. The workflow never spells a
+      # filename itself.
+      #
+      # It used to glob package\Output\Kronos-*-portable.zip, which cannot match
+      # KronosReborn-0.1.0-portable.zip, and it also asked for an installer that only package.cmd
+      # builds, so the upload step failed on both counts. The name was duplicated here even though
+      # config.cmd is documented as the single source for it, and a rename broke the one place that
+      # could not see config.cmd. Reading the paths back out removes that duplication rather than
+      # correcting the copy, so the next rename cannot fail the same way.
+      - name: Package portable
+        id: package
         working-directory: .\package
         run: cmd /c build.cmd
+
+      # Inno Setup ships preinstalled on the windows runner image, which package.cmd looks for in
+      # the usual locations. This is a separate step from the portable build because package.cmd is
+      # what produces the installer, and a single step that ran both would have uploaded a zip and
+      # nothing else.
+      - name: Package installer
+        id: installer
+        working-directory: .\package
+        run: cmd /c package.cmd
 
       - uses: actions/upload-artifact@v4
         with:
           name: Kronos-artifacts
           path: |
-            package\Output\Kronos-*-portable.zip
-            package\Output\Kronos-*-installer.exe
+            ${{ steps.package.outputs.portable }}
+            ${{ steps.installer.outputs.installer }}
           if-no-files-found: error

@@ -28,6 +28,11 @@ echo.
 echo Built %output_installer%
 echo.
 
+REM As in build.cmd: report the path rather than have the workflow reconstruct the name. This one
+REM matters more, because the installer was previously asked for by a workflow that never ran this
+REM script, so the file could not have existed however the name was spelled.
+if defined GITHUB_OUTPUT >>"%GITHUB_OUTPUT%" echo installer=%output_installer%
+
 exit /b 0
 
 :error

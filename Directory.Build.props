@@ -15,26 +15,24 @@
     <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
 
     <!--
-    Architecture: x64 and ARM64, chosen at build time.
+    Architecture: x64 only, for now.
 
-    KronosRid is the single place this is decided, so the runtime identifier and the platform target
-    cannot drift apart. Setting one without the other is not possible, which is the mistake that would
-    otherwise produce a binary whose architecture disagrees with the runtime it was published for.
+    KronosRid is the single place the runtime identifier is decided, so the runtime identifier and the
+    platform target cannot drift apart. Setting one without the other is not possible, which is the
+    mistake that would otherwise produce a binary whose architecture disagrees with the runtime it was
+    published for.
 
-      dotnet build  (defaults to win-x64)
-      dotnet build -p:KronosRid=win-arm64
+    ARM64 was supported and has been taken out again. The indirection is deliberately kept rather
+    than collapsed into a literal win-x64: putting it back is then the value below plus an entry in
+    RuntimeIdentifiers plus a build step, and nothing else has to be untangled.
 
-    Note on what ARM64 means for this program, because it is not what it might appear. The DLLs it
-    places into game folders - nvngx_dlss.dll, nvngx_dlssg.dll and the rest - exist only as x86_64
-    binaries. There is no ARM64 build of DLSS, because there is no ARM64 DLSS.
-
-    Windows on ARM runs x64 applications under emulation, and games on such a machine are x64 games,
-    so the DLLs sitting in their folders are x64 and are managed normally. The application itself
-    being native ARM64 is about the application, not about the payloads.
-
-    The practical consequence is which runtimes are worth offering on ARM64. DLSS is moot, because
-    there is no NVIDIA GPU. FSR and XeSS are not tied to a GPU vendor and do apply, so they are the
-    ones that matter there.
+    What ARM64 would have meant, kept here because it is the reason it was easy to support and is
+    still true if it comes back. The DLLs this program places into game folders - nvngx_dlss.dll,
+    nvngx_dlssg.dll and the rest - exist only as x86_64 binaries. Windows on ARM runs x64
+    applications under emulation and the games on such a machine are x64 games, so their folders hold
+    x64 DLLs which are managed normally. Native ARM64 is a property of the application, not of the
+    payloads. The consequence is which runtimes are worth offering there: DLSS is moot, because there
+    is no ARM64 DLSS and no NVIDIA GPU on Windows on ARM, while FSR and XeSS do apply.
 
     Prefer32Bit is set false so an AnyCPU project cannot quietly become 32-bit preferred.
     -->
@@ -46,16 +44,20 @@
     <!--
     Every architecture the project supports, for the package lock only.
 
-    Restore is told about both so the committed packages.lock.json covers both, which is what lets CI
-    restore in locked mode whichever architecture it happens to be building. The lock records which
-    runtimes it covers and refuses a restore whose set does not match, so a lock covering only one
-    architecture makes the other fail with NU1004 rather than quietly re-resolving to something
+    Restore is told about every one so the committed packages.lock.json covers every one, which is what
+    lets CI restore in locked mode whichever architecture it happens to be building. The lock records
+    which runtimes it covers and refuses a restore whose set does not match, so a lock covering only
+    one architecture makes another fail with NU1004 rather than quietly re-resolving to something
     unreviewed.
 
     KronosRid above still chooses the one being built. RuntimeIdentifiers is plural and affects restore
     resolution rather than the build.
+
+    Removing an entry here invalidates the committed lock and CI fails with NU1004 until the lock is
+    regenerated and committed. That is the intended failure. Restore with the lock file property
+    disabled, once, and commit the result alongside this change.
     -->
-    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
 
     <!--
     Dependency auditing across the whole graph, transitive packages included.

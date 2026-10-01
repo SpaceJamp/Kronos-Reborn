@@ -155,24 +155,28 @@ system, not a launcher, and not a game manager.
 
 ### Runtimes and architectures
 
-The runtime DLLs this program places are **x64 binaries**, and that is true on an ARM64 machine as
-well. Windows on ARM runs x64 applications under emulation, so games there are x64 games and the DLLs
-in their folders are x64. Nothing needs an ARM64 build of a runtime.
+**Only x64 is built at present.** ARM64 was supported and has been taken out again for now. That is a
+change of scope, not a correction: the ARM64 build worked, and putting it back is a build
+configuration change rather than new code.
 
-Which means the practical difference between the two architectures is not the payload, it is the
-hardware:
+The observation that made ARM64 cheap is worth keeping, because it is still true. The runtime DLLs
+this program places are **x64 binaries**, and that would remain true on an ARM64 machine: Windows on
+ARM runs x64 applications under emulation, so games there are x64 games and the DLLs in their folders
+are x64. Nothing would ever have needed an ARM64 build of a runtime.
 
-- **DLSS is not applicable on ARM64.** There is no ARM64 DLSS, because there is no ARM64 DLSS at all.
-  There is also no NVIDIA GPU on Windows on ARM, which is the more direct reason.
-- **FSR and XeSS are applicable on ARM64.** Neither is tied to a GPU vendor, and both work on any
-  DirectX 12 GPU.
+If it does return, the practical difference between the architectures would not be the payload, it
+would be the hardware: **DLSS would not apply on ARM64**, because there is no ARM64 DLSS and no NVIDIA
+GPU on Windows on ARM, while **FSR and XeSS would**, since neither is tied to a GPU vendor and both
+work on any DirectX 12 GPU.
 
 - **R45.** The program does not offer a runtime version that cannot apply to the machine it is running
   on, and says why rather than listing it and letting it fail later.
 - **R46.** A game whose runtime DLLs are not x64 is reported as unsupported rather than offered for a
   swap it cannot perform.
-- **R47.** The set of runtime versions offered depends on the architecture, and the program states
-  which ones were excluded and why.
+- **R47.** The set of runtime versions offered is decided by what the machine can actually run — its
+  architecture, its GPU and its API support — rather than by what happens to be available, and the
+  program states which versions were excluded and on what grounds. Architecture is one input to that
+  decision and currently the only one that varies between builds, since only one is produced.
 
 ### Settings
 
@@ -198,9 +202,9 @@ hardware:
 
 ## Constraints
 
-- **C1.** Windows on x64 or ARM64. 32-bit Windows is not supported, because it cannot run a 64-bit
-  program and the DLLs involved are 64-bit binaries. On ARM64 the program runs natively while the
-  game DLLs it manages remain x64, which is normal because games there run under emulation.
+- **C1.** Windows on x64. 32-bit Windows is not supported, because it cannot run a 64-bit program and
+  the DLLs involved are 64-bit binaries. ARM64 was in scope and has been deferred for now; it is not
+  excluded on technical grounds, and nothing in the program would need to change to support it.
 - **C2.** No elevation required. The program runs as the current user. It writes only to the user's
   own data directory and to game installations, which are already writable by that user.
 - **C3.** No required server. The program works with no network connection and with no service
@@ -209,11 +213,13 @@ hardware:
 - **C4.** Verifiable builds. Every build records its version, the commit it came from, when it was
   made, and the architecture it was built for, so a bug report can be tied to a specific binary.
 - **C5.** The test suite runs in CI. Nothing ships that CI has not built and tested.
-- **C6.** The program is built and published for both x64 and ARM64 from one source tree, with the
-  architecture chosen at build time.
-- **C7.** The runtime DLLs placed into games are x64 binaries, including on ARM64. This is not a
-  limitation of the program but a property of what it places, and it is why the ARM64 build manages
-  x64 payloads rather than needing ARM64 ones.
+- **C6.** The program is built and published for x64 from one source tree, with the architecture chosen
+  at build time rather than hard-coded, so adding another is a configuration change. The committed
+  dependency lock covers exactly the architectures built; it is regenerated in the same change that
+  alters that set, because a mismatched lock fails the build on purpose.
+- **C7.** The runtime DLLs placed into games are x64 binaries. This is not a limitation of the program
+  but a property of what it places, and it is the reason an ARM64 build would manage x64 payloads
+  rather than needing ARM64 ones.
 
 ---
 
@@ -346,3 +352,4 @@ None outstanding. New questions are added here as they arise, and moved into Dec
 | 0.1.0 | Initial specification. |
 | 0.1.0 | Settled the six open questions into Decisions, and added the requirements that follow from them: R48 and R49 for discovery of runtime versions, R50 to R55 for persistence. |
 | 0.1.0 | Added R56 to R64 for error reporting, so that failures name what failed, why, where, and what to do about it. |
+| 0.1.0 | Deferred ARM64, leaving x64 as the only architecture. Restated C1, C6, C7 and R47 rather than deleting them, so the reasoning survives and putting it back is a configuration change. |
