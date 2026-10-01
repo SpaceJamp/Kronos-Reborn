@@ -19,7 +19,7 @@ namespace KronosReborn.Data.Valve;
 /// difference matters: an unreadable library configuration must not be mistaken for a library with no
 /// games.
 /// </remarks>
-internal sealed class ValveNode
+public sealed class ValveNode
 {
     readonly List<ValveNode> _children = [];
 

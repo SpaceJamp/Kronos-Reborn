@@ -52,29 +52,41 @@ public sealed record GameRecord(
     }
 
     /// <summary>
-    /// Collapses duplicates, keeping the first record for each distinct install path.
+    /// Collapses duplicates, keeping one record per distinct install path.
     /// </summary>
     /// <remarks>
-    /// The same game installed on two libraries is one game. Which record survives is the first one
-    /// seen, so the order libraries are scanned in decides which library gets credited, and that order
-    /// is made explicit by the caller rather than depending on enumeration order.
+    /// The same game installed on two libraries is one game, shown once. R3 also requires the other
+    /// library to be mentioned rather than dropped, so a survivor that meets a duplicate is replaced
+    /// by a copy naming both, which keeps the result immutable and still one row.
+    ///
+    /// The name of the first library seen leads, and enumeration order decides which that is, so the
+    /// scanner supplies library order explicitly rather than letting the filesystem choose.
     /// </remarks>
     public static IReadOnlyList<GameRecord> Deduplicate(IEnumerable<GameRecord> games)
     {
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var unique = new List<GameRecord>();
+        var order = new List<string>();
+        var merged = new Dictionary<string, GameRecord>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var game in games)
         {
             var key = PathNormalizer.Normalize(game.InstallPath);
 
-            if (seen.Add(key))
+            if (!merged.TryGetValue(key, out var existing))
             {
-                unique.Add(game);
+                order.Add(key);
+                merged[key] = game;
+                continue;
             }
+
+            if (existing.LibraryName.Contains(game.LibraryName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            merged[key] = existing with { LibraryName = $"{existing.LibraryName}, {game.LibraryName}" };
         }
 
-        return unique;
+        return order.Select(key => merged[key]).ToList();
     }
 }
 
