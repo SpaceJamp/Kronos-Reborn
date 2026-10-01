@@ -21,6 +21,18 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # No -r / --runtime on any command below.
+      #
+      # RuntimeIdentifier is declared in Directory.Build.props, so it already applies to every project.
+      # Passing it again at solution level fails the build outright:
+      #
+      #   error NETSDK1134: Building a solution with a specific RuntimeIdentifier is not supported.
+      #   If you would like to publish for a single RID, specify the RID at the individual project
+      #   level instead.
+      #
+      # Verified both ways: with -r the solution build fails, without it the output still lands in
+      # bin\Release\net10.0-windows\win-x64.
+
       # Restore in locked mode before building anything.
       #
       # A plain restore updates packages.lock.json instead of failing, so without this the lock would
@@ -32,16 +44,16 @@ jobs:
       # advisory inside a package that cannot be updated here should not be able to block every
       # build, because that is how a guard gets switched off. They are worth reading in this log.
       - name: Restore with the committed dependency lock
-        run: dotnet restore KronosReborn.sln -r win-x64 --locked-mode
+        run: dotnet restore KronosReborn.sln --locked-mode
 
       - name: Build
-        run: dotnet build KronosReborn.sln -c Release -r win-x64 --no-restore
+        run: dotnet build KronosReborn.sln -c Release --no-restore
 
       # dotnet run rather than dotnet test, because `dotnet test` reports "Zero tests ran" against
       # xUnit v4's in-process console runner on this SDK. The same tests pass when the test
       # executable runs, which is what this does. Reason recorded in the test project file.
       - name: Test
-        run: dotnet run --project .\tests\KronosReborn.Tests -c Release -r win-x64 --no-build
+        run: dotnet run --project .\tests\KronosReborn.Tests -c Release --no-build
 
       - name: Package
         working-directory: .\package
