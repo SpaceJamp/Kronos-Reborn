@@ -100,6 +100,11 @@ system, not a launcher, and not a game manager.
   the user has explicitly enabled accepting untrusted ones.
 - **R17.** The source of a runtime version is recorded, so the user can tell where it came from.
 - **R18.** Removing a runtime version from the collection does not remove it from any game.
+- **R48.** A runtime version found inside an installed game is added to the collection without the
+  user asking, and is marked as discovered rather than imported, because its trustworthiness comes
+  from where it was found rather than from having been checked.
+- **R49.** Games that were installed before the program was ever run are still usable as a source of
+  runtime versions, with no prior discovery by the user required.
 
 ### Swapping
 
@@ -179,6 +184,18 @@ hardware:
 
 ---
 
+### Persistence
+
+- **R50.** Data is stored as plain files, in a form a person can read and correct without running
+  the program.
+- **R51.** A corrupt or unreadable data file does not stop the program starting. It is reported, and
+  the rest of the data is used.
+- **R52.** Writing data is atomic: an interrupted write leaves the previous version of the file
+  intact rather than a truncated one.
+- **R53.** History is retained per game up to a limit, and the limit is changeable by the user.
+- **R54.** Discarding history beyond the limit discards the oldest entries first.
+- **R55.** The program does not read data written by any previous version of this program.
+
 ## Constraints
 
 - **C1.** Windows on x64 or ARM64. 32-bit Windows is not supported, because it cannot run a 64-bit
@@ -199,6 +216,28 @@ hardware:
   x64 payloads rather than needing ARM64 ones.
 
 ---
+
+### Error reporting
+
+- **R56.** Anything that fails tells the user what failed, and the program keeps running. An
+  unrecoverable error is reported and the program stops deliberately, rather than disappearing.
+- **R57.** An error says what was being attempted, and what the underlying failure was. "Could not read
+  Steam libraries" is not enough; the user cannot act on it.
+- **R58.** An error says which path, library or game it concerns, so the user can tell a problem with
+  one game from a problem with the whole library.
+- **R59.** An error distinguishes "this could not be read" from "this is empty". A library whose
+  configuration is unreadable is a different problem from a library containing no games, and reporting
+  them the same way tells the user something false.
+- **R60.** An error names a next action where there is an obvious one, such as the file or setting
+  involved, rather than leaving the user to work it out.
+- **R61.** Detailed diagnostics are available on demand without interrupting the user. A summary is
+  always shown; the full detail, including the underlying exception, is one step away.
+- **R62.** Diagnostics identify the build, the architecture and the session, so a report can be tied to
+  a specific binary. Version alone is not enough once more than one build exists.
+- **R63.** A failure that affects several items at once reports every item affected, not only the
+  first. Truncating a failure list loses the information the user needed it for.
+- **R64.** Errors are never swallowed silently, including in background work. Work that fails while the
+  user is looking at something else still reaches them.
 
 ## Safety principles
 
@@ -233,29 +272,77 @@ The program is a single window. It does not open multiple windows to show unrela
 
 ---
 
-## Open questions
+## Decisions
 
-These are decisions not yet made. Each one is recorded here rather than settled by accident later.
+Questions that were open, and what was decided. Recorded with the reasoning, because each one
+constrains the others and none should be revisited without knowing why.
 
-1. **Where do runtime versions come from?** Discover them from games already on this machine, let the
-   user import them, or both. A version discovered locally is guaranteed to exist and be trusted;
-   an imported one is broader but has to be verified.
-2. **Is persistence a database or files?** A database handles queries and history well. Plain files
-   are easier to inspect, back up and repair by hand. This depends on how much history is kept.
-3. **Does the program read the previous version's data?** It has a different data directory, so
-   starting empty. Importing game history and downloaded runtimes would be kind, and would also mean
-   supporting a format that is no longer maintained.
-4. **How much game history is retained?** Every change forever, or recent changes only. Affects the
-   answer to question 2.
-5. **Cover images.** Fetching them means network access and a cache. Skipping them means a plainer
-   list. Cover images may also not exist for every game.
-6. **Does the program launch games?** Convenient, and a natural place to be wrong about which runtime
-   is loaded. Out of scope until decided.
+### Where runtime versions come from
+
+**Both: discovered from games already installed, and imported by the user.**
+
+A version found in a game on this machine is known to exist and needs no verification, because it is
+already on the disk and already in use. An imported version broadens the collection beyond whatever
+happens to be installed, and is verified before being accepted.
+
+Discovery alone would leave the program unable to offer a version nobody happens to have. Import
+alone would mean trusting files of unknown provenance for every version it offers, with no ground
+truth to compare against.
+
+### How data is persisted
+
+**Plain files, not a database.**
+
+The data is a list of games, a list of runtime versions, and a short history. Nothing here needs
+querying, joining or indexing, so a database would be machinery without a job. Plain files can be
+read, corrected and recovered by hand, which matters when the same directory holds the backups standing
+between a user and an unrecoverable game.
+
+Reversible: if history retention grows into something that needs querying, the history can move to a
+database without anything else changing.
+
+### How much history is kept
+
+**A bounded number of recent changes per game.**
+
+Unlimited history combined with plain files means a data directory that grows forever and gets slower
+to load. The bound is presented in the interface rather than hard-coded, so the user can raise it.
+
+### Whether the previous version's data is read
+
+**No. The program starts empty.**
+
+It uses its own data directory, and reading the old one would mean maintaining a format that is no
+longer maintained, in exchange for convenience to a small number of existing users. If that turns out
+to matter, an import can be added as a separate one-way operation that is not part of normal startup.
+
+### Cover images
+
+**Deferred. Not required for the first working version.**
+
+Fetching them means network access and a cache to maintain, and plenty of games have no artwork at
+all. A list without images is entirely usable, and adding them later costs nothing that is hard to
+add.
+
+### Launching games
+
+**Out of scope.**
+
+Convenient, and also a natural place to be wrong: the program would have to decide which runtime a
+game actually loaded, which is a harder question than which runtime files are on disk. That belongs in
+a version that already reports versions correctly.
 
 ---
 
+## Open questions
+
+None outstanding. New questions are added here as they arise, and moved into Decisions once settled.
+
+---
 ## Change log
 
 | Version | Change |
 | --- | --- |
 | 0.1.0 | Initial specification. |
+| 0.1.0 | Settled the six open questions into Decisions, and added the requirements that follow from them: R48 and R49 for discovery of runtime versions, R50 to R55 for persistence. |
+| 0.1.0 | Added R56 to R64 for error reporting, so that failures name what failed, why, where, and what to do about it. |
