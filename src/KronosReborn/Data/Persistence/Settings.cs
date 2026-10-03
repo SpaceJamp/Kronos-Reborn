@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using KronosReborn.Data.Libraries;
+using KronosReborn.UI;
 
 namespace KronosReborn.Data.Persistence;
 
@@ -37,7 +38,10 @@ public sealed record Settings(
     bool WindowMaximized,
 
     /// <summary>Column widths for the game list (JSON object).</summary>
-    Dictionary<string, double>? ColumnWidths)
+    Dictionary<string, double>? ColumnWidths,
+
+    /// <summary>UI theme mode.</summary>
+    ThemeMode ThemeMode)
 {
     /// <summary>Default settings for a fresh install.</summary>
     public static Settings Default { get; } = new(
@@ -48,7 +52,8 @@ public sealed record Settings(
         WindowWidth: null,
         WindowHeight: null,
         WindowMaximized: false,
-        ColumnWidths: null);
+        ColumnWidths: null,
+        ThemeMode: ThemeMode.Light);
 
     /// <summary>Creates a copy with one value changed.</summary>
     public Settings With(
@@ -59,7 +64,8 @@ public sealed record Settings(
         double? windowWidth = null,
         double? windowHeight = null,
         bool? windowMaximized = null,
-        Dictionary<string, double>? columnWidths = null)
+        Dictionary<string, double>? columnWidths = null,
+        ThemeMode? themeMode = null)
     {
         return new Settings(
             enabledLibraryRoots ?? EnabledLibraryRoots,
@@ -69,7 +75,8 @@ public sealed record Settings(
             windowWidth ?? WindowWidth,
             windowHeight ?? WindowHeight,
             windowMaximized ?? WindowMaximized,
-            columnWidths ?? ColumnWidths);
+            columnWidths ?? ColumnWidths,
+            themeMode ?? ThemeMode);
     }
 }
 
@@ -84,7 +91,8 @@ internal sealed record SettingsData(
     double? WindowWidth,
     double? WindowHeight,
     bool WindowMaximized,
-    Dictionary<string, double>? ColumnWidths)
+    Dictionary<string, double>? ColumnWidths,
+    string ThemeMode)
 {
     public Settings ToSettings() => new(
         EnabledLibraryRoots,
@@ -94,7 +102,8 @@ internal sealed record SettingsData(
         WindowWidth,
         WindowHeight,
         WindowMaximized,
-        ColumnWidths);
+        ColumnWidths,
+        Enum.TryParse<ThemeMode>(ThemeMode, out var tm) ? tm : KronosReborn.UI.ThemeMode.Light);
 
     public static SettingsData FromSettings(Settings s) => new(
         [.. s.EnabledLibraryRoots],
@@ -104,5 +113,6 @@ internal sealed record SettingsData(
         s.WindowWidth,
         s.WindowHeight,
         s.WindowMaximized,
-        s.ColumnWidths);
+        s.ColumnWidths,
+        s.ThemeMode.ToString());
 }

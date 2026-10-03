@@ -7,52 +7,155 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- Fluent/System theme base -->
+                <!-- Base theme (Aero2) for system controls -->
                 <ResourceDictionary Source="pack://application:,,,/PresentationFramework.Aero2;component/Themes/Aero2.NormalColor.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Color palette -->
-            <SolidColorBrush x:Key="PrimaryBrush" Color="#2C3E50" />
-            <SolidColorBrush x:Key="PrimaryLightBrush" Color="#34495E" />
-            <SolidColorBrush x:Key="AccentBrush" Color="#3498DB" />
-            <SolidColorBrush x:Key="AccentLightBrush" Color="#5DADE2" />
-            <SolidColorBrush x:Key="SuccessBrush" Color="#27AE60" />
-            <SolidColorBrush x:Key="WarningBrush" Color="#F39C12" />
-            <SolidColorBrush x:Key="ErrorBrush" Color="#E74C3C" />
-            <SolidColorBrush x:Key="BackgroundBrush" Color="#ECF0F1" />
-            <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#2C3E50" />
-            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#7F8C8D" />
-            <SolidColorBrush x:Key="BorderBrush" Color="#BDC3C7" />
-            <SolidColorBrush x:Key="HoverBrush" Color="#EBF5FB" />
-            <SolidColorBrush x:Key="SelectionBrush" Color="#D6EAF8" />
+            <!-- ============================================================
+                 THEME DEFINITIONS
+                 Both light and dark themes define the same keys.
+                 The active theme is swapped at runtime via ThemeManager.
+                 ============================================================ -->
 
-            <!-- Typography -->
+            <!-- LIGHT THEME (default) -->
+            <ResourceDictionary x:Key="LightTheme">
+                <!-- Color palette -->
+                <SolidColorBrush x:Key="PrimaryBrush" Color="#2C3E50" />
+                <SolidColorBrush x:Key="PrimaryLightBrush" Color="#34495E" />
+                <SolidColorBrush x:Key="AccentBrush" Color="#3498DB" />
+                <SolidColorBrush x:Key="AccentLightBrush" Color="#5DADE2" />
+                <SolidColorBrush x:Key="AccentDarkBrush" Color="#2980B9" />
+                <SolidColorBrush x:Key="SuccessBrush" Color="#27AE60" />
+                <SolidColorBrush x:Key="WarningBrush" Color="#F39C12" />
+                <SolidColorBrush x:Key="ErrorBrush" Color="#E74C3C" />
+                <SolidColorBrush x:Key="BackgroundBrush" Color="#ECF0F1" />
+                <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
+                <SolidColorBrush x:Key="SurfaceAltBrush" Color="#F8F9FA" />
+                <SolidColorBrush x:Key="TextPrimaryBrush" Color="#2C3E50" />
+                <SolidColorBrush x:Key="TextSecondaryBrush" Color="#7F8C8D" />
+                <SolidColorBrush x:Key="TextMutedBrush" Color="#BDC3C7" />
+                <SolidColorBrush x:Key="BorderBrush" Color="#BDC3C7" />
+                <SolidColorBrush x:Key="BorderLightBrush" Color="#E0E0E0" />
+                <SolidColorBrush x:Key="HoverBrush" Color="#EBF5FB" />
+                <SolidColorBrush x:Key="HoverStrongBrush" Color="#D6EAF8" />
+                <SolidColorBrush x:Key="SelectionBrush" Color="#D6EAF8" />
+                <SolidColorBrush x:Key="FocusBrush" Color="#3498DB" />
+                <SolidColorBrush x:Key="DisabledBrush" Color="#ECF0F1" />
+                <SolidColorBrush x:Key="DisabledTextBrush" Color="#BDC3C7" />
+                <SolidColorBrush x:Key="OverlayBrush" Color="#80000000" />
+
+                <!-- Status colors (same in both themes) -->
+                <SolidColorBrush x:Key="StatusOkBrush" Color="#27AE60" />
+                <SolidColorBrush x:Key="StatusWarnBrush" Color="#F39C12" />
+                <SolidColorBrush x:Key="StatusErrorBrush" Color="#E74C3C" />
+                <SolidColorBrush x:Key="StatusMissingBrush" Color="#E74C3C" />
+            </ResourceDictionary>
+
+            <!-- DARK THEME -->
+            <ResourceDictionary x:Key="DarkTheme">
+                <!-- Color palette -->
+                <SolidColorBrush x:Key="PrimaryBrush" Color="#ECF0F1" />
+                <SolidColorBrush x:Key="PrimaryLightBrush" Color="#BDC3C7" />
+                <SolidColorBrush x:Key="AccentBrush" Color="#5DADE2" />
+                <SolidColorBrush x:Key="AccentLightBrush" Color="#85C1E9" />
+                <SolidColorBrush x:Key="AccentDarkBrush" Color="#3498DB" />
+                <SolidColorBrush x:Key="SuccessBrush" Color="#58D68D" />
+                <SolidColorBrush x:Key="WarningBrush" Color="#F7DC6F" />
+                <SolidColorBrush x:Key="ErrorBrush" Color="#EC7063" />
+                <SolidColorBrush x:Key="BackgroundBrush" Color="#1E1E1E" />
+                <SolidColorBrush x:Key="SurfaceBrush" Color="#252526" />
+                <SolidColorBrush x:Key="SurfaceAltBrush" Color="#2D2D2D" />
+                <SolidColorBrush x:Key="TextPrimaryBrush" Color="#EAEAEA" />
+                <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B0B0B0" />
+                <SolidColorBrush x:Key="TextMutedBrush" Color="#808080" />
+                <SolidColorBrush x:Key="BorderBrush" Color="#3E3E42" />
+                <SolidColorBrush x:Key="BorderLightBrush" Color="#4A4A4A" />
+                <SolidColorBrush x:Key="HoverBrush" Color="#2D2D30" />
+                <SolidColorBrush x:Key="HoverStrongBrush" Color="#37373D" />
+                <SolidColorBrush x:Key="SelectionBrush" Color="#094771" />
+                <SolidColorBrush x:Key="FocusBrush" Color="#5DADE2" />
+                <SolidColorBrush x:Key="DisabledBrush" Color="#2D2D2D" />
+                <SolidColorBrush x:Key="DisabledTextBrush" Color="#606060" />
+                <SolidColorBrush x:Key="OverlayBrush" Color="#C0000000" />
+
+                <!-- Status colors (adjusted for dark) -->
+                <SolidColorBrush x:Key="StatusOkBrush" Color="#58D68D" />
+                <SolidColorBrush x:Key="StatusWarnBrush" Color="#F7DC6F" />
+                <SolidColorBrush x:Key="StatusErrorBrush" Color="#EC7063" />
+                <SolidColorBrush x:Key="StatusMissingBrush" Color="#EC7063" />
+            </ResourceDictionary>
+
+            <!-- ACTIVE THEME (starts as Light, swapped by ThemeManager) -->
+            <ResourceDictionary x:Key="ActiveTheme" />
+
+            <!-- ============================================================
+                 DYNAMIC RESOURCES (aliases that point to ActiveTheme)
+                 All UI elements bind to these DynamicResource keys.
+                 ============================================================ -->
+            <DynamicResource x:Key="Primary" ResourceKey="PrimaryBrush" />
+            <DynamicResource x:Key="PrimaryLight" ResourceKey="PrimaryLightBrush" />
+            <DynamicResource x:Key="Accent" ResourceKey="AccentBrush" />
+            <DynamicResource x:Key="AccentLight" ResourceKey="AccentLightBrush" />
+            <DynamicResource x:Key="AccentDark" ResourceKey="AccentDarkBrush" />
+            <DynamicResource x:Key="Success" ResourceKey="SuccessBrush" />
+            <DynamicResource x:Key="Warning" ResourceKey="WarningBrush" />
+            <DynamicResource x:Key="Error" ResourceKey="ErrorBrush" />
+            <DynamicResource x:Key="Background" ResourceKey="BackgroundBrush" />
+            <DynamicResource x:Key="Surface" ResourceKey="SurfaceBrush" />
+            <DynamicResource x:Key="SurfaceAlt" ResourceKey="SurfaceAltBrush" />
+            <DynamicResource x:Key="TextPrimary" ResourceKey="TextPrimaryBrush" />
+            <DynamicResource x:Key="TextSecondary" ResourceKey="TextSecondaryBrush" />
+            <DynamicResource x:Key="TextMuted" ResourceKey="TextMutedBrush" />
+            <DynamicResource x:Key="Border" ResourceKey="BorderBrush" />
+            <DynamicResource x:Key="BorderLight" ResourceKey="BorderLightBrush" />
+            <DynamicResource x:Key="Hover" ResourceKey="HoverBrush" />
+            <DynamicResource x:Key="HoverStrong" ResourceKey="HoverStrongBrush" />
+            <DynamicResource x:Key="Selection" ResourceKey="SelectionBrush" />
+            <DynamicResource x:Key="Focus" ResourceKey="FocusBrush" />
+            <DynamicResource x:Key="Disabled" ResourceKey="DisabledBrush" />
+            <DynamicResource x:Key="DisabledText" ResourceKey="DisabledTextBrush" />
+            <DynamicResource x:Key="Overlay" ResourceKey="OverlayBrush" />
+            <DynamicResource x:Key="StatusOk" ResourceKey="StatusOkBrush" />
+            <DynamicResource x:Key="StatusWarn" ResourceKey="StatusWarnBrush" />
+            <DynamicResource x:Key="StatusError" ResourceKey="StatusErrorBrush" />
+            <DynamicResource x:Key="StatusMissing" ResourceKey="StatusMissingBrush" />
+
+            <!-- ============================================================
+                 TYPOGRAPHY
+                 ============================================================ -->
             <FontFamily x:Key="UIFont">Segoe UI</FontFamily>
             <System:Double x:Key="FontSizeSmall">12</System:Double>
             <System:Double x:Key="FontSizeNormal">13</System:Double>
             <System:Double x:Key="FontSizeLarge">15</System:Double>
             <System:Double x:Key="FontSizeTitle">20</System:Double>
+            <System:Double x:Key="FontSizeHeader">14</System:Double>
 
-            <!-- Spacing -->
+            <!-- ============================================================
+                 SPACING
+                 ============================================================ -->
             <System:Double x:Key="SpaceXS">4</System:Double>
             <System:Double x:Key="SpaceS">8</System:Double>
             <System:Double x:Key="SpaceM">12</System:Double>
             <System:Double x:Key="SpaceL">16</System:Double>
             <System:Double x:Key="SpaceXL">24</System:Double>
 
-            <!-- Converters -->
+            <!-- ============================================================
+                 CONVERTERS
+                 ============================================================ -->
             <BooleanToVisibilityConverter x:Key="BoolToVis" />
-
-            <!-- Status color converter -->
             <local:StringToBrushConverter x:Key="StringToBrush" />
+            <local:InverseBooleanConverter x:Key="InverseBool" />
 
-            <!-- Window style -->
+            <!-- ============================================================
+                 BASE STYLES (using DynamicResource for theme awareness)
+                 ============================================================ -->
+
+            <!-- Window -->
             <Style TargetType="Window">
                 <Setter Property="FontFamily" Value="{StaticResource UIFont}" />
                 <Setter Property="FontSize" Value="{StaticResource FontSizeNormal}" />
-                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-                <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+                <Setter Property="Background" Value="{DynamicResource Background}" />
             </Style>
 
             <!-- Button base -->
@@ -79,14 +182,16 @@
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="Border" Property="Background"
-                                            Value="{StaticResource HoverBrush}" />
+                                            Value="{DynamicResource HoverStrong}" />
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
                                     <Setter TargetName="Border" Property="Background"
-                                            Value="{StaticResource AccentLightBrush}" />
+                                            Value="{DynamicResource AccentDark}" />
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="Border" Property="Opacity" Value="0.5" />
+                                    <Setter TargetName="Border" Property="Background"
+                                            Value="{DynamicResource Disabled}" />
+                                    <Setter TargetName="Border" Property="Opacity" Value="0.6" />
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -94,35 +199,33 @@
                 </Setter>
             </Style>
 
-            <!-- Primary button -->
             <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
-                <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+                <Setter Property="Background" Value="{DynamicResource Accent}" />
                 <Setter Property="Foreground" Value="White" />
                 <Setter Property="FontWeight" Value="SemiBold" />
             </Style>
 
-            <!-- Secondary button -->
             <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
-                <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+                <Setter Property="Background" Value="{DynamicResource Surface}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
                 <Setter Property="BorderThickness" Value="1" />
             </Style>
 
-            <!-- Toolbar button -->
             <Style x:Key="ToolbarButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
                 <Setter Property="Background" Value="Transparent" />
-                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
                 <Setter Property="Padding" Value="10,6" />
                 <Setter Property="FontWeight" Value="Normal" />
             </Style>
 
-            <!-- ListView base -->
+            <!-- ListView -->
             <Style TargetType="ListView">
-                <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+                <Setter Property="Background" Value="{DynamicResource Surface}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="AlternationCount" Value="2" />
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
             </Style>
 
             <Style TargetType="ListViewItem">
@@ -130,12 +233,13 @@
                 <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="Padding" Value="8,4" />
                 <Setter Property="Margin" Value="0" />
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ListViewItem">
                             <Border x:Name="Border"
                                     Background="{TemplateBinding Background}"
-                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderBrush="{DynamicResource Border}"
                                     BorderThickness="0,0,0,1"
                                     Padding="{TemplateBinding Padding}"
                                     SnapsToDevicePixels="True">
@@ -143,11 +247,19 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsSelected" Value="True">
-                                    <Setter TargetName="Border" Property="Background" Value="{StaticResource SelectionBrush}" />
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource Selection}" />
+                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Border" Property="Background" Value="{StaticResource HoverBrush}" />
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource Hover}" />
                                 </Trigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsSelected" Value="True" />
+                                        <Condition Property="IsMouseOver" Value="True" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource Selection}" />
+                                </MultiTrigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
@@ -156,13 +268,13 @@
 
             <!-- GridViewColumnHeader -->
             <Style TargetType="GridViewColumnHeader">
-                <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
+                <Setter Property="Background" Value="{DynamicResource Primary}" />
                 <Setter Property="Foreground" Value="White" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
                 <Setter Property="Padding" Value="8,6" />
                 <Setter Property="BorderThickness" Value="0,0,1,0" />
-                <Setter Property="BorderBrush" Value="#34495E" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="GridViewColumnHeader">
@@ -180,21 +292,21 @@
                 </Setter>
             </Style>
 
-            <!-- GroupItem style for grouped ListView -->
+            <!-- GroupItem -->
             <Style TargetType="GroupItem">
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="GroupItem">
                             <Expander IsExpanded="True"
-                                      Background="{StaticResource SurfaceBrush}"
-                                      BorderBrush="{StaticResource BorderBrush}"
-                                        BorderThickness="0,0,0,1"
-                                        Margin="0,8,0,0">
+                                      Background="{DynamicResource Surface}"
+                                      BorderBrush="{DynamicResource Border}"
+                                      BorderThickness="0,0,0,1"
+                                      Margin="0,8,0,0">
                                 <Expander.Header>
                                     <TextBlock Text="{Binding Name}"
                                                FontWeight="SemiBold"
                                                FontSize="{StaticResource FontSizeNormal}"
-                                               Foreground="{StaticResource PrimaryBrush}"
+                                               Foreground="{DynamicResource Primary}"
                                                Padding="4,4" />
                                 </Expander.Header>
                                 <ItemsPresenter />
@@ -202,6 +314,103 @@
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
+            </Style>
+
+            <!-- Expander (for group items) -->
+            <Style TargetType="Expander">
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Expander">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4"
+                                    SnapsToDevicePixels="True">
+                                <DockPanel>
+                                    <ToggleButton x:Name="ExpanderButton"
+                                                  DockPanel.Dock="Top"
+                                                  IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                                  Template="{StaticResource ExpanderToggleButtonTemplate}"
+                                                  Content="{TemplateBinding Header}"
+                                                  ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                                  FontWeight="SemiBold"
+                                                  FontSize="{StaticResource FontSizeNormal}"
+                                                  Foreground="{DynamicResource Primary}"
+                                                  Padding="8,6"
+                                                  Background="Transparent"
+                                                  BorderThickness="0"
+                                                  Cursor="Hand" />
+                                    <ContentPresenter x:Name="ExpanderContent"
+                                                      DockPanel.Dock="Bottom"
+                                                      Visibility="Collapsed"
+                                                      Margin="4,0,0,0" />
+                                </DockPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger SourceName="ExpanderButton" Property="IsChecked" Value="True">
+                                    <Setter TargetName="ExpanderContent" Property="Visibility" Value="Visible" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Expander ToggleButton Template -->
+            <ControlTemplate x:Key="ExpanderToggleButtonTemplate" TargetType="ToggleButton">
+                <Grid Background="Transparent" SnapsToDevicePixels="True">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Path x:Name="Arrow"
+                          Grid.Column="0"
+                          Data="M 0 0 L 4 4 L 8 0 Z"
+                          Fill="{DynamicResource TextPrimary}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,8,0"
+                          RenderTransformOrigin="0.5,0.5">
+                        <Path.RenderTransform>
+                            <RotateTransform Angle="0" />
+                        </Path.RenderTransform>
+                    </Path>
+                    <ContentPresenter Grid.Column="1"
+                                      VerticalAlignment="Center"
+                                      RecognizesAccessKey="True" />
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsChecked" Value="True">
+                        <Trigger.EnterActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="Arrow"
+                                                     Storyboard.TargetProperty="(Path.RenderTransform).(RotateTransform.Angle)"
+                                                     To="90" Duration="0:0:0.15" />
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </Trigger.EnterActions>
+                        <Trigger.ExitActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="Arrow"
+                                                     Storyboard.TargetProperty="(Path.RenderTransform).(RotateTransform.Angle)"
+                                                     To="0" Duration="0:0:0.15" />
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </Trigger.ExitActions>
+                    </Trigger>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="Arrow" Property="Fill" Value="{DynamicResource Accent}" />
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <!-- Separator -->
+            <Style x:Key="{x:Static ToolBar.SeparatorStyleKey}" TargetType="Separator">
+                <Setter Property="Background" Value="{DynamicResource Border}" />
+                <Setter Property="Margin" Value="8,0" />
+                <Setter Property="Width" Value="1" />
             </Style>
 
             <!-- Status indicator -->
@@ -215,25 +424,36 @@
             <Style x:Key="StatusTextStyle" TargetType="TextBlock">
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
-                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
             </Style>
 
-            <!-- Build info text -->
             <Style x:Key="BuildInfoStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
-                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
                 <Setter Property="Margin" Value="0,4,0,0" />
             </Style>
 
             <Style x:Key="TitleStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="{StaticResource FontSizeTitle}" />
                 <Setter Property="FontWeight" Value="SemiBold" />
-                <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource Primary}" />
             </Style>
 
             <Style x:Key="SubtitleStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="{StaticResource FontSizeNormal}" />
-                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            </Style>
+
+            <!-- ScrollBar -->
+            <Style TargetType="ScrollBar">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Width" Value="10" />
+                <Setter Property="Height" Value="10" />
+            </Style>
+
+            <Style TargetType="ScrollViewer">
+                <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+                <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
             </Style>
         </ResourceDictionary>
     </Application.Resources>

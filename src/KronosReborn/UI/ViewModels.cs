@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using KronosReborn.Data.Libraries;
+using KronosReborn.Data.Persistence;
 using KronosReborn.Data.Runtimes;
 using Microsoft.Win32;
 
@@ -80,10 +81,10 @@ public sealed class GameRow : INotifyPropertyChanged
     {
         get
         {
-            if (IsMissing) return "#E74C3C";       // Red
-            if (!HasAnyRuntime) return "#F39C12";  // Orange
-            if (HasUnknownVersions) return "#F39C12"; // Orange
-            return "#27AE60";                       // Green
+            if (IsMissing) return "#E74C3C";
+            if (!HasAnyRuntime) return "#F39C12";
+            if (HasUnknownVersions) return "#F39C12";
+            return "#27AE60";
         }
     }
 
@@ -125,20 +126,44 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly SteamLibraryScanner _scanner = new();
     private readonly GameRuntimeScanner _runtimeScanner = new();
     private readonly RuntimeCatalog _catalog;
+    private readonly PersistenceService _persistence;
+    private readonly Settings _settings;
+    private readonly ThemeManager _themeManager;
     private ObservableCollection<GameRow> _games = new();
     private GroupMode _groupMode = GroupMode.ByLibrary;
     private bool _isScanning;
     private string _statusText = "Ready";
     private int _selectedCount;
 
-    public MainViewModel(RuntimeCatalog catalog)
+    public MainViewModel(
+        RuntimeCatalog catalog,
+        PersistenceService persistence,
+        Settings settings,
+        ThemeManager themeManager)
     {
         _catalog = catalog;
+        _persistence = persistence;
+        _settings = settings;
+        _themeManager = themeManager;
+
+        // Initialize group mode from settings
+        _groupMode = settings.GroupByLibrary ? GroupMode.ByLibrary : GroupMode.Flat;
+
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsScanning);
         ToggleGroupCommand = new RelayCommand(_ => GroupMode = GroupMode == GroupMode.Flat ? GroupMode.ByLibrary : GroupMode.Flat);
+        ToggleThemeCommand = new RelayCommand(_ => _themeManager.ToggleTheme());
         OpenSettingsCommand = new RelayCommand(_ => OpenSettings());
 
         _games.CollectionChanged += OnGamesCollectionChanged;
+
+        // Subscribe to theme changes to persist
+        _themeManager.ThemeChanged += OnThemeChanged;
+    }
+
+    private void OnThemeChanged(ThemeMode mode)
+    {
+        var updated = _settings.With(themeMode: mode);
+        _persistence.SaveSettings(updated);
     }
 
     public ObservableCollection<GameRow> Games
@@ -240,6 +265,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public ICommand RefreshCommand { get; }
     public ICommand ToggleGroupCommand { get; }
+    public ICommand ToggleThemeCommand { get; }
     public ICommand OpenSettingsCommand { get; }
 
     public async System.Threading.Tasks.Task RefreshAsync()

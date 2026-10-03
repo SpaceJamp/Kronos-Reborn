@@ -10,6 +10,8 @@
         Height="720" Width="1100"
         MinHeight="500" MinWidth="900"
         WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Background}"
+        Foreground="{DynamicResource TextPrimary}"
         d:DataContext="{d:DesignInstance Type=ui:MainViewModel, IsDesignTimeCreatable=False}">
 
     <Window.Resources>
@@ -31,8 +33,8 @@
 
         <!-- Toolbar -->
         <Border Grid.Row="0"
-                Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
+                Background="{DynamicResource Surface}"
+                BorderBrush="{DynamicResource Border}"
                 BorderThickness="0,0,0,1"
                 Padding="12,8">
             <StackPanel Orientation="Horizontal">
@@ -56,8 +58,16 @@
                         Command="{Binding ToggleGroupCommand}"
                         ToolTip="Toggle grouping by library" />
 
+                <!-- Theme toggle -->
+                <Button Content="🌓"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding ToggleThemeCommand}"
+                        ToolTip="Toggle light/dark theme"
+                        FontSize="16"
+                        Padding="10,4" />
+
                 <!-- Spacer -->
-                <Border Width="1" Background="{StaticResource BorderBrush}" Margin="12,0" VerticalAlignment="Stretch" />
+                <Border Width="1" Background="{DynamicResource Border}" Margin="12,0" VerticalAlignment="Stretch" />
 
                 <!-- Selected count -->
                 <TextBlock Text="{Binding SelectedCount, StringFormat='{}{0} selected'}"
@@ -77,9 +87,9 @@
 
         <!-- Game List -->
         <Border Grid.Row="1"
-                Background="{StaticResource BackgroundBrush}"
+                Background="{DynamicResource Background}"
                 Margin="8"
-                BorderBrush="{StaticResource BorderBrush}"
+                BorderBrush="{DynamicResource Border}"
                 BorderThickness="1"
                 CornerRadius="4">
             <ListView x:Name="GameListView"
@@ -235,9 +245,9 @@
 
         <!-- Empty state overlay -->
         <Border Grid.Row="1"
-                Background="{StaticResource SurfaceBrush}"
+                Background="{DynamicResource Surface}"
                 Margin="8"
-                BorderBrush="{StaticResource BorderBrush}"
+                BorderBrush="{DynamicResource Border}"
                 BorderThickness="1"
                 CornerRadius="4"
                 Visibility="{Binding Games.Count, Converter={StaticResource InverseBool}}">
@@ -262,8 +272,8 @@
 
         <!-- Status Bar -->
         <Border Grid.Row="2"
-                Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
+                Background="{DynamicResource Surface}"
+                BorderBrush="{DynamicResource Border}"
                 BorderThickness="0,1,0,0"
                 Padding="12,6">
             <Grid>
