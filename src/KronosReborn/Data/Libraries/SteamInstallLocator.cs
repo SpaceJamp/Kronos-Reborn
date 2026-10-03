@@ -164,13 +164,62 @@ public sealed class SteamInstallLocator(ISteamRegistry registry)
     /// <summary>The folders Steam installs into when left to its own devices.</summary>
     private static IEnumerable<string> ConventionalFolders()
     {
-        foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) })
+        // Standard Program Files locations
+        foreach (var root in new[] { 
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), 
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) 
+        })
         {
             if (!string.IsNullOrWhiteSpace(root))
             {
                 yield return Path.Combine(root, "Steam");
             }
         }
+
+        // Common additional locations
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrWhiteSpace(localAppData))
+        {
+            yield return Path.Combine(localAppData, "Steam");
+        }
+
+        // Steam Deck / Linux-style locations (if running via Proton/Steam on Windows)
+        foreach (var drive in DriveInfo.GetDrives().Where(d => d.IsReady))
+        {
+            yield return Path.Combine(drive.RootDirectory.FullName, "SteamLibrary");
+            yield return Path.Combine(drive.RootDirectory.FullName, "Steam");
+        }
+
+        // Check for Steam executable to derive install folder
+        var steamExe = FindSteamExecutable();
+        if (steamExe != null)
+        {
+            yield return Path.GetDirectoryName(steamExe)!;
+        }
+    }
+
+    private static string? FindSteamExecutable()
+    {
+        // Check registry for SteamExe
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+            if (key?.GetValue("SteamExe") is string exePath && !string.IsNullOrWhiteSpace(exePath))
+            {
+                return exePath;
+            }
+        }
+        catch { }
+
+        // Check common locations
+        var candidates = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam", "steam.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Steam", "steam.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Steam", "steam.exe"),
+        };
+
+        return candidates.FirstOrDefault(File.Exists);
     }
 
     private static bool Same(string a, string b) =>

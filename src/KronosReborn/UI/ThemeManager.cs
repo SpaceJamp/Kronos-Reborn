@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows;
 using Microsoft.Win32;
 using KronosReborn.Data.Persistence;
@@ -60,31 +61,30 @@ public sealed class ThemeManager
 
     private void ApplyTheme(ThemeMode mode)
     {
-        var dictionaries = Application.Current.Resources.MergedDictionaries;
-        var activeThemeDict = dictionaries.FirstOrDefault(d => d.Source == null && d.Contains("ActiveTheme"));
+        var appResources = Application.Current.Resources;
 
-        if (activeThemeDict == null)
+        // Get the theme dictionary from resources
+        var themeKey = mode == ThemeMode.Dark ? "DarkTheme" : "LightTheme";
+        if (!appResources.Contains(themeKey))
         {
-            activeThemeDict = new ResourceDictionary { Source = null };
-            activeThemeDict.Add("ActiveTheme", new ResourceDictionary());
-            dictionaries.Add(activeThemeDict);
+            return;
         }
 
-        var themeDict = mode == ThemeMode.Dark
-            ? (ResourceDictionary)Application.Current.Resources["DarkTheme"]
-            : (ResourceDictionary)Application.Current.Resources["LightTheme"];
+        var themeDict = (ResourceDictionary)appResources[themeKey];
 
-        // Clear and merge the theme
-        activeThemeDict.Clear();
+        // Update all theme resource keys directly in Application.Resources
         foreach (var key in themeDict.Keys)
         {
-            activeThemeDict[key] = themeDict[key];
+            appResources[key] = themeDict[key];
         }
 
         // Also update the window background immediately
         foreach (Window window in Application.Current.Windows)
         {
-            window.Background = (System.Windows.Media.Brush)themeDict["BackgroundBrush"];
+            if (themeDict.Contains("BackgroundBrush"))
+            {
+                window.Background = (System.Windows.Media.Brush)themeDict["BackgroundBrush"];
+            }
         }
     }
 }
