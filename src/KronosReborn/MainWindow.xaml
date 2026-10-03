@@ -3,22 +3,285 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:KronosReborn"
+        xmlns:ui="clr-namespace:KronosReborn.UI"
         mc:Ignorable="d"
         Title="Kronos Reborn"
-        Height="480" Width="720"
-        WindowStartupLocation="CenterScreen">
-    <!--
-    The window is a placeholder. It exists to prove the build produces a launchable application and,
-    more usefully, to prove the build metadata below really made it into the assembly: the version,
-    commit hash and build date shown here are read from metadata injected by the build, not compiled
-    into the source.
-    -->
-    <StackPanel Margin="24" VerticalAlignment="Center">
-        <TextBlock Text="Kronos Reborn" FontSize="28" FontWeight="SemiBold" />
-        <TextBlock Margin="0,12,0,0" Opacity="0.7"
-                   Text="Scaffolding. No features yet." />
-        <TextBlock Margin="0,24,0,0" Text="{Binding VersionText}" />
-        <TextBlock Margin="0,4,0,0" Opacity="0.7" TextWrapping="Wrap"
-                   Text="{Binding BuildText}" />
-    </StackPanel>
+        Height="720" Width="1100"
+        MinHeight="500" MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        d:DataContext="{d:DesignInstance Type=ui:MainViewModel, IsDesignTimeCreatable=False}">
+
+    <Window.Resources>
+        <ui:InverseBooleanConverter x:Key="InverseBool" />
+
+        <CollectionViewSource x:Key="GamesViewSource" Source="{Binding Games}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="LibraryName" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />  <!-- Toolbar -->
+            <RowDefinition Height="*" />     <!-- Game list -->
+            <RowDefinition Height="Auto" />  <!-- Status bar -->
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="0"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="12,8">
+            <StackPanel Orientation="Horizontal">
+                <!-- Title area -->
+                <StackPanel VerticalAlignment="Center" Margin="0,0,24,0">
+                    <TextBlock Text="Kronos Reborn" Style="{StaticResource TitleStyle}" />
+                    <TextBlock x:Name="VersionText" Style="{StaticResource SubtitleStyle}" />
+                </StackPanel>
+
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="0,0,12,0" />
+
+                <!-- Refresh button -->
+                <Button Content="Refresh"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Command="{Binding RefreshCommand}"
+                        ToolTip="Scan libraries and detect runtimes (F5)" />
+
+                <!-- Group toggle -->
+                <Button Content="{Binding GroupModeText}"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding ToggleGroupCommand}"
+                        ToolTip="Toggle grouping by library" />
+
+                <!-- Spacer -->
+                <Border Width="1" Background="{StaticResource BorderBrush}" Margin="12,0" VerticalAlignment="Stretch" />
+
+                <!-- Selected count -->
+                <TextBlock Text="{Binding SelectedCount, StringFormat='{}{0} selected'}"
+                           Style="{StaticResource SubtitleStyle}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,12,0"
+                           Visibility="{Binding SelectedCount, Converter={StaticResource InverseBool}, ConverterParameter=Inverse}" />
+
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="0,0,12,0" />
+
+                <!-- Settings -->
+                <Button Content="⚙ Settings"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding OpenSettingsCommand}" />
+            </StackPanel>
+        </Border>
+
+        <!-- Game List -->
+        <Border Grid.Row="1"
+                Background="{StaticResource BackgroundBrush}"
+                Margin="8"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+            <ListView x:Name="GameListView"
+                      ItemsSource="{Binding Source={StaticResource GamesViewSource}}"
+                      SelectionMode="Extended"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                <ListView.View>
+                    <GridView x:Name="GameGridView">
+                        <!-- Status column -->
+                        <GridViewColumn Width="40">
+                            <GridViewColumn.Header>
+                                <TextBlock Text="" ToolTip="Status" />
+                            </GridViewColumn.Header>
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Ellipse Fill="{Binding StatusColor, Converter={StaticResource StringToBrush}}"
+                                                 Style="{StaticResource StatusIndicatorStyle}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <!-- Game Name -->
+                        <GridViewColumn Header="Game" Width="280">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding GameName}"
+                                                   FontWeight="Medium"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip="{Binding InstallPath}" />
+                                        <TextBlock Text=" (missing)"
+                                                   Foreground="{StaticResource ErrorBrush}"
+                                                   FontStyle="Italic"
+                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                   VerticalAlignment="Center"
+                                                   Visibility="{Binding IsMissing, Converter={StaticResource InverseBool}, ConverterParameter=Inverse}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <!-- Library -->
+                        <GridViewColumn Header="Library" Width="150"
+                                        DisplayMemberBinding="{Binding LibraryName}" />
+
+                        <!-- DLSS -->
+                        <GridViewColumn Header="DLSS" Width="100">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding DlssVersion, TargetNullValue='—'}"
+                                                   Foreground="{Binding DlssVersion, Converter={StaticResource StringToBrush}, ConverterParameter=HasValue}"
+                                                   FontFamily="Consolas" />
+                                        <TextBlock Text=" FG"
+                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Visibility="{Binding DlssGVersion, Converter={StaticResource InverseBool}, ConverterParameter=Inverse}"
+                                                   VerticalAlignment="Center" Margin="4,0,0,0" />
+                                        <TextBlock Text=" RR"
+                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Visibility="{Binding DlssRVersion, Converter={StaticResource InverseBool}, ConverterParameter=Inverse}"
+                                                   VerticalAlignment="Center" Margin="4,0,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <!-- FSR -->
+                        <GridViewColumn Header="FSR" Width="90">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding FsrVersion, TargetNullValue='—'}"
+                                               Foreground="{Binding FsrVersion, Converter={StaticResource StringToBrush}, ConverterParameter=HasValue}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <!-- XeSS -->
+                        <GridViewColumn Header="XeSS" Width="90">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding XessVersion, TargetNullValue='—'}"
+                                               Foreground="{Binding XessVersion, Converter={StaticResource StringToBrush}, ConverterParameter=HasValue}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <!-- Last Changed -->
+                        <GridViewColumn Header="Last Changed" Width="140"
+                                        DisplayMemberBinding="{Binding LastChangedText}" />
+                    </GridView>
+                </ListView.View>
+
+                <ListView.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}"
+                                           FontWeight="SemiBold"
+                                           FontSize="{StaticResource FontSizeNormal}"
+                                           Foreground="{StaticResource PrimaryBrush}"
+                                           Padding="4,4" />
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                        <GroupStyle.ContainerStyle>
+                            <Style TargetType="GroupItem">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="GroupItem">
+                                            <Expander IsExpanded="True"
+                                                      Background="{StaticResource SurfaceBrush}"
+                                                      BorderBrush="{StaticResource BorderBrush}"
+                                                      BorderThickness="0,0,0,1"
+                                                      Margin="0,8,0,0">
+                                                <Expander.Header>
+                                                    <TextBlock Text="{Binding Name}"
+                                                               FontWeight="SemiBold"
+                                                               FontSize="{StaticResource FontSizeNormal}"
+                                                               Foreground="{StaticResource PrimaryBrush}"
+                                                               Padding="4,4" />
+                                                </Expander.Header>
+                                                <ItemsPresenter />
+                                            </Expander>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </GroupStyle.ContainerStyle>
+                    </GroupStyle>
+                </ListView.GroupStyle>
+
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Type ListViewItem}}">
+                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListView.ItemContainerStyle>
+            </ListView>
+        </Border>
+
+        <!-- Empty state overlay -->
+        <Border Grid.Row="1"
+                Background="{StaticResource SurfaceBrush}"
+                Margin="8"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Visibility="{Binding Games.Count, Converter={StaticResource InverseBool}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
+                <TextBlock Text="📂" FontSize="48" HorizontalAlignment="Center" />
+                <TextBlock Text="No games found"
+                           Style="{StaticResource TitleStyle}"
+                           HorizontalAlignment="Center"
+                           Margin="0,16,0,8" />
+                <TextBlock Text="Click Refresh to scan your Steam libraries for games and runtime DLLs."
+                           Style="{StaticResource SubtitleStyle}"
+                           HorizontalAlignment="Center"
+                           TextWrapping="Wrap"
+                           MaxWidth="400" />
+                <Button Content="Refresh Now"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Command="{Binding RefreshCommand}"
+                        Margin="0,24,0,0"
+                        Padding="24,10" />
+            </StackPanel>
+        </Border>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="2"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="12,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Text="{Binding StatusText}"
+                           Style="{StaticResource StatusTextStyle}"
+                           VerticalAlignment="Center" />
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                    <TextBlock Text="{Binding BuildInfoText}"
+                               Style="{StaticResource BuildInfoStyle}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
 </Window>
