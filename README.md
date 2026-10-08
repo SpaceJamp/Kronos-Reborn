@@ -53,7 +53,7 @@ Windows on ARM, while FSR and XeSS would.
 | Area | State |
 | --- | --- |
 | Steam library discovery, manifests, deduplication | Working |
-| Runtime version detection from DLL version resources | Working |
+| Runtime version detection, in nested folders as well as the root | Working |
 | Runtime collection: discovery from games, import, signature checking, removal | Working |
 | Persistence: settings, per-game history, atomic writes, corrupt-file recovery | Working |
 | Swapping, including runtimes made of several DLLs, with preview and rollback | Working |
@@ -185,6 +185,14 @@ arbitrary until you know why:
   dereference gets committed and is discovered at run time. There were seventeen of these. NuGet
   advisory codes stay warnings, because an unfixable transitive advisory must not be able to stop
   every build.
+- **Runtime DLLs are found by searching a few levels down, not by a list of folder names.** Games
+  disagree about where they keep these: The Witcher 3 uses `bin\x64_dx12`, Injustice uses
+  `Binaries\Retail`, Portal with RTX uses `bin\.trex`. A fixed list of the usual names missed all of
+  them, so the program reported no runtime at all in most of a typical library. One search is shared
+  by the scanner and the swap planner, so what is detected is what a swap would replace.
+- **Two spellings of one folder are one folder.** A default Steam install is recorded in the registry
+  as `c:/program files (x86)/steam` and guessed as `C:\Program Files (x86)\Steam`. Comparing those as
+  different made the library be scanned three times and every game appear three times over.
 - **A runtime kind is a unit that a swap handles whole.** DLSS is one DLL; FSR is two that only work
   as a matched pair. Writing one of them leaves the game with a runtime that never existed in that
   shape, so a swap of any kind is all of its files or none.

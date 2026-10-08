@@ -18,6 +18,85 @@ namespace KronosReborn.Tests;
 /// </remarks>
 public class SteamDiscoveryTests
 {
+    [Theory]
+    [InlineData(@"c:/program files (x86)/steam", @"C:\Program Files (x86)\Steam")]
+    [InlineData(@"C:\Program Files (x86)\Steam\", @"C:\Program Files (x86)\Steam")]
+    [InlineData(@"C:\Games\MyGame\", @"c:\games\mygame")]
+    public void PathsNamingTheSameFolderCompareEqual(string a, string b)
+    {
+        // The real case: a default Steam installation is recorded in the registry as
+        // "c:/program files (x86)/steam" and reached by the conventional-folder guess as
+        // "C:\Program Files (x86)\Steam". Treating those as different made every installed game
+        // appear three times, because the library was scanned once per route to the same folder.
+        Assert.Equal(PathNormalizer.Normalize(a), PathNormalizer.Normalize(b), ignoreCase: true);
+    }
+
+    [Fact]
+    public void ADriveRootKeepsItsSeparator()
+    {
+        // "C:\" must not trim down to "C:", which is the drive-relative path and names something else.
+        Assert.Equal(@"C:\", PathNormalizer.Normalize(@"C:\"));
+    }
+
+    [Fact]
+    public void GamesReachableByTwoRoutesAreListedOnce()
+    {
+        using var temp = new TemporaryDirectory();
+        var steamRoot = CreateSteamLibrary(temp.Root, "700", "Half Life", "HL");
+
+        // The same installation described two ways, which is what discovery actually produced on a
+        // default install: once from the registry value and once from the conventional folder guess.
+        var viaRegistryForm = new SteamLibraryScanner().Scan(
+            steamRoot.Replace('\\', '/'), TestContext.Current.CancellationToken);
+        var viaFolder = new SteamLibraryScanner().Scan(steamRoot, TestContext.Current.CancellationToken);
+
+        var combined = ScanResult.Combine([viaRegistryForm, viaFolder]);
+
+        Assert.Single(combined.Games);
+        Assert.Equal("Half Life", combined.Games[0].DisplayName);
+    }
+
+    [Fact]
+    public void CombiningKeepsEveryProblemFromEverySource()
+    {
+        // R63: a truncated list of failures loses what the user opened it for.
+        var first = new ScanResult(
+            [new GameRecord("Steam", "1", "One", @"C:\G\One", true)],
+            [new ScanProblem("Steam", "a", "first problem")],
+            1);
+
+        var second = new ScanResult(
+            [new GameRecord("Epic", "2", "Two", @"C:\G\Two", true)],
+            [new ScanProblem("Epic", "b", "second problem")],
+            1);
+
+        var combined = ScanResult.Combine([first, second]);
+
+        Assert.Equal(2, combined.Games.Count);
+        Assert.Equal(2, combined.Problems.Count);
+        Assert.Equal(2, combined.SourcesChecked);
+    }
+
+    private static string CreateSteamLibrary(string root, string appId, string name, string installDir)
+    {
+        var steamRoot = Path.Combine(root, "steam");
+        var apps = Path.Combine(steamRoot, "steamapps");
+        var common = Path.Combine(apps, "common", installDir);
+
+        Directory.CreateDirectory(common);
+        File.WriteAllText(Path.Combine(common, "game.exe"), "binary");
+
+        File.WriteAllText(
+            Path.Combine(apps, $"appmanifest_{appId}.acf"),
+            "\"AppState\"\n"
+            + "{\n"
+            + $"    \"appid\"      \"{appId}\"\n"
+            + $"    \"name\"       \"{name}\"\n"
+            + $"    \"installdir\" \"{installDir}\"\n"
+            + "}\n");
+
+        return steamRoot;
+    }
     [Fact]
     public void SteamLibraryFoldersExtractsOldLayout()
     {

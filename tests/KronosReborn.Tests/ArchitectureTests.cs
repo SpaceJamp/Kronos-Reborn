@@ -218,6 +218,38 @@ public class ArchitectureTests
             string.Join(Environment.NewLine, offenders));
     }
 
+    [Fact]
+    public void OnlyThePersistenceTestsMayLookAtTheUsersOwnDataDirectory()
+    {
+        // The one test allowed to name LocalApplicationData is the one asserting where the program's
+        // data directory is, which can only be answered by asking. Reading the folder a second time
+        // anywhere else is how a test ends up creating it, and how a debugging probe leaves real files
+        // in the machine's profile.
+        var offenders = new List<string>();
+
+        foreach (var file in SourceFiles("tests"))
+        {
+            var name = Path.GetFileName(file);
+
+            if (name.Equals("ArchitectureTests.cs", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("PersistenceTests.cs", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (File.ReadAllText(file).Contains(
+                    "SpecialFolder.LocalApplicationData", StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetRelativePath(RepositoryRoot, file));
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "These tests read the user's local application data directory. Use a temporary directory:" +
+            Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
     // ------------------------------------------------------------ Specification
 
     [Fact]

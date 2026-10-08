@@ -573,10 +573,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// </summary>
     private RefreshOutcome DiscoverAndScan(CancellationToken token)
     {
+        var games = new List<GameRecord>();
         var locator = new SteamInstallLocator(new WindowsSteamRegistry());
         var discovery = locator.Discover();
 
-        var games = new List<GameRecord>();
+        var results = new List<ScanResult>();
         var problems = new List<ScanProblem>(discovery.Problems);
 
         foreach (var root in discovery.InstallRoots)
@@ -585,9 +586,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
             // R4/R5: one unreadable library is reported and the others are still scanned.
             var result = _scanner.Scan(root, token);
-            games.AddRange(result.Games);
-            problems.AddRange(result.Problems);
+            results.Add(result);
         }
+
+        // Combine folds the per-library scans together and deduplicates the games. Doing this by
+        // hand — concatenating the lists — let the same install found by two different routes appear
+        // once per route, which on a default Steam installation meant every game listed three times.
+        var combined = ScanResult.Combine(results);
+
+        games.AddRange(combined.Games);
+        problems.AddRange(combined.Problems);
 
         var snapshots = _runtimeScanner.ScanMany(games, token).ToList();
 

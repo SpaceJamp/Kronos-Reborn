@@ -162,41 +162,54 @@ public sealed class SteamInstallLocator(ISteamRegistry registry)
     }
 
     /// <summary>The folders Steam installs into when left to its own devices.</summary>
-    private static IEnumerable<string> ConventionalFolders()
+    /// <remarks>
+    /// Only folders that are actually there are yielded. These are guesses rather than records, and
+    /// a guess about a folder that does not exist contributes nothing except a problem saying it
+    /// could not be read, so each one added noise to the problems list and a scan with nothing to
+    /// do. A path the registry records is treated differently, because that is Steam stating a fact
+    /// rather than this program speculating.
+    /// </remarks>
+    private static IReadOnlyList<string> ConventionalFolders()
     {
-        // Standard Program Files locations
-        foreach (var root in new[] {
+        var candidates = new List<string>();
+
+        foreach (var root in new[]
+        {
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)
         })
         {
             if (!string.IsNullOrWhiteSpace(root))
             {
-                yield return Path.Combine(root, "Steam");
+                candidates.Add(Path.Combine(root, "Steam"));
             }
         }
 
-        // Common additional locations
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (!string.IsNullOrWhiteSpace(localAppData))
         {
-            yield return Path.Combine(localAppData, "Steam");
+            candidates.Add(Path.Combine(localAppData, "Steam"));
         }
 
-        // Steam Deck / Linux-style locations (if running via Proton/Steam on Windows)
+        // Steam Deck / Linux-style locations.
         foreach (var drive in DriveInfo.GetDrives().Where(d => d.IsReady))
         {
-            yield return Path.Combine(drive.RootDirectory.FullName, "SteamLibrary");
-            yield return Path.Combine(drive.RootDirectory.FullName, "Steam");
+            candidates.Add(Path.Combine(drive.RootDirectory.FullName, "SteamLibrary"));
+            candidates.Add(Path.Combine(drive.RootDirectory.FullName, "Steam"));
         }
 
-        // Check for Steam executable to derive install folder
+        // Derive the folder from the executable, for an install the guesses missed.
         var steamExe = FindSteamExecutable();
-        if (steamExe != null)
+        if (steamExe != null && Path.GetDirectoryName(steamExe) is { } folder)
         {
-            yield return Path.GetDirectoryName(steamExe)!;
+            candidates.Add(folder);
         }
+
+        // Keep only the folders that are really there. See the remarks above.
+        return candidates.Where(PathNormalizer.DirectoryExists).ToList();
     }
+
+    /// <summary>The path if it names a folder that is there, otherwise nothing.</summary>
 
     private static string? FindSteamExecutable()
     {

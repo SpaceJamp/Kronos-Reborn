@@ -25,22 +25,6 @@ namespace KronosReborn.Data.Runtimes;
 public sealed class GameRuntimeScanner
 {
     /// <summary>
-    /// Subdirectories of a game folder that runtime DLLs are commonly found in, in search order.
-    /// </summary>
-    /// <remarks>
-    /// Shared with the swap planner, which uses it to put a replacement DLL where the game already
-    /// keeps the original. When the two lists disagreed, a swap would write a DLL to the game root
-    /// while the game's real runtime stayed in a subdirectory.
-    ///
-    /// Written with the platform separator so that a path built from one of these compares equal to
-    /// the same path built elsewhere. A forward slash in "Binaries/Win64" produced a path that
-    /// opened the right file but never compared equal to itself.
-    /// </remarks>
-    public static readonly IReadOnlyList<string> KnownSubdirectories =
-        ["x64", "bin", "bin64", "Win64",
-         $"Binaries{Path.DirectorySeparatorChar}Win64"];
-
-    /// <summary>
     /// Scans one game's folder for all known runtime DLLs.
     /// </summary>
     /// <param name="game">The game to scan, from library discovery.</param>
@@ -53,27 +37,18 @@ public sealed class GameRuntimeScanner
 
         var runtimes = new List<DetectedRuntime>();
 
+        // Where each of this game's runtime DLLs actually is. Shared with the swap planner so that
+        // detection and installation cannot disagree about a path.
+        var located = RuntimeDllLocator.Find(game.InstallPath, cancellation: cancellation);
+
         foreach (var fileName in RuntimeDlls.AllFileNames)
         {
             cancellation.ThrowIfCancellationRequested();
 
-            var relativePath = fileName;
-            var fullPath = Path.Combine(game.InstallPath, fileName);
+            var fullPath = located.GetValueOrDefault(fileName)
+                           ?? Path.Combine(game.InstallPath, fileName);
 
-            // Also check common subdirectories where games sometimes place these
-            if (!File.Exists(fullPath))
-            {
-                foreach (var sub in KnownSubdirectories)
-                {
-                    var candidate = Path.Combine(game.InstallPath, sub, fileName);
-                    if (File.Exists(candidate))
-                    {
-                        relativePath = Path.Combine(sub, fileName);
-                        fullPath = candidate;
-                        break;
-                    }
-                }
-            }
+            var relativePath = Path.GetRelativePath(game.InstallPath, fullPath);
 
             var kind = RuntimeDlls.KindFor(fileName) ?? throw new InvalidOperationException($"File name {fileName} not in RuntimeDlls");
             runtimes.Add(ReadOne(kind, fileName, relativePath, fullPath));

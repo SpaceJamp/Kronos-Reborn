@@ -262,38 +262,18 @@ public static class SwapPlanner
     /// Where each DLL of a runtime kind belongs inside a game folder.
     /// </summary>
     /// <remarks>
-    /// Each file is placed where the game already keeps it, so a game that holds its DLSS in
-    /// <c>Binaries/Win64</c> does not get a second copy in its root. A file the game does not have
-    /// yet goes in the root, which is where the overwhelming majority of these DLLs live.
+    /// Uses the same <see cref="RuntimeDllLocator"/> the scanner uses, so a replacement lands exactly
+    /// where the game already loads the original from. Derived separately the two disagreed: the
+    /// scanner found a DLL in <c>bin\x64_dx12</c> while the planner wrote the replacement to the game
+    /// root, leaving the game still running the old runtime and a stray DLL beside it.
     /// </remarks>
     private static IReadOnlyList<string> ResolveTargetFiles(string gamePath, RuntimeKind kind)
     {
-        var targets = new List<string>();
+        var located = RuntimeDllLocator.Find(gamePath);
 
-        foreach (var fileName in RuntimeDlls.ByKind[kind])
-        {
-            targets.Add(FindExistingLocation(gamePath, fileName)
-                        ?? Path.Combine(gamePath, fileName));
-        }
-
-        return targets;
-    }
-
-    /// <summary>
-    /// The subdirectory of a game folder that a runtime DLL is already in, or null.
-    /// </summary>
-    private static string? FindExistingLocation(string gamePath, string fileName)
-    {
-        foreach (var sub in GameRuntimeScanner.KnownSubdirectories)
-        {
-            var candidate = Path.Combine(gamePath, sub, fileName);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
+        return RuntimeDlls.ByKind[kind]
+            .Select(fileName => RuntimeDllLocator.TargetPathFor(gamePath, fileName, located))
+            .ToArray();
     }
 }
 

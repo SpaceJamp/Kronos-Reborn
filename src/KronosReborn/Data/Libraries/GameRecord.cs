@@ -103,6 +103,11 @@ internal static class PathNormalizer
     /// "C:\Games\" and "C:\Games" are the same folder and a comparison that says otherwise produces
     /// duplicate rows in the list.
     ///
+    /// Also unifies the direction of separators. A registry value for a default Steam installation
+    /// reads <c>c:/program files (x86)/steam</c>, while the same folder reached by the conventional
+    /// folder guess reads <c>C:\Program Files (x86)\Steam</c>. Both name one folder, and comparing
+    /// them without normalising made every installed game appear three times over.
+    ///
     /// Deliberately not a full canonicalisation. Resolving to a short name, resolving links or
     /// normalising away "..\" all involve touching the disk, and this is used in places that must stay
     /// cheap and must not fail when a path does not exist. Callers that need the disk checked use
@@ -115,17 +120,23 @@ internal static class PathNormalizer
             return string.Empty;
         }
 
-        var trimmed = path.Trim().TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+        var trimmed = path.Trim().Replace(AltSeparator, PrimarySeparator).TrimEnd(PrimarySeparator);
 
         // A bare drive root such as "C:\" trims down to "C:", which is the drive-relative path and
         // names something else entirely. Keep the separator for that one case.
         if (trimmed.Length == 2 && trimmed[1] == ':')
         {
-            return trimmed + System.IO.Path.DirectorySeparatorChar;
+            return trimmed + PrimarySeparator;
         }
 
         return trimmed;
     }
+
+    /// <summary>The separator Windows paths are normally written with.</summary>
+    private const char PrimarySeparator = '\\';
+
+    /// <summary>The other separator, which Windows accepts but a registry value often contains.</summary>
+    private const char AltSeparator = '/';
 
     /// <summary>
     /// Whether a directory is there, treating any failure to tell as "not there".
