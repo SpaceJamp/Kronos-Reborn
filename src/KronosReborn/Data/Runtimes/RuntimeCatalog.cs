@@ -27,7 +27,7 @@ namespace KronosReborn.Data.Runtimes;
 /// R52: writes are atomic.
 /// R53/R54: history per game with limit (handled elsewhere, catalog is the version pool).
 /// </remarks>
-public sealed class RuntimeCatalog
+public sealed class RuntimeCatalog : IDisposable
 {
     private readonly string _catalogPath;
     private readonly ReaderWriterLockSlim _lock = new();
@@ -108,7 +108,7 @@ public sealed class RuntimeCatalog
         string gameName,
         string libraryName)
     {
-        if (!detected.Exists || !detected.IsVersionKnown)
+        if (!detected.Exists || !detected.IsVersionKnown || detected.Version is null)
         {
             // R10: unknown versions are never guessed at, so they don't enter the catalog
             return null;
@@ -341,6 +341,9 @@ public sealed class RuntimeCatalog
         File.WriteAllText(tempPath, json);
         File.Move(tempPath, _catalogPath, overwrite: true);
     }
+
+    /// <summary>Releases the reader/writer lock.</summary>
+    public void Dispose() => _lock.Dispose();
 
     private sealed record CatalogData(IReadOnlyList<CatalogEntry> Entries);
 
