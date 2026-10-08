@@ -710,6 +710,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// </remarks>
     public bool HasDetailPanel => SelectedGame is not null;
 
+    /// <summary>
+    /// Whether the detail panel is actually on screen.
+    /// </summary>
+    /// <remarks>
+    /// Not the same as <see cref="HasDetailPanel"/>. The panel is drawn over the main area, and the
+    /// version library is drawn over the main area too and would cover it — so a panel that stayed
+    /// "shown" while the library was up would be a control that could not be seen or reached.
+    /// </remarks>
+    public bool ShowDetailPanel => HasDetailPanel && ShowingGames;
+
     public GroupMode GroupMode
     {
         get => _groupMode;
@@ -815,6 +825,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             OnPropertyChanged();
             OnPropertyChanged(nameof(ShowingGames));
             OnPropertyChanged(nameof(ShowingLibrary));
+            OnPropertyChanged(nameof(ShowDetailPanel));
         }
     }
 

@@ -53,8 +53,8 @@ public sealed record Settings(
         MaxHistoryPerGame: 50,
         GroupByLibrary: true,
         PosterGrid: false,
-        WindowWidth: null,
-        WindowHeight: null,
+        WindowWidth: 1600,
+        WindowHeight: 960,
         WindowMaximized: false,
         ColumnWidths: null,
         ThemeMode: ThemeMode.Light);

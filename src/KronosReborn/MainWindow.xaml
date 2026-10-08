@@ -111,19 +111,27 @@
                 <!--
                 Search. Filters the list or grid as it is typed, so a library of a few hundred games
                 can be narrowed without scrolling.
+
+                The icon is a Grid overlay rather than a sibling with a negative margin: in a
+                horizontal StackPanel a negative left margin pulls the next item back over this one,
+                which put the magnifier on top of the text at the right-hand end of the box.
                 -->
-                <TextBox x:Name="SearchBox"
-                         Width="200"
-                         Margin="12,0,0,0"
-                         VerticalAlignment="Center"
-                         Padding="8,4"
-                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                         ToolTip="Filter by game name" />
-                <TextBlock Text="🔍"
-                           VerticalAlignment="Center"
-                           Margin="-30,0,8,0"
-                           IsHitTestVisible="False"
-                           FontSize="12" />
+                <Grid Width="200"
+                      Height="26"
+                      Margin="12,0,0,0"
+                      VerticalAlignment="Center">
+                    <TextBox x:Name="SearchBox"
+                             Padding="22,4,8,4"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Filter by game name" />
+
+                    <TextBlock Text="🔍"
+                               HorizontalAlignment="Left"
+                               VerticalAlignment="Center"
+                               Margin="6,0,0,0"
+                               IsHitTestVisible="False"
+                               FontSize="11" />
+                </Grid>
 
                 <!-- Theme toggle -->
                 <Button Content="🌓"
@@ -167,7 +175,7 @@
                 CornerRadius="4"
                 Margin="0,16,16,16"
                 Padding="16"
-                Visibility="{Binding HasDetailPanel, Converter={StaticResource BoolToVisibility}}">
+                Visibility="{Binding ShowDetailPanel, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
                 <TextBlock Text="{Binding SelectedGame.GameName}"
                            Style="{StaticResource TitleStyle}"
@@ -506,7 +514,35 @@
                             one, and with it where there is more than one, because "310.9.1" alone on a
                             card does not say whether it is Super Resolution or Frame Generation.
                             -->
-                            <StackPanel Grid.Row="1"
+                            <!--
+        Nothing found for the search.
+
+        The empty-state panel above says "no games found", which is a different and wrong thing to say
+        when a library of seven games is on disk and the search simply matched none of them. Both are
+        an empty list, and only one of them means the library is gone.
+        -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource SurfaceBrush}"
+                Margin="8"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Visibility="{Binding IsSearchMissingEverything, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
+                <TextBlock Text="🔍" FontSize="40" HorizontalAlignment="Center" />
+                <TextBlock Text="No games match"
+                           Style="{StaticResource TitleStyle}"
+                           HorizontalAlignment="Center"
+                           Margin="0,12,0,6" />
+                <TextBlock Text="{Binding SearchText, StringFormat='Nothing matches “{0}”. Clear the search to see your library again.'}"
+                           Style="{StaticResource SubtitleStyle}"
+                           HorizontalAlignment="Center"
+                           TextWrapping="Wrap"
+                           MaxWidth="420" />
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="1"
                                         Margin="8,6,8,8"
                                         Background="{DynamicResource SurfaceBrush}">
                                 <TextBlock Text="{Binding GameName}"

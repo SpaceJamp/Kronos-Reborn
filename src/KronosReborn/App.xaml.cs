@@ -15,16 +15,12 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        // Initialize theme resources BEFORE the MainWindow is created from StartupUri
         InitializeTheme();
-
         base.OnStartup(e);
     }
 
     private void InitializeTheme()
     {
-        // Copy LightTheme resources directly into Application.Resources
-        // so DynamicResource references in MainWindow.xaml can resolve.
         if (Resources["LightTheme"] is ResourceDictionary lightTheme)
         {
             foreach (var key in lightTheme.Keys)

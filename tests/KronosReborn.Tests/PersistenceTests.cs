@@ -113,8 +113,8 @@ public class PersistenceTests
         Assert.False(s.AllowUntrustedRuntimes); // R42: off by default
         Assert.Equal(50, s.MaxHistoryPerGame);  // R53: default limit
         Assert.True(s.GroupByLibrary);          // R12 default
-        Assert.Null(s.WindowWidth);
-        Assert.Null(s.WindowHeight);
+        Assert.Equal(1600, s.WindowWidth);
+        Assert.Equal(960, s.WindowHeight);
         Assert.False(s.WindowMaximized);
     }
 
