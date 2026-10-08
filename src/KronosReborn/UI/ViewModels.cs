@@ -824,7 +824,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         var targets = SelectedGamesForSwap().ToList();
 
-        _pendingPlans = SwapPlanner.Plan(
+        // The whole matched set, not just the kind that was picked: DLSS, Frame Generation and Ray
+        // Reconstruction have to end up at the same version as one another.
+        _pendingPlans = SwapPlanner.PlanWithFamily(
             targets, _catalog, SelectedRuntime.Kind, SelectedRuntime.EntryId, _settings);
 
         _preview.Clear();
@@ -838,7 +840,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         StatusText = _pendingPlans.Count == 0
             ? $"Nothing to do: {SelectedGame.GameName} already runs " +
               $"{RuntimeKindNames.Display(SelectedRuntime.Kind)} {SelectedRuntime.Version}."
-            : $"{_pendingPlans.Count} game(s) would change. Review the preview, then apply.";
+            : $"{_pendingPlans.Count} change(s) across {targets.Count} game(s). Review, then apply.";
     }
 
     /// <summary>

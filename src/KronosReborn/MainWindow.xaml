@@ -119,10 +119,10 @@
                         read from its own cache rather than fetched. A game with no cached art shows
                         its initial instead: artwork is a nicety and no game is listed without one.
 
-                        The poster is kept in the same cell as the game name, which is why the Game
-                        column is wide enough for both.
+                        The poster is kept in the same cell as the game name, so a game is
+                        one unit to look at rather than a thumbnail beside a row of text.
                         -->
-                        <GridViewColumn Header="Game" Width="380">
+                        <GridViewColumn Header="Game" Width="300">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid>
@@ -131,14 +131,21 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
 
-                                        <Grid Grid.Column="0" Width="46" Height="69"
-                                              Margin="0,0,10,0">
+                                        <!--
+                                            Sized so the whole row still fits the window at its
+                                            minimum width. Steam's artwork is up to 600x900, and
+                                            showing it at anything near its own size pushes the
+                                            runtime columns off the right edge and forces the list
+                                            to scroll sideways.
+                                            -->
+                                            <Grid Grid.Column="0" Width="32" Height="48"
+                                                  Margin="0,2,8,2">
                                             <Border Background="{DynamicResource BackgroundBrush}"
                                                     CornerRadius="3"
                                                     Visibility="{Binding HasPoster, Converter={StaticResource InverseBool}}">
                                                 <TextBlock Text="{Binding Initial}"
                                                            Foreground="{DynamicResource TextSecondaryBrush}"
-                                                           FontSize="20"
+                                                           FontSize="15"
                                                            HorizontalAlignment="Center"
                                                            VerticalAlignment="Center" />
                                             </Border>
@@ -166,11 +173,11 @@
                         </GridViewColumn>
 
                         <!-- Library -->
-                        <GridViewColumn Header="Library" Width="150"
+                        <GridViewColumn Header="Library" Width="130"
                                         DisplayMemberBinding="{Binding LibraryName}" />
 
                         <!-- DLSS -->
-                        <GridViewColumn Header="DLSS" Width="100">
+                        <GridViewColumn Header="DLSS" Width="92">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -193,7 +200,7 @@
                         </GridViewColumn>
 
                         <!-- FSR -->
-                        <GridViewColumn Header="FSR" Width="90">
+                        <GridViewColumn Header="FSR" Width="80">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding FsrVersion, TargetNullValue='—'}"
@@ -205,7 +212,7 @@
                         </GridViewColumn>
 
                         <!-- XeSS -->
-                        <GridViewColumn Header="XeSS" Width="90">
+                        <GridViewColumn Header="XeSS" Width="80">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding XessVersion, TargetNullValue='—'}"
@@ -217,7 +224,7 @@
                         </GridViewColumn>
 
                         <!-- Last Changed -->
-                        <GridViewColumn Header="Last Changed" Width="140"
+                        <GridViewColumn Header="Last Changed" Width="120"
                                         DisplayMemberBinding="{Binding LastChangedText}" />
                     </GridView>
                 </ListView.View>

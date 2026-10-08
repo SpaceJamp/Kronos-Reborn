@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -250,6 +251,87 @@ public class ArchitectureTests
             "These tests read the user's local application data directory. Use a temporary directory:" +
             Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
+
+    [Fact]
+    public void TheGameListFitsTheWindowAtItsNarrowest()
+    {
+        // Adding posters widened the game column and pushed the runtime columns off the right edge,
+        // at which point the list scrolled sideways and the version you were comparing was the one
+        // you could no longer see. Nothing else fails when this happens: the columns are still there
+        // and still bound, they are just off screen.
+        var xaml = File.ReadAllText(
+            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
+
+        var minWidth = ReadAttribute(xaml, "MinWidth");
+        Assert.True(minWidth > 0, "MinWidth could not be read from the window.");
+
+        var widths = ColumnWidths(xaml).ToList();
+
+        // Asserted as a count so this cannot pass by finding nothing at all and dividing by it.
+        Assert.True(
+            widths.Count >= 5,
+            $"Only {widths.Count} fixed column widths were found, so this check cannot see the list.");
+
+        var total = widths.Sum();
+
+        Assert.True(
+            total <= minWidth,
+            $"The game list's columns total {total}px, wider than the window's {minWidth}px minimum. " +
+            "The right-hand columns will be off screen and the list will scroll sideways. " +
+            $"Widest columns: {string.Join(", ", widths.OrderByDescending(w => w).Take(4))}.");
+    }
+
+    [Fact]
+    public void PostersAreShownSmallEnoughToKeepRowsCompact()
+    {
+        // Steam's artwork is up to 600x900. Shown near its own size, each row is as tall as a poster
+        // and only four or five games are visible at a time, which is worse than no posters at all.
+        var xaml = File.ReadAllText(
+            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
+
+        var poster = Regex.Match(
+            xaml,
+            @"Grid\.Column=""0""\s+Width=""(?<w>\d+)""\s+Height=""(?<h>\d+)""",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(5));
+
+        Assert.True(
+            poster.Success,
+            "The poster cell could not be found in the window. If it was renamed, this guard needs " +
+            "to be pointed at the new markup rather than deleted.");
+
+        var width = int.Parse(poster.Groups["w"].Value, CultureInfo.InvariantCulture);
+        var height = int.Parse(poster.Groups["h"].Value, CultureInfo.InvariantCulture);
+
+        Assert.True(height <= 56, $"Posters are {height}px tall, so rows are too tall to scan.");
+
+        // Steam's capsule images are 600x900, two parts wide to three parts high. Distorting them
+        // would stretch the artwork, so the cell has to keep that ratio.
+        Assert.Equal(1.5, height / (double)width, 2);
+    }
+
+    /// <summary>Reads a numeric window attribute such as MinWidth.</summary>
+    private static int ReadAttribute(string xaml, string name)
+    {
+        var match = Regex.Match(
+            xaml,
+            $@"{name}=""(?<v>\d+)""",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(5));
+
+        return match.Success
+            ? int.Parse(match.Groups["v"].Value, CultureInfo.InvariantCulture)
+            : 0;
+    }
+
+    /// <summary>Every fixed width declared on a list column.</summary>
+    private static IEnumerable<int> ColumnWidths(string xaml) =>
+        Regex.Matches(
+            xaml,
+            @"GridViewColumn[^>]*\bWidth=""(?<w>\d+)""",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(5))
+        .Select(m => int.Parse(m.Groups["w"].Value, CultureInfo.InvariantCulture));
 
     [Fact]
     public void EveryVisibilityBindingInTheWindowCanProduceAVisibility()

@@ -224,6 +224,12 @@ arbitrary until you know why:
   pair, so choosing one takes every file of that kind beside it and refuses the import, naming what is
   missing, if any are absent. What is taken is copied into the collection's own folder under the data
   directory, so deleting or moving the folder it was downloaded to does not empty the collection.
+- **DLSS, DLSS Frame Gen and DLSS Ray Reconstruction are one runtime in three files**, and NVIDIA
+  supports them only at matching versions. Choosing a DLSS version therefore brings the other parts
+  the game already has to that same version, so it cannot end up running Frame Generation built for a
+  different Super Resolution version. A part is never added to a game that never shipped with it. If
+  the collection does not hold a matching version of a part the game has, the upgrade still goes
+  ahead and the preview names the part that would be left behind and what would fix it.
 - **One runtime version is one catalog entry.** The game a version was found in is not part of its
   identity, so DLSS present in three games is one entry rather than three identical-looking ones —
   and choosing any of them would have copied a file onto itself.

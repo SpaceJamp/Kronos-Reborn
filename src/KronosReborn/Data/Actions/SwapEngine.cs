@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -40,10 +41,25 @@ public sealed record SwapPlan(
     bool IsUntrusted,
     bool HasCurrentVersion,
     IReadOnlyList<string> SourceFiles,
-    IReadOnlyList<string> TargetFiles)
+    IReadOnlyList<string> TargetFiles,
+    IReadOnlyList<RuntimeKind>? UnmatchedParts = null)
 {
+    /// <summary>
+    /// Parts of the same runtime this game already carries that could not be brought along.
+    /// </summary>
+    /// <remarks>
+    /// DLSS, Frame Generation and Ray Reconstruction are supported at matching versions. When the
+    /// collection does not hold a companion at the version being installed, that companion cannot be
+    /// brought into step. Rather than refuse the whole upgrade — which would mean a game stuck on an
+    /// old DLSS version until the user manually imports something — the swap goes ahead and the
+    /// preview says plainly which parts were left behind, because silently leaving a game running
+    /// Frame Generation built for a different Super Resolution version is the problem this exists to
+    /// prevent.
+    /// </remarks>
+    public IReadOnlyList<RuntimeKind> Unmatched => UnmatchedParts ?? [];
+
     /// <summary>Whether this plan involves a change that warrants a warning.</summary>
-    public bool HasWarning => IsDowngrade || IsUntrusted;
+    public bool HasWarning => IsDowngrade || IsUntrusted || Unmatched.Count > 0;
 
     /// <summary>
     /// Target files that do not exist yet, and which therefore have nothing to back up and must be
@@ -72,7 +88,17 @@ public sealed record SwapPlan(
 
             var current = CurrentVersion ?? "none";
             var warning = HasWarning ? " ⚠" : "";
-            return $"{GameName}: {kindName} {current} → {TargetVersion}{warning}";
+
+            // Spelled out rather than left to the user to work out from a version number: a stack that
+            // is out of step is the exact situation this whole rule exists to avoid, so the preview
+            // has to say what is out of step and what would fix it.
+            var leftBehind = Unmatched.Count == 0
+                ? string.Empty
+                : " — but " + string.Join(" and ", Unmatched.Select(RuntimeKindNames.Display)) +
+                  " stays on the version it already has. Import " + TargetVersion +
+                  " of it too, or the game will run the parts out of step.";
+
+            return $"{GameName}: {kindName} {current} → {TargetVersion}{warning}{leftBehind}";
         }
     }
 
@@ -259,6 +285,186 @@ public static class SwapPlanner
     /// The catalog files to copy, one per DLL the runtime kind consists of.
     /// </summary>
     /// <returns>Null when the catalog does not hold every file the kind needs.</returns>
+    /// <summary>
+    /// Plans a swap for one game together with every part of the same runtime it already carries.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// DLSS, Frame Generation and Ray Reconstruction are one runtime in up to three files and are only
+    /// supported at matching versions. Choosing a DLSS version therefore brings the rest of the stack
+    /// with it, so a game cannot be left running Frame Generation built for a different Super
+    /// Resolution version than the one beside it.
+    /// </para>
+    /// <para>
+    /// A part is included only when the game already has it and the collection holds that part at the
+    /// same version. Both conditions matter. Adding Frame Generation to a game that never shipped it is
+    /// adding runtime support to that game, which the specification puts out of scope, and offering a
+    /// companion version the collection does not hold would produce a plan that cannot be carried out.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<SwapPlan> PlanWithFamily(
+        IEnumerable<SwapGameInfo> games,
+        RuntimeCatalog catalog,
+        RuntimeKind runtimeKind,
+        string targetEntryId,
+        Settings settings)
+    {
+        ArgumentNullException.ThrowIfNull(games);
+        ArgumentNullException.ThrowIfNull(catalog);
+
+        if (!catalog.TryGet(targetEntryId, out var target) || target is null)
+        {
+            return [];
+        }
+
+        var version = target.Version;
+        var all = games.ToList();
+
+        var companions = RuntimeDlls.Related(runtimeKind)
+            .Where(kind => kind != runtimeKind)
+            .Where(kind => catalog.Entries.Any(e =>
+                e.Kind == kind && VersionNumber.AreEquivalent(e.Version, version)))
+            .ToList();
+
+        var plans = Plan(all, catalog, runtimeKind, targetEntryId, settings).ToList();
+
+        foreach (var game in all)
+        {
+            var companionsForGame = new List<SwapPlan>();
+
+            foreach (var kind in companions)
+            {
+                companionsForGame.AddRange(PlanCompanion(game, catalog, kind, version, settings));
+            }
+
+            plans.AddRange(companionsForGame);
+
+            // Anything the game carries but that could not be planned above is recorded on the
+            // primary plan, so the preview can say the stack would be left half-matched rather than
+            // letting it pass unremarked.
+            if (plans.Count > 0 && !string.Equals(plans[0].GameId, game.GameId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var leftBehind = LeftBehind(game, catalog, runtimeKind, version, companionsForGame);
+
+            if (leftBehind.Count > 0)
+            {
+                var index = plans.ToList().FindIndex(p =>
+                    string.Equals(p.GameId, game.GameId, StringComparison.OrdinalIgnoreCase) &&
+                    p.RuntimeKind == runtimeKind);
+
+                if (index >= 0)
+                {
+                    plans[index] = plans[index] with { UnmatchedParts = leftBehind };
+                }
+            }
+        }
+
+        return plans;
+    }
+
+    /// <summary>
+    /// Parts of the same runtime a game carries that this swap would leave at a different version.
+    /// </summary>
+    private static IReadOnlyList<RuntimeKind> LeftBehind(
+        SwapGameInfo game,
+        RuntimeCatalog catalog,
+        RuntimeKind runtimeKind,
+        string version,
+        IReadOnlyList<SwapPlan> plannedCompanions)
+    {
+        if (game.Snapshot is not { } snapshot)
+        {
+            return [];
+        }
+
+        var planned = plannedCompanions.Select(p => p.RuntimeKind).ToHashSet();
+
+        return
+        [
+            .. RuntimeDlls.Related(runtimeKind)
+                .Where(kind => kind != runtimeKind && !planned.Contains(kind))
+                .Where(kind =>
+                    snapshot.Runtimes.Any(r => r.Kind == kind && r.Exists))
+                // A part the game already runs at the chosen version is in step, and nothing about it
+                // is being left behind. Only a part that would end up on a different version counts.
+                .Where(kind =>
+                    !VersionNumber.AreEquivalent(
+                        snapshot.Runtimes.First(r => r.Kind == kind).Version,
+                        version))
+                .Where(kind =>
+                    !catalog.Entries.Any(e =>
+                        e.Kind == kind && VersionNumber.AreEquivalent(e.Version, version))),
+        ];
+    }
+
+    /// <summary>
+    /// Plans one companion part of a matched set for one game, where that game already has it.
+    /// </summary>
+    private static IReadOnlyList<SwapPlan> PlanCompanion(
+        SwapGameInfo game,
+        RuntimeCatalog catalog,
+        RuntimeKind kind,
+        string version,
+        Settings settings)
+    {
+        _ = settings;
+
+        if (!game.ExistsOnDisk || game.Snapshot is not { } snapshot)
+        {
+            return [];
+        }
+
+        var current = snapshot.Runtimes.FirstOrDefault(r => r.Kind == kind);
+        if (current is not { Exists: true })
+        {
+            // The game does not carry this part, and adding it is out of scope.
+            return [];
+        }
+
+        // Already running it: nothing to do.
+        if (VersionNumber.AreEquivalent(current.Version, version))
+        {
+            return [];
+        }
+
+        var entry = catalog.Entries.FirstOrDefault(e =>
+            e.Kind == kind && VersionNumber.AreEquivalent(e.Version, version));
+
+        if (entry is null)
+        {
+            return [];
+        }
+
+        var targets = ResolveTargetFiles(game.GamePath, kind);
+        if (targets.Count == 0)
+        {
+            return [];
+        }
+
+        return
+        [
+            new SwapPlan(
+                game.GameId,
+                game.GameName,
+                game.GamePath,
+                kind,
+                current.Version,
+                version,
+                entry.Trust,
+                IsDowngrade: false,
+                IsUntrusted: entry.Trust != RuntimeTrust.Trusted,
+                HasCurrentVersion: true,
+                SourceFiles: targets.Where(File.Exists).ToArray(),
+                TargetFiles: targets)
+        ];
+    }
+
+    /// <summary>
+    /// The catalog files to copy, one per DLL the runtime kind consists of.
+    /// </summary>
     private static IReadOnlyList<string>? ResolveSourceFiles(CatalogEntry entry, RuntimeKind kind)
     {
         var directory = Path.GetDirectoryName(entry.FilePath);
@@ -437,6 +643,13 @@ public sealed class SwapExecutor
     /// R39: the batch continues past a failure.
     /// R40: cancelling stops work not yet started and returns what was already done.
     /// </remarks>
+    [SuppressMessage(
+        "Performance",
+        "CA1822:Mark members as static",
+        Justification = "An instance method because it is the engine's operation, not a function of " +
+                        "its arguments. The persistence it needs is reached through ExecuteSingle, " +
+                        "and making this static would invite a second entry point that records no " +
+                        "history at all.")]
     public BatchSwapResult Execute(
         IReadOnlyList<SwapPlan> plans,
         CancellationToken cancellation = default)
@@ -447,27 +660,88 @@ public sealed class SwapExecutor
         var cancelled = false;
         var notAttempted = 0;
 
-        foreach (var plan in plans)
+        // A game's plans are one unit. DLSS, Frame Generation and Ray Reconstruction must end up at
+        // matching versions, so a failure part way through one game rolls back the parts already done
+        // to that game rather than leaving it half swapped. Failures still do not stop other games,
+        // which is R39.
+        foreach (var group in GroupByGame(plans))
         {
             if (cancellation.IsCancellationRequested)
             {
                 // R40: stop, but report what was already applied rather than throwing it away.
                 cancelled = true;
-                notAttempted++;
+                notAttempted += group.Count;
                 continue;
             }
 
-            var result = ExecuteSingle(plan);
-
-            if (result.Succeeded && result.HistoryEntry is not null)
-            {
-                _persistence.AddHistoryEntry(plan.GameId, result.HistoryEntry);
-            }
-
-            results.Add(result);
+            notAttempted += ApplyGroup(group, results);
         }
 
         return new BatchSwapResult(results.ToImmutableList(), cancelled, notAttempted);
+    }
+
+    /// <summary>The plans that make up each game's change, in the order they must be applied.</summary>
+    private static IReadOnlyList<IReadOnlyList<SwapPlan>> GroupByGame(IReadOnlyList<SwapPlan> plans) =>
+        [.. plans.GroupBy(p => p.GameId, StringComparer.OrdinalIgnoreCase)
+                 .Select(g => (IReadOnlyList<SwapPlan>)g.ToArray())];
+
+    /// <summary>
+    /// Applies one game's plans together.
+    /// </summary>
+    /// <returns>How many of them were never attempted because an earlier part failed.</returns>
+    private int ApplyGroup(IReadOnlyList<SwapPlan> group, List<SwapResult> results)
+    {
+        var applied = new List<SwapResult>();
+
+        for (var i = 0; i < group.Count; i++)
+        {
+            var result = ExecuteSingle(group[i]);
+            results.Add(result);
+
+            if (!result.Succeeded)
+            {
+                // The game is now inconsistent with itself. Put back what was already done to it, so
+                // the parts that did apply do not survive on their own.
+                foreach (var earlier in applied)
+                {
+                    RollBack(earlier.CreatedFiles, earlier.Backups);
+                }
+
+                // Each earlier part is reported as failed, with the reason, rather than being left
+                // claiming success: R63 is explicit that a summary must account for every item.
+                foreach (var earlier in applied)
+                {
+                    var index = results.IndexOf(earlier);
+                    if (index < 0)
+                    {
+                        continue;
+                    }
+
+                    results[index] = earlier with
+                    {
+                        Succeeded = false,
+                        HistoryEntry = null,
+                        ErrorMessage =
+                            "Rolled back because another part of the same runtime could not be applied.",
+                    };
+                }
+
+                return group.Count - i - 1;
+            }
+
+            applied.Add(result);
+        }
+
+        // Every part applied, so the game can now be recorded as changed.
+        foreach (var result in applied)
+        {
+            if (result.HistoryEntry is { } entry)
+            {
+                _persistence.AddHistoryEntry(group[0].GameId, entry);
+            }
+        }
+
+        return 0;
     }
 
     private SwapResult ExecuteSingle(SwapPlan plan)
