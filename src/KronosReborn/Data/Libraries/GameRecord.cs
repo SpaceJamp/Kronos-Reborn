@@ -19,12 +19,17 @@ namespace KronosReborn.Data.Libraries;
 /// <param name="Name">The name the library reports, which may differ from the folder name.</param>
 /// <param name="InstallPath">Absolute path to the game's folder.</param>
 /// <param name="Exists">Whether that folder was actually there when it was looked for.</param>
+/// <param name="PosterPath">
+/// Cover art the library has already downloaded, or null when it has none. Optional because artwork is
+/// a nicety: a game with no cached art is still a game, and finding games must not depend on it.
+/// </param>
 public sealed record GameRecord(
     string LibraryName,
     string Id,
     string Name,
     string InstallPath,
-    bool Exists)
+    bool Exists,
+    string? PosterPath = null)
 {
     /// <summary>
     /// A name to show the user.

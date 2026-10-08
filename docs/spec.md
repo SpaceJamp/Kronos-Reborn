@@ -324,11 +324,25 @@ to matter, an import can be added as a separate one-way operation that is not pa
 
 ### Cover images
 
-**Deferred. Not required for the first working version.**
+**Shown, and read from what Steam has already downloaded.**
 
-Fetching them means network access and a cache to maintain, and plenty of games have no artwork at
-all. A list without images is entirely usable, and adding them later costs nothing that is hard to
-add.
+Steam keeps the artwork it displays for every app it knows about, in its own cache on the local
+machine. The poster for an installed game is therefore already here, and showing it costs a file
+lookup rather than a download.
+
+The two objections that deferred this are both answered rather than dismissed:
+
+- *"Fetching them means network access and a cache to maintain."* Nothing is fetched. There is no
+  cache to build, nothing to expire, and no request that can fail because a server is down or the
+  machine is offline. This continues to satisfy C3 and the exclusion of servers from scope, because
+  no server is contacted.
+- *"Plenty of games have no artwork at all."* True, and harmless: such a game is listed with its
+  initial in place of a poster, exactly as it would be listed without one. Artwork is never a reason
+  for a game to be missing.
+
+Two layouts exist — named files directly under a folder named for the app, and named files inside a
+subfolder named for the image hash — and both are still produced, so both are read. Neither layout is
+a choice the user made or can be asked about.
 
 ### Launching games
 
@@ -357,3 +371,4 @@ None outstanding. New questions are added here as they arise, and moved into Dec
 | 0.1.0 | Clarified R21 and R24: a runtime kind is installed whole, and backups are held outside the game folder, so nothing but the runtime files themselves is written into a game installation. |
 | 0.1.0 | Clarified R27: an undo is itself reversible, so history carries forward the state needed to redo. |
 | 0.1.0 | Noted R33 against R42: the setting decides whether an untrusted file may enter the collection, and does not decide whether the user is warned when one is installed. Accepting a file is not evidence that it is genuine. |
+| 0.1.0 | Built cover images, which the Decisions section above had deferred, after establishing that Steam's own artwork cache makes them available locally with no network access and no cache to maintain. |

@@ -35,8 +35,19 @@ public sealed class GameRow : INotifyPropertyChanged
         InstallPath = record.InstallPath;
         LibraryName = record.LibraryName;
         ExistsOnDisk = record.Exists;
+        PosterPath = record.PosterPath;
         Snapshot = snapshot;
     }
+
+    /// <summary>Cover art the library has already downloaded, or null.</summary>
+    public string? PosterPath { get; }
+
+    /// <summary>Whether there is a poster to show.</summary>
+    public bool HasPoster => !string.IsNullOrWhiteSpace(PosterPath);
+
+    /// <summary>The game's initial, shown in place of a poster when there is none.</summary>
+    public string Initial =>
+        GameName.Length > 0 ? GameName[..1].ToUpperInvariant() : "?";
 
     public GameRuntimeSnapshot? Snapshot
     {

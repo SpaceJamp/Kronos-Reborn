@@ -112,22 +112,55 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <!-- Game Name -->
-                        <GridViewColumn Header="Game" Width="280">
+                        <!--
+                        Poster.
+
+                        Steam has already downloaded cover art for every app it knows, so this is
+                        read from its own cache rather than fetched. A game with no cached art shows
+                        its initial instead: artwork is a nicety and no game is listed without one.
+
+                        The poster is kept in the same cell as the game name, which is why the Game
+                        column is wide enough for both.
+                        -->
+                        <GridViewColumn Header="Game" Width="380">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding GameName}"
-                                                   FontWeight="Medium"
-                                                   VerticalAlignment="Center"
-                                                   ToolTip="{Binding InstallPath}" />
-                                        <TextBlock Text=" (missing)"
-                                                   Foreground="{StaticResource ErrorBrush}"
-                                                   FontStyle="Italic"
-                                                   FontSize="{StaticResource FontSizeSmall}"
-                                                   VerticalAlignment="Center"
-                                                   Visibility="{Binding IsMissing, Converter={StaticResource BoolToVisibility}}" />
-                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Grid Grid.Column="0" Width="46" Height="69"
+                                              Margin="0,0,10,0">
+                                            <Border Background="{DynamicResource BackgroundBrush}"
+                                                    CornerRadius="3"
+                                                    Visibility="{Binding HasPoster, Converter={StaticResource InverseBool}}">
+                                                <TextBlock Text="{Binding Initial}"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                                           FontSize="20"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <Image Source="{Binding PosterPath}"
+                                                   Stretch="UniformToFill"
+                                                   Visibility="{Binding HasPoster, Converter={StaticResource BoolToVisibility}}" />
+                                        </Grid>
+
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding GameName}"
+                                                       FontWeight="Medium"
+                                                       VerticalAlignment="Center"
+                                                       ToolTip="{Binding InstallPath}" />
+                                            <TextBlock Text=" (missing)"
+                                                       Foreground="{StaticResource ErrorBrush}"
+                                                       FontStyle="Italic"
+                                                       FontSize="{StaticResource FontSizeSmall}"
+                                                       VerticalAlignment="Center"
+                                                       Visibility="{Binding IsMissing, Converter={StaticResource BoolToVisibility}}" />
+                                        </StackPanel>
+                                    </Grid>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>

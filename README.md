@@ -53,6 +53,7 @@ Windows on ARM, while FSR and XeSS would.
 | Area | State |
 | --- | --- |
 | Steam library discovery, manifests, deduplication | Working |
+| Game posters, read from Steam's own artwork cache | Working |
 | Runtime version detection, in nested folders as well as the root | Working |
 | Runtime collection: discovery from games, import, signature checking, removal | Working |
 | Persistence: settings, per-game history, atomic writes, corrupt-file recovery | Working |
@@ -215,6 +216,14 @@ arbitrary until you know why:
   one unparseable token that became zero — every DLSS version compared equal to every other, and the
   downgrade warning could never fire for the most common runtime there is. The interface showed
   `310,9,1` for the same reason. It now reads `310.9.1`.
+- **Posters come from Steam's own artwork cache, not from the network.** Steam already downloads the
+  artwork it shows for every app it knows about, so the poster is on the machine. Nothing is fetched,
+  so there is no cache to maintain, no request that can fail, and nothing that breaks offline.
+  Artwork was deferred in the specification until this was established.
+- **A runtime is imported whole, and owned by the collection.** FSR is two DLLs that only work as a
+  pair, so choosing one takes every file of that kind beside it and refuses the import, naming what is
+  missing, if any are absent. What is taken is copied into the collection's own folder under the data
+  directory, so deleting or moving the folder it was downloaded to does not empty the collection.
 - **One runtime version is one catalog entry.** The game a version was found in is not part of its
   identity, so DLSS present in three games is one entry rather than three identical-looking ones —
   and choosing any of them would have copied a file onto itself.

@@ -132,12 +132,59 @@ public sealed class SteamLibraryScanner
             return;
         }
 
+        // Cover art is looked up once per library rather than per game, so the artwork folder is
+        // enumerated a single time instead of once for every manifest in it.
+        var posterPaths = ReadPosterPaths(libraryRoot, manifests);
+
         foreach (var file in ordered)
         {
             cancellation.ThrowIfCancellationRequested();
 
-            ReadManifest(file, libraryRoot, libraryName, games, problems);
+            ReadManifest(file, libraryRoot, libraryName, games, problems, posterPaths);
         }
+    }
+
+    /// <summary>
+    /// The artwork Steam has cached for each app in a library, by app id.
+    /// </summary>
+    /// <remarks>
+    /// Best effort and silent when it cannot be done. Artwork is not part of finding games, so a
+    /// missing or unreadable artwork folder produces no game and no problem — it only means the list
+    /// has no posters in it.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, string> ReadPosterPaths(string libraryRoot, string manifests)
+    {
+        var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // manifests is <steam root>/steamapps, so the Steam root is one level up from it.
+        var steamRoot = Path.GetDirectoryName(manifests);
+        if (steamRoot is null || !Directory.Exists(steamRoot))
+        {
+            return found;
+        }
+
+        try
+        {
+            foreach (var manifest in Directory.EnumerateFiles(manifests, "appmanifest_*.acf"))
+            {
+                if (SteamAppManifest.TryGetAppIdFromFileName(Path.GetFileName(manifest)) is not { } appId)
+                {
+                    continue;
+                }
+
+                var poster = GamePosterLocator.Find(appId, [steamRoot]);
+                if (poster is not null)
+                {
+                    found[appId] = poster;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // No artwork, which is a perfectly good outcome for a list of games.
+        }
+
+        return found;
     }
 
     /// <summary>
@@ -148,7 +195,8 @@ public sealed class SteamLibraryScanner
         string libraryRoot,
         string libraryName,
         List<GameRecord> games,
-        List<ScanProblem> problems)
+        List<ScanProblem> problems,
+        IReadOnlyDictionary<string, string> posterPaths)
     {
         var fileName = Path.GetFileName(file);
 
@@ -220,7 +268,10 @@ public sealed class SteamLibraryScanner
             manifest.AppId,
             manifest.Name,
             installPath,
-            PathNormalizer.DirectoryExists(installPath)));
+            PathNormalizer.DirectoryExists(installPath),
+            // Artwork Steam has already downloaded for this app. Purely a nicety: a game with no
+            // cached art is still listed, and nothing here fails if the artwork folder is absent.
+            posterPaths.TryGetValue(manifest.AppId, out var poster) ? poster : null));
     }
 
     /// <summary>
