@@ -36,11 +36,36 @@ public sealed record PersistenceLoadResult(
 /// R53/R54: history per game with configurable limit, oldest dropped first.
 /// R55: no migration from previous versions.
 /// </remarks>
-public sealed class PersistenceService
+public sealed class PersistenceService : IDisposable
 {
     private readonly ReaderWriterLockSlim _lock = new();
+    private readonly DataPaths _paths;
     private Settings _settings = Settings.Default;
     private ImmutableDictionary<string, GameHistory> _histories = ImmutableDictionary<string, GameHistory>.Empty;
+
+    /// <summary>Creates a persistence service over the given data paths.</summary>
+    /// <param name="paths">
+    /// Where the data lives. Injected rather than resolved statically so a test can point it at a
+    /// temporary directory; see <see cref="DataPaths"/>.
+    /// </param>
+    public PersistenceService(DataPaths? paths = null)
+    {
+        _paths = paths ?? DataPaths.ForCurrentUser();
+        _paths.EnsureCreated();
+    }
+
+    /// <summary>Where this service reads and writes.</summary>
+    public DataPaths Paths => _paths;
+
+    /// <summary>
+    /// Releases the reader/writer lock.
+    /// </summary>
+    /// <remarks>
+    /// The lock is held only for the duration of each property read or write, never across an
+    /// await, so a service that is simply left alone is also fine and this exists for the sake of
+    /// being a good citizen with the underlying handle.
+    /// </remarks>
+    public void Dispose() => _lock.Dispose();
 
     /// <summary>Current settings.</summary>
     public Settings Settings
@@ -100,7 +125,7 @@ public sealed class PersistenceService
         try
         {
             _settings = settings;
-            AtomicWrite(DataDirectory.SettingsPath, JsonSerializer.Serialize(SettingsData.FromSettings(settings), JsonOptions.Default));
+            AtomicWrite(_paths.SettingsPath, JsonSerializer.Serialize(SettingsData.FromSettings(settings), JsonOptions.Default));
         }
         finally
         {
@@ -162,7 +187,7 @@ public sealed class PersistenceService
     private Settings LoadSettings(out List<ScanProblem> problems)
     {
         problems = [];
-        var path = DataDirectory.SettingsPath;
+        var path = _paths.SettingsPath;
 
         if (!File.Exists(path))
         {
@@ -191,7 +216,7 @@ public sealed class PersistenceService
     {
         problems = [];
         var histories = new Dictionary<string, GameHistory>();
-        var dir = DataDirectory.HistoryDirectory;
+        var dir = _paths.HistoryDirectory;
 
         if (!Directory.Exists(dir))
         {
@@ -224,11 +249,9 @@ public sealed class PersistenceService
         return histories;
     }
 
-    private static string HistoryPath(string gameId)
+    private string HistoryPath(string gameId)
     {
-        // Sanitize gameId for filename
-        var safe = string.Join("_", gameId.Split(Path.GetInvalidFileNameChars()));
-        return Path.Combine(DataDirectory.HistoryDirectory, $"{safe}.json");
+        return Path.Combine(_paths.HistoryDirectory, $"{DataPaths.SafeName(gameId)}.json");
     }
 
     /// <summary>
@@ -240,6 +263,12 @@ public sealed class PersistenceService
     private static void AtomicWrite(string path, string content)
     {
         var dir = Path.GetDirectoryName(path)!;
+
+        // The data paths are pure values and do not create anything as a side effect of being read,
+        // so the directory is made here rather than assumed. A first write would otherwise fail with
+        // DirectoryNotFoundException.
+        Directory.CreateDirectory(dir);
+
         var tempPath = Path.Combine(dir, $".{Path.GetFileName(path)}.tmp.{Guid.NewGuid():N}");
 
         File.WriteAllText(tempPath, content);
