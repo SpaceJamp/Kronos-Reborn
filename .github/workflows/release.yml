@@ -1,0 +1,60 @@
+name: Release
+
+# Publishing a tagged version. The build workflow runs on every push; this only runs when a version
+# tag is pushed, so a normal commit never produces artifacts.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The tag is the source of the version, so the commit and tag are both stamped into the
+          # build metadata. Without this the assembly would report no revision at all.
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore with the committed dependency lock
+        run: dotnet restore KronosReborn.sln --locked-mode
+
+      - name: Build
+        run: dotnet build KronosReborn.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet run --project .\tests\KronosReborn.Tests -c Release --no-build
+
+      # The scripts report the paths they produced rather than having this workflow derive a
+      # filename, for the reason given in build.yml: the name lives in config.cmd and duplicating it
+      # here is how a rename breaks the upload.
+      - name: Package portable
+        id: package
+        working-directory: .\package
+        run: cmd /c build.cmd
+
+      - name: Package installer
+        id: installer
+        working-directory: .\package
+        run: cmd /c package.cmd
+
+      # C5: nothing ships that CI has not built and tested. The test step above is what makes this
+      # publish rather than an upload of something unverified.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release create "${{ github.ref_name }}"
+          --title "${{ github.ref_name }}"
+          --generate-notes
+          "${{ steps.package.outputs.portable }}"
+          "${{ steps.installer.outputs.installer }}"

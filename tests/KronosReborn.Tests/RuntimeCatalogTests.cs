@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using KronosReborn.Data.Libraries;
 using KronosReborn.Data.Runtimes;
@@ -15,6 +16,16 @@ namespace KronosReborn.Tests;
 /// </summary>
 public class RuntimeCatalogTests
 {
+    /// <summary>
+    /// Serialization settings matching the ones the catalog itself writes with, so a hand-written
+    /// catalog file in a test is read back exactly as the program would write it.
+    /// </summary>
+    private static readonly JsonSerializerOptions CatalogJsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() },
+    };
     // ------------------------------------------------------------ SignatureVerifier
 
     [Fact]
@@ -26,15 +37,51 @@ public class RuntimeCatalogTests
     }
 
     [Fact]
-    public void SignatureVerifierReturnsFailedForUnsignedFile()
+    public void SignatureVerifierReportsUnsignedFileAsUnsigned()
     {
         using var temp = new TemporaryDirectory();
         var file = Path.Combine(temp.Root, "unsigned.dll");
         File.WriteAllBytes(file, CreateDummyDll());
 
         var result = SignatureVerifier.Check(file);
+
         Assert.False(result.HasValidSignature);
-        Assert.Contains("not signed or invalid", result.Details);
+
+        // R59: an unsigned file and a file whose signature does not validate are different
+        // problems, and saying so has to be visible in the message.
+        Assert.Contains("not signed", result.Details);
+    }
+
+    [Fact]
+    public void SignatureVerifierActuallyValidatesRealSignatures()
+    {
+        // A positive control. Every other signature test feeds it a file with no signature, so they
+        // would all still pass if the trust call were broken and simply always reported "unsigned".
+        // Checking a genuinely signed Microsoft binary proves the call reaches Windows and gets a
+        // real answer: the file must come back signed, and then rejected for being the wrong
+        // publisher rather than for lacking a signature.
+        var signed = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System), "kernel32.dll");
+
+        if (!File.Exists(signed))
+        {
+            return; // Nothing to check against on this machine; not worth failing over.
+        }
+
+        var result = SignatureVerifier.Check(signed);
+
+        Assert.False(result.HasValidSignature);
+        Assert.DoesNotContain("not signed", result.Details);
+        Assert.Contains("not a known runtime vendor", result.Details);
+    }
+
+    [Fact]
+    public void SignatureVerifierTreatsAnEmptyPathAsAFailureRatherThanThrowing()
+    {
+        var result = SignatureVerifier.Check("   ");
+
+        Assert.False(result.HasValidSignature);
+        Assert.False(string.IsNullOrWhiteSpace(result.Details));
     }
 
     // ------------------------------------------------------------ CatalogEntry
@@ -130,7 +177,7 @@ public class RuntimeCatalogTests
             DateTimeOffset.UtcNow);
 
         var data = new { Entries = new[] { entry } };
-        var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        var json = JsonSerializer.Serialize(data, CatalogJsonOptions);
         File.WriteAllText(catalogPath, json);
 
         var catalog = new RuntimeCatalog(catalogPath);
@@ -421,13 +468,13 @@ public class RuntimeCatalogTests
 
         // Discover
         var scanner = new SteamLibraryScanner();
-        var result = scanner.Scan(steamRoot);
+        var result = scanner.Scan(steamRoot, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.Games.Count);
 
         // Scan runtimes - dummy DLLs have no version resource, so versions are unknown
         var rtScanner = new GameRuntimeScanner();
-        var snapshots = rtScanner.ScanMany(result.Games);
+        var snapshots = rtScanner.ScanMany(result.Games, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, snapshots.Count);
         Assert.True(snapshots[0].HasAnyRuntime);

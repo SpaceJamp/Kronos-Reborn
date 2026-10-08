@@ -36,11 +36,11 @@ public sealed record DetectedRuntime(
     {
         var kindName = Kind switch
         {
-            RuntimeKind.Dlss  => "DLSS",
+            RuntimeKind.Dlss => "DLSS",
             RuntimeKind.DlssG => "DLSS Frame Gen",
             RuntimeKind.DlssR => "DLSS Ray Recon",
-            RuntimeKind.Fsr   => "FSR",
-            RuntimeKind.Xess  => "XeSS",
+            RuntimeKind.Fsr => "FSR",
+            RuntimeKind.Xess => "XeSS",
             _ => Kind.ToString()
         };
 

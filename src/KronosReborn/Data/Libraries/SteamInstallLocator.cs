@@ -165,9 +165,9 @@ public sealed class SteamInstallLocator(ISteamRegistry registry)
     private static IEnumerable<string> ConventionalFolders()
     {
         // Standard Program Files locations
-        foreach (var root in new[] { 
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), 
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) 
+        foreach (var root in new[] {
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)
         })
         {
             if (!string.IsNullOrWhiteSpace(root))

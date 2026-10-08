@@ -12,6 +12,16 @@ namespace KronosReborn.Data.Libraries;
 /// defensiveness for its own sake, it is what R4 and R5 ask for: one unreadable library, or one
 /// manifest that is half written, must not cost the user every other game they own.
 /// </remarks>
+/// <remarks>
+/// This type holds no state. It is kept as a type rather than made static because it names a unit of
+/// work — reading one Steam library folder — and the view model constructs it as one. That is a
+/// deliberate shape, not an oversight, which is why the "make members static" analyzer finding is
+/// suppressed here.
+/// </remarks>
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Performance",
+    "CA1822:Mark members as static",
+    Justification = "Stateless by design; kept as a type so it can name a unit of work.")]
 public sealed class SteamLibraryScanner
 {
     /// <summary>Name used for the library folder that is the Steam installation itself.</summary>
@@ -123,7 +133,7 @@ public sealed class SteamLibraryScanner
     /// <summary>
     /// Reads one manifest and adds the game it describes.
     /// </summary>
-    private void ReadManifest(
+    private static void ReadManifest(
         string file,
         string libraryRoot,
         string libraryName,

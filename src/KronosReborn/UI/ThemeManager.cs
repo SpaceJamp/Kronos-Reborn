@@ -14,7 +14,7 @@ public sealed class ThemeManager
     private readonly Settings _initialSettings;
     private Settings _settings;
     private ThemeMode _currentMode = ThemeMode.Light;
-    private bool _isSystemDark = false;
+    private bool _isSystemDark;
 
     public event Action<ThemeMode>? ThemeChanged;
 
@@ -59,7 +59,7 @@ public sealed class ThemeManager
         }
     }
 
-    private void ApplyTheme(ThemeMode mode)
+    private static void ApplyTheme(ThemeMode mode)
     {
         var appResources = Application.Current.Resources;
 

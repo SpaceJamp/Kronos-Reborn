@@ -80,6 +80,33 @@
     <NuGetAuditLevel>low</NuGetAuditLevel>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
 
+    <!--
+    Warnings are errors.
+
+    A build that reports warnings still succeeds, so a nullable dereference or an obsolete API call
+    gets committed and then discovered at run time. This repository had seventeen of them, including
+    a dereference the compiler had already flagged as a possible null in the swap planner. Turning
+    the dial means the next one fails the build instead.
+
+    NU1901 to NU1904 stay warnings on purpose, for the same reason the NuGet audit findings do: an
+    advisory inside a transitive package that cannot be updated here must not be able to stop every
+    build, because a guard that blocks everything eventually gets switched off.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+
+    <!--
+    Analysis at the recommended level, with warnings as errors so an analyzer finding fails the
+    build in the same way a compiler one does.
+
+    CA1859 is switched off deliberately. It asks for concrete collection types in return
+    positions instead of IReadOnlyList, which would narrow the API of every planner and scanner
+    helper for no measurable gain: each is called once per game per refresh, not in a loop over
+    thousands of items. Turning it on here would trade a real design property for a rule.
+    -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <NoWarn>$(NoWarn);CA1859</NoWarn>
+
     <!-- One place for the version, so the app, the installer and the repository agree. -->
     <Version>0.1.0</Version>
 

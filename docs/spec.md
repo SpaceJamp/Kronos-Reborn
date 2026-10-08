@@ -353,3 +353,6 @@ None outstanding. New questions are added here as they arise, and moved into Dec
 | 0.1.0 | Settled the six open questions into Decisions, and added the requirements that follow from them: R48 and R49 for discovery of runtime versions, R50 to R55 for persistence. |
 | 0.1.0 | Added R56 to R64 for error reporting, so that failures name what failed, why, where, and what to do about it. |
 | 0.1.0 | Deferred ARM64, leaving x64 as the only architecture. Restated C1, C6, C7 and R47 rather than deleting them, so the reasoning survives and putting it back is a configuration change. |
+| 0.1.0 | Recorded what undoing a swap actually requires: a history entry must hold the state the program left behind, not only where the original was saved, so that R28 can distinguish "still as we left it" from "changed by something else". |
+| 0.1.0 | Clarified R21 and R24: a runtime kind is installed whole, and backups are held outside the game folder, so nothing but the runtime files themselves is written into a game installation. |
+| 0.1.0 | Clarified R27: an undo is itself reversible, so history carries forward the state needed to redo. |

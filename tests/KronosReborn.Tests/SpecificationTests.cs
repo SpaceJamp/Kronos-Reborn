@@ -64,17 +64,17 @@ public class SpecificationTests
     {
         // A gap usually means a requirement was deleted and the rest were never renumbered, which
         // silently breaks any reference to the deleted one.
-        var requirements = RequirementIds().Where(x => x.StartsWith("R", StringComparison.Ordinal)).ToList();
+        var requirements = RequirementIds().Where(x => x.StartsWith('R')).ToList();
         AssertSequenceIsContiguous(requirements, "R");
 
-        var constraints = RequirementIds().Where(x => x.StartsWith("C", StringComparison.Ordinal)).ToList();
+        var constraints = RequirementIds().Where(x => x.StartsWith('C')).ToList();
         AssertSequenceIsContiguous(constraints, "C");
     }
 
     static void AssertSequenceIsContiguous(List<string> ids, string prefix)
     {
         var numbers = ids
-            .Select(x => int.Parse(x.Substring(1), System.Globalization.CultureInfo.InvariantCulture))
+            .Select(x => int.Parse(x.AsSpan(1), System.Globalization.CultureInfo.InvariantCulture))
             .OrderBy(x => x)
             .ToList();
 

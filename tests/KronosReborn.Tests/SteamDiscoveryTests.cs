@@ -360,7 +360,7 @@ public class SteamDiscoveryTests
             """);
 
         var scanner = new SteamLibraryScanner();
-        var result = scanner.Scan(temp.Root);
+        var result = scanner.Scan(temp.Root, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.Games.Count);
         Assert.Equal(1, result.SourcesChecked);
@@ -391,7 +391,7 @@ public class SteamDiscoveryTests
             """);
 
         var scanner = new SteamLibraryScanner();
-        var result = scanner.Scan(temp.Root);
+        var result = scanner.Scan(temp.Root, TestContext.Current.CancellationToken);
 
         Assert.Single(result.Games);
         Assert.False(result.Games[0].Exists);
@@ -412,7 +412,7 @@ public class SteamDiscoveryTests
             "this is not vdf at all {");
 
         var scanner = new SteamLibraryScanner();
-        var result = scanner.Scan(temp.Root);
+        var result = scanner.Scan(temp.Root, TestContext.Current.CancellationToken);
 
         Assert.Empty(result.Games);
         Assert.Single(result.Problems);
@@ -441,7 +441,7 @@ public class SteamDiscoveryTests
             """);
 
         var scanner = new SteamLibraryScanner();
-        var result = scanner.Scan(temp.Root);
+        var result = scanner.Scan(temp.Root, TestContext.Current.CancellationToken);
 
         Assert.Single(result.Problems);
         Assert.Equal("Steam library", result.Problems[0].Scope);

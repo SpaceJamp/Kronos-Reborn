@@ -1,0 +1,25 @@
+# Keeps dependencies moving without anyone having to remember to look.
+#
+# Grouped so that a routine patch to xunit does not arrive in the same pull request as a framework
+# bump: a batch of unrelated updates is much harder to review than one at a time.
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      test-dependencies:
+        patterns:
+          - xunit.*
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - '*'

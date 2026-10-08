@@ -58,6 +58,13 @@ jobs:
       # dotnet run rather than dotnet test, because `dotnet test` reports "Zero tests ran" against
       # xUnit v4's in-process console runner on this SDK. The same tests pass when the test
       # executable runs, which is what this does. Reason recorded in the test project file.
+      # The build treats warnings as errors, so this step is also the thing that keeps compiler and
+      # analyzer findings from being committed. dotnet format is a separate check because it notices
+      # style the compiler does not care about, and a repository whose formatting drifts is one where
+      # real diffs get lost in the noise.
+      - name: Check formatting
+        run: dotnet format KronosReborn.sln --verify-no-changes --verbosity warning
+
       - name: Test
         run: dotnet run --project .\tests\KronosReborn.Tests -c Release --no-build
 

@@ -111,7 +111,7 @@ public class RuntimeDetectionTests
 
         var game = new GameRecord("Steam", "123", "Test Game", gameDir, true);
         var scanner = new GameRuntimeScanner();
-        var snap = scanner.Scan(game);
+        var snap = scanner.Scan(game, TestContext.Current.CancellationToken);
 
         Assert.Equal("123", snap.GameId);
         Assert.Equal("Test Game", snap.GameName);
@@ -144,7 +144,7 @@ public class RuntimeDetectionTests
 
         var game = new GameRecord("Steam", "456", "Subdir Game", gameDir, true);
         var scanner = new GameRuntimeScanner();
-        var snap = scanner.Scan(game);
+        var snap = scanner.Scan(game, TestContext.Current.CancellationToken);
 
         var dlss = snap.Runtimes.First(r => r.Kind == RuntimeKind.Dlss);
         Assert.True(dlss.Exists);
@@ -161,7 +161,7 @@ public class RuntimeDetectionTests
         var scanner = new GameRuntimeScanner();
 
         // ScanMany skips games that don't exist on disk, returning empty snapshots for them
-        var results = scanner.ScanMany(new[] { game });
+        var results = scanner.ScanMany([game], TestContext.Current.CancellationToken);
 
         Assert.Single(results);
         var snap = results[0];
@@ -190,7 +190,7 @@ public class RuntimeDetectionTests
         };
 
         var scanner = new GameRuntimeScanner();
-        var results = scanner.ScanMany(games);
+        var results = scanner.ScanMany(games, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, results.Count);
         Assert.True(results[0].HasAnyRuntime);
@@ -207,7 +207,7 @@ public class RuntimeDetectionTests
             var dir = Path.Combine(temp.Root, $"Game{i}");
             Directory.CreateDirectory(dir);
             File.WriteAllBytes(Path.Combine(dir, "nvngx_dlss.dll"), CreateDummyDll());
-            return new GameRecord("Steam", i.ToString(), $"Game {i}", dir, true);
+            return new GameRecord("Steam", i.ToString(System.Globalization.CultureInfo.InvariantCulture), $"Game {i}", dir, true);
         }).ToList();
 
         var scanner = new GameRuntimeScanner();

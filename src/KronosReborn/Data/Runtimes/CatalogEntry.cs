@@ -81,19 +81,19 @@ public sealed record CatalogEntry(
         {
             var kindName = Kind switch
             {
-                RuntimeKind.Dlss  => "DLSS",
+                RuntimeKind.Dlss => "DLSS",
                 RuntimeKind.DlssG => "DLSS Frame Gen",
                 RuntimeKind.DlssR => "DLSS Ray Recon",
-                RuntimeKind.Fsr   => "FSR",
-                RuntimeKind.Xess  => "XeSS",
+                RuntimeKind.Fsr => "FSR",
+                RuntimeKind.Xess => "XeSS",
                 _ => Kind.ToString()
             };
 
             var sourceText = Source switch
             {
                 RuntimeSource.Discovered => $"discovered in {SourceDetail}",
-                RuntimeSource.Imported   => $"imported from {SourceDetail}",
-                RuntimeSource.Bundled    => $"bundled ({SourceDetail})",
+                RuntimeSource.Imported => $"imported from {SourceDetail}",
+                RuntimeSource.Bundled => $"bundled ({SourceDetail})",
                 _ => SourceDetail
             };
 

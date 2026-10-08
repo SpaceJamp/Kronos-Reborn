@@ -4,11 +4,12 @@
 </p>
 
 > [!WARNING]
-> **Under construction. There is no working application yet.**
+> **Under construction. The program finds games and can swap runtimes, but parts of the interface
+> are not built yet.**
 >
-> This repository currently contains scaffolding only: a buildable WPF project, a test harness, CI and
-> an installer script. Nothing scans for games or swaps a DLL. Nothing here is ready to run, and no
-> binaries are published.
+> Steam discovery, runtime version detection, the runtime collection, persistence, swapping and
+> undoing all work and are covered by tests. Settings has no interface, only launch and undo use it
+> so far, and only Steam is supported. Builds are unsigned and no binaries are published yet.
 
 ## What this is
 
@@ -41,11 +42,30 @@ Windows on ARM, while FSR and XeSS would.
 
 | | |
 | --- | --- |
-| Version | `0.1.0`, scaffolding only |
+| Version | `0.1.0` |
 | Framework | .NET 10, WPF |
 | Architectures | x64 |
-| Features | None yet |
-| Tests | 37, covering build metadata, version consistency, specification structure and the Valve key-values reader |
+| Libraries | Steam only |
+| Tests | 177, including architecture guards that fail on whole classes of mistake |
+
+### What works
+
+| Area | State |
+| --- | --- |
+| Steam library discovery, manifests, deduplication | Working |
+| Runtime version detection from DLL version resources | Working |
+| Runtime collection: discovery from games, import, signature checking, removal | Working |
+| Persistence: settings, per-game history, atomic writes, corrupt-file recovery | Working |
+| Swapping, including runtimes made of several DLLs, with preview and rollback | Working |
+| Undoing a swap, repeatably | Working |
+| Settings interface | Not built — values load and persist, but nothing edits them |
+| Undo through the interface | Launches and undo the newest change for the selected game |
+| GOG, Epic, Battle.net and the other libraries | Not started |
+| Batch preview and apply from the interface | Engine and tests exist; the selection flow is partial |
+
+The specification is in [`docs/spec.md`](docs/spec.md) and is the authority on what the program is
+meant to do. Requirements are cited by number in comments next to the code that satisfies them, and
+a test fails if code cites a requirement the specification does not define.
 
 ## Requirements
 
@@ -85,10 +105,35 @@ dotnet run --project .\tests\KronosReborn.Tests -c Release
 ```
 
 **Not `dotnet test`.** That reports "Zero tests ran" and exits 5 on this SDK. The tests themselves are
-fine — the same thirty-seven pass when the test executable runs — but `dotnet test` reaches xUnit's
-in-process console runner rather than its Microsoft.Testing.Platform runner, and the two do not share a
-protocol here. The reasons this was not simply fixed are recorded in `KronosReborn.Tests.csproj`;
-revisit when the SDK or xUnit ships a combination that works.
+fine — they all pass when the test executable runs — but `dotnet test` reaches xUnit's in-process
+console runner rather than its Microsoft.Testing.Platform runner, and the two do not share a protocol
+here. The reasons this was not simply fixed are recorded in `KronosReborn.Tests.csproj`; revisit when
+the SDK or xUnit ships a combination that works.
+
+### Tests that read the source
+
+`ArchitectureTests` reads the repository's own files rather than calling into it. These are not
+style checks: each one exists because the mistake it guards was made and not caught.
+
+- **Every runtime kind is a unit with files, and every kind is covered by the swap tests.** A runtime
+  made of several DLLs had one of them overwritten and the other left behind. Any test that happened
+  to pick a single-DLL runtime passed while that was true.
+- **Only `DataPaths` builds the program's data directory, and no test constructs a service without
+  one.** The data directory used to be a static reading the real user profile, so running the suite
+  wrote history files into the developer's own account and read them back on the next run.
+- **The swap engine is reachable from the view model, and every command it exposes is bound.** The
+  swap, undo and batch engines were written, tested and never called: the program could list games
+  but could not change anything, and no engine test would have shown that.
+- **Every requirement cited in code exists in the specification.**
+
+## Checks that run on every build
+
+| Check | What it prevents |
+| --- | --- |
+| Warnings are errors, with analysis at the recommended level | A nullable dereference or an obsolete API reaching a release |
+| `dotnet format --verify-no-changes` | Formatting drift hiding real diffs |
+| Tests run against temporary directories only | Tests depending on, or damaging, machine state |
+| Architecture guards above | Whole classes of defect passing unnoticed |
 
 ## Packaging
 
@@ -136,6 +181,20 @@ arbitrary until you know why:
 - **`Directory.Build.props` injects build metadata from a target, not a bare `ItemGroup`.** A bare
   `ItemGroup` is evaluated at project load, before the SDK assigns `SourceRevisionId`, so the commit
   is written as an empty string while the informational version still shows it.
+- **Warnings are errors.** A build that reports warnings still succeeds, so a possible null
+  dereference gets committed and is discovered at run time. There were seventeen of these. NuGet
+  advisory codes stay warnings, because an unfixable transitive advisory must not be able to stop
+  every build.
+- **A runtime kind is a unit that a swap handles whole.** DLSS is one DLL; FSR is two that only work
+  as a matched pair. Writing one of them leaves the game with a runtime that never existed in that
+  shape, so a swap of any kind is all of its files or none.
+- **A history entry records the state the program left behind, not just where the original went.**
+  Undoing has to know whether the game still holds what was written into it, which means storing a
+  hash of the file after the swap. Comparing the live file against the backup instead cannot work:
+  after a successful swap those two necessarily differ, so it rejects every undo.
+- **Backups live in the program's data directory, not beside the file they protect.** A file named
+  `nvngx_dlss.dll.kronos_bak_...` inside a Steam install is at the mercy of anything that verifies
+  game files, shows all files in a launcher, or deletes unknown DLLs.
 - **Every build metadata value is nullable.** An unset timestamp converts to the Unix epoch, which
   formats as 1 January 1970 and reads as a real build date rather than as missing data.
 - **NuGet auditing covers the whole graph, transitive packages included,** and audit findings stay
