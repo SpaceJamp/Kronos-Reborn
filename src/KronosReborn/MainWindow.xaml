@@ -95,6 +95,36 @@
                         Command="{Binding ToggleGroupCommand}"
                         ToolTip="Toggle grouping by library" />
 
+                <!--
+                List or poster grid.
+
+                The grid is the poster view: one card per game with the versions it runs across the
+                bottom. It is the faster way to see a library at a glance — which games are behind and
+                which are current — where the list is better for comparing versions between games.
+                -->
+                <Button Content="{Binding ViewModeText}"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding ToggleViewCommand}"
+                        ToolTip="Switch between the list and the poster grid"
+                        Margin="4,0,0,0" />
+
+                <!--
+                Search. Filters the list or grid as it is typed, so a library of a few hundred games
+                can be narrowed without scrolling.
+                -->
+                <TextBox x:Name="SearchBox"
+                         Width="200"
+                         Margin="12,0,0,0"
+                         VerticalAlignment="Center"
+                         Padding="8,4"
+                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="Filter by game name" />
+                <TextBlock Text="🔍"
+                           VerticalAlignment="Center"
+                           Margin="-30,0,8,0"
+                           IsHitTestVisible="False"
+                           FontSize="12" />
+
                 <!-- Theme toggle -->
                 <Button Content="🌓"
                         Style="{StaticResource ToolbarButtonStyle}"
@@ -115,6 +145,81 @@
 
                 <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="0,0,12,0" />
 
+                <!--
+        The selected game's detail panel.
+
+        The pickers live here rather than in the list because a list row is the wrong place for a
+        control that changes something: it makes every row look editable, and with five runtime
+        columns it leaves no room for the game name. Here the game being changed is named, its install
+        path is shown, and each runtime has its own dropdown beneath its own label — so which of the
+        three DLSS parts a version belongs to is stated on the control that will install it.
+
+        Inline rather than a dialog, which the specification asks for: this is a question that can be
+        answered on the main window, so it is not put behind a modal.
+        -->
+        <Border Grid.Row="1"
+                Width="360"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Margin="0,16,16,16"
+                Padding="16"
+                Visibility="{Binding HasDetailPanel, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="{Binding SelectedGame.GameName}"
+                           Style="{StaticResource TitleStyle}"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGame.InstallPath}"
+                           FontSize="{StaticResource FontSizeSmall}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,2,0,12" />
+
+                <!--
+                Each runtime with its own label over its own dropdown. Two columns, because there are
+                five runtimes and a single column of five controls pushes the bottom off the window.
+                -->
+                <ItemsControl ItemsSource="{Binding SelectedGame.Choices}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Width="150"
+                                        Margin="0,0,10,10"
+                                        Visibility="{Binding IsAvailable, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="{Binding Label}"
+                                           FontWeight="SemiBold"
+                                           FontSize="{StaticResource FontSizeSmall}"
+                                           Margin="0,0,0,2" />
+
+                                <ContentControl Content="{Binding}"
+                                                ContentTemplate="{StaticResource RuntimePickerTemplate}" />
+
+                                <TextBlock Text="{Binding CurrentText}"
+                                           FontSize="{StaticResource FontSizeSmall}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,2,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <!-- Games / version library -->
+                <Button Content="{Binding AreaText}"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding ToggleAreaCommand}"
+                        Margin="12,0,0,0"
+                        ToolTip="Switch between your games and the versions you hold" />
+
                 <!-- Settings -->
                 <Button Content="⚙ Settings"
                         Style="{StaticResource ToolbarButtonStyle}"
@@ -129,10 +234,18 @@
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="4">
+            <Grid>
+            <!--
+            The list and the poster grid are both here and one is hidden, rather than one of them being
+            rebuilt when the view changes. Rebuilding a GridView on every toggle throws away the column
+            widths the user has dragged, which is a small thing that is very annoying if it happens
+            every time you press the button.
+            -->
             <ListView x:Name="GameListView"
                       ItemsSource="{Binding Games, Mode=OneWay}"
                         SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
                       SelectionMode="Extended"
+                      Visibility="{Binding IsListView, Converter={StaticResource BoolToVisibility}}"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       ScrollViewer.HorizontalScrollBarVisibility="Auto">
@@ -217,29 +330,21 @@
                         <GridViewColumn Header="Library" Width="130"
                                         DisplayMemberBinding="{Binding LibraryName}" />
 
-                        <!-- DLSS -->
                         <!--
-                        One column per runtime, each holding that runtime's version picker for this
-                        game.
+                        Versions, read-only.
 
-                        These were read-only text before, and the only way to change a version was to
-                        select a game and pick from a single list of every runtime at once — where
-                        "310.2.1" appeared once for DLSS and once for Frame Generation, distinguishable
-                        only by the lines around them. Here each runtime's choice is its own cell in
-                        its own column, so the three DLSS parts are visibly three decisions, each
-                        carrying only its own versions, and any number of games can be set up before
-                        anything is applied.
-
-                        A cell is blank where the game does not carry that runtime: R45 says a runtime
-                        a game does not have is not offered, since installing one is adding runtime
-                        support to the game rather than upgrading what it has.
+                        The pickers for these live in the selected game's panel rather than here, and
+                        that is deliberate: a control in every row would make the whole list look
+                        editable, and two controls showing the same value is a defect however well
+                        they agree. What the list shows is what each game runs, which is what you
+                        compare rows by; what you can change is in the panel, on one named game.
                         -->
                         <GridViewColumn Header="DLSS" Width="104">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <ContentControl Content="{Binding DlssChoice}"
-                                                    ContentTemplate="{StaticResource RuntimePickerTemplate}"
-                                                    VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding DlssChoice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
@@ -247,9 +352,9 @@
                         <GridViewColumn Header="DLSS FG" Width="104">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <ContentControl Content="{Binding DlssGChoice}"
-                                                    ContentTemplate="{StaticResource RuntimePickerTemplate}"
-                                                    VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding DlssGChoice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
@@ -257,9 +362,9 @@
                         <GridViewColumn Header="DLSS RR" Width="104">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <ContentControl Content="{Binding DlssRChoice}"
-                                                    ContentTemplate="{StaticResource RuntimePickerTemplate}"
-                                                    VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding DlssRChoice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
@@ -267,9 +372,9 @@
                         <GridViewColumn Header="FSR" Width="104">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <ContentControl Content="{Binding FsrChoice}"
-                                                    ContentTemplate="{StaticResource RuntimePickerTemplate}"
-                                                    VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding FsrChoice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
@@ -277,13 +382,12 @@
                         <GridViewColumn Header="XeSS" Width="104">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <ContentControl Content="{Binding XessChoice}"
-                                                    ContentTemplate="{StaticResource RuntimePickerTemplate}"
-                                                    VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding XessChoice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
-
                         <!-- Last Changed -->
                         <GridViewColumn Header="Last Changed" Width="110"
                                         DisplayMemberBinding="{Binding LastChangedText}" />
@@ -339,6 +443,196 @@
                     </Style>
                 </ListView.ItemContainerStyle>
             </ListView>
+
+            <!--
+            Poster grid: the view for seeing a whole library at a glance.
+
+            Each card is the game's own artwork with a bar across the bottom carrying the versions it
+            runs, which is the thing you cannot get from a list of names. A game with no cached
+            artwork shows its initial on a muted panel rather than a blank, because a grid of empty
+            cards looks like a failure to load.
+
+            A game missing from disk is dimmed rather than hidden, the same as in the list: a game that
+            has been uninstalled is still a game the user has, and it should still be findable.
+            -->
+            <ListBox x:Name="GamePosterView"
+                     ItemsSource="{Binding Games, Mode=OneWay}"
+                     SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
+                     Visibility="{Binding IsGridView, Converter={StaticResource BoolToVisibility}}"
+                     HorizontalContentAlignment="Stretch"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Width" Value="168" />
+                        <Setter Property="Margin" Value="8" />
+                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0" Height="150">
+                                <Image Source="{Binding PosterPath}"
+                                       Stretch="UniformToFill"
+                                       Visibility="{Binding HasPoster, Converter={StaticResource BoolToVisibility}}" />
+
+                                <Border Background="{DynamicResource SurfaceBrush}"
+                                        Visibility="{Binding HasPoster, Converter={StaticResource InverseBool}}">
+                                    <TextBlock Text="{Binding Initial}"
+                                               FontSize="36"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+
+                            <!--
+                            What the game runs. Shown without the runtime's name where there is only
+                            one, and with it where there is more than one, because "310.9.1" alone on a
+                            card does not say whether it is Super Resolution or Frame Generation.
+                            -->
+                            <StackPanel Grid.Row="1"
+                                        Margin="8,6,8,8"
+                                        Background="{DynamicResource SurfaceBrush}">
+                                <TextBlock Text="{Binding GameName}"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap"
+                                           MaxHeight="34" />
+
+                                <ItemsControl ItemsSource="{Binding Choices}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal"
+                                                        Visibility="{Binding IsAvailable, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="{Binding Label}"
+                                                           FontSize="{StaticResource FontSizeSmall}"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                                           Margin="0,3,4,0" />
+                                                <TextBlock Text="{Binding CurrentText}"
+                                                           FontSize="{StaticResource FontSizeSmall}"
+                                                           FontFamily="Consolas"
+                                                           Margin="0,3,0,0" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            </Grid>
+        </Border>
+
+        <!--
+        The version library.
+
+        What the collection actually holds, which is a question the game list cannot answer: the list
+        says what each game runs and the pickers say what could go into one game, but nothing said what
+        was available in total, where a version came from, or whether it could be trusted. A version
+        three games already run is one known to work on this machine, which is why the card says so.
+
+        Newest first, compared by number rather than as text: text ordering puts 310.9.1 before 310.2.1,
+        which makes the older build look like the newer one.
+        -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource BackgroundBrush}"
+                Margin="8"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Visibility="{Binding ShowingLibrary, Converter={StaticResource BoolToVisibility}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="12,10,12,0">
+                    <TextBlock Text="{Binding LibrarySummary}"
+                               Style="{StaticResource SubtitleStyle}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,16,0" />
+
+                    <!--
+                    Filter by runtime. Leaving it unset shows everything, which is what a first visit
+                    should show rather than an empty library because nothing had been chosen yet.
+                    -->
+                    <ComboBox ItemsSource="{Binding LibraryKindOptions}"
+                              SelectedItem="{Binding LibraryKind}"
+                              MinWidth="140"
+                              VerticalAlignment="Center">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Label}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
+                <ScrollViewer Grid.Row="1" Margin="8,8,8,0">
+                    <ItemsControl ItemsSource="{Binding LibraryEntries}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="250"
+                                        Margin="0,0,8,8"
+                                        Padding="12"
+                                        Background="{DynamicResource SurfaceBrush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding KindLabel}"
+                                                       Style="{StaticResource SubtitleStyle}"
+                                                       Margin="0,0,8,0" />
+                                            <TextBlock Text="{Binding Version}"
+                                                       FontFamily="Consolas"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+
+                                        <TextBlock Text="{Binding TrustText}"
+                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                                   Margin="0,4,0,0" />
+
+                                        <TextBlock Text="{Binding UsageText}"
+                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                   Margin="0,2,0,0" />
+
+                                        <TextBlock Text="{Binding SourceText}"
+                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
         </Border>
 
         <!-- Empty state overlay -->

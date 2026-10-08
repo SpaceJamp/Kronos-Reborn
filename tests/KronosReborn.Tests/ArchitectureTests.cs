@@ -300,25 +300,25 @@ public class ArchitectureTests
             Assert.Contains($"Header=\"{column}\"", xaml, StringComparison.Ordinal);
         }
 
-        // Each runtime column binds to its own property on the row rather than to one shared list, so
-        // the cells cannot end up showing each other's choices.
+        // Each runtime column reads its own property on the row rather than one shared list, so
+        // the cells cannot end up showing each other's versions.
         foreach (var property in new[]
                  {
-                     "DlssChoice", "DlssGChoice", "DlssRChoice", "FsrChoice", "XessChoice",
+                     "DlssChoice.CurrentText", "DlssGChoice.CurrentText", "DlssRChoice.CurrentText",
+                     "FsrChoice.CurrentText", "XessChoice.CurrentText",
                  })
         {
-            Assert.Contains(
-                $"Content=\"{{Binding {property}}}\"",
-                xaml,
-                StringComparison.Ordinal);
+            Assert.Contains($"Binding {property}", xaml, StringComparison.Ordinal);
         }
     }
 
     [Fact]
-    public void EachRuntimeColumnUsesTheSamePickerMarkup()
+    public void AVersionIsChangedInExactlyOnePlace()
     {
-        // Five copies of the same markup would drift: one gets its warning removed, another loses its
-        // tooltip, and nothing fails. One template means there is one copy to get wrong.
+        // The pickers were in every row of the list and also in the selected game's panel. Two controls
+        // showing the same value is a defect however well they agree: it doubles the places a change
+        // can be made, makes the whole list look editable, and leaves the list with no room for the
+        // game name.
         var xaml = File.ReadAllText(
             Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
 
@@ -328,9 +328,12 @@ public class ArchitectureTests
             RegexOptions.None,
             TimeSpan.FromSeconds(5));
 
-        Assert.Equal(5, uses);
-
+        Assert.Equal(1, uses);
         Assert.Contains("x:Key=\"RuntimePickerTemplate\"", xaml, StringComparison.Ordinal);
+
+        // And it is inside the panel, named after the selected game, so it is clear which game a
+        // version chosen there would go into.
+        Assert.Contains("SelectedGame.Choices", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

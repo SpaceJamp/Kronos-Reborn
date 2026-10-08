@@ -272,6 +272,17 @@ work on any DirectX 12 GPU.
   310.9.1 for the same build.
 - **R72.** A runtime a game cannot take is not offered at all, and its cell is empty rather than
   holding a control that looks usable and does nothing. A game carrying no runtimes offers nothing.
+- **R73.** A version is chosen in exactly one place: a panel naming the game and its install path, with
+  a picker per runtime beneath that runtime's name. A list row is the wrong place for a control that
+  changes something: it makes every row look editable and puts two controls on one value.
+- **R74.** What the collection holds is viewable on its own, newest first by version number rather than
+  as text. Each version says which runtime it is for, whether its signature was accepted, where it came
+  from, and which games already run it — a version several games already run is one known to work here.
+- **R75.** Games can be shown as poster cards carrying the versions they run, and either view can be
+  filtered by name. Both views are built once and one is hidden, rather than one being rebuilt on each
+  toggle, because rebuilding throws away column widths the user has set.
+- **R76.** The choice of list or grid persists, as grouping does. A preference that resets every launch
+  is a preference that has to be set every launch.
 
 ## Safety principles
 
@@ -401,5 +412,5 @@ None outstanding. New questions are added here as they arise, and moved into Dec
 | 0.1.0 | Noted R33 against R42: the setting decides whether an untrusted file may enter the collection, and does not decide whether the user is warned when one is installed. Accepting a file is not evidence that it is genuine. |
 | 0.1.0 | Built cover images, which the Decisions section above had deferred, after establishing that Steam's own artwork cache makes them available locally with no network access and no cache to maintain. |
 | 0.1.0 | Added R65 to R69. DLSS, DLSS Frame Generation and DLSS Ray Reconstruction are three separate things the user chooses between separately, so choosing one installs one. The picker gives each its own picker rather than one flat list of bare version numbers, because the three routinely hold the same version and a line reading only "310.2.1" does not say which of them it would install. NVIDIA supports them only at matching versions, which the preview now reports rather than acts on — it was briefly implemented as installing them together, which took the choice away, and that has been reversed. A runtime the game does not carry is never offered; a game whose several runtimes cannot all be applied is left as it was. |
-| 0.1.0 | Added R70 to R72. The version picker moved into the game list, one column per runtime, replacing read-only version text and a single picker for whichever game was selected. The old arrangement could set one game at a time and could not say which of the three DLSS parts a bare version number belonged to. The window's minimum width is now 1120px to fit five runtime columns; the fit check reads that from the markup, so it follows rather than being restated. |
+| 0.1.0 | Added R73 to R76, after reading the DLSS Swapper source rather than working from its description. Three things came out of it that this program had no equivalent of: a poster grid carrying each game's versions, a search box, and a version library — a screen answering "what can I install, where did it come from, and does it work anywhere", which nothing previously could answer. The pickers moved from the list rows into a panel for the selected game, because a control in every row makes the list look editable and puts two controls on one value. That reverses the R70 arrangement of putting them in the list; R70's underlying requirement, that each runtime be chosen separately, is unchanged and is now stated per picker rather than per column. |
 | 0.1.0 | Reduced the game list's fixed column widths and the size of the poster cell so the whole row fits the window at its minimum width. Adding posters had pushed the runtime columns off the right edge, where the version being compared was the one that could no longer be seen. Guarded by two checks over the window markup, since a column that is off screen is still present and still bound and nothing else fails. |

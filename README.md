@@ -54,6 +54,9 @@ Windows on ARM, while FSR and XeSS would.
 | --- | --- |
 | | Steam library discovery, manifests, deduplication | Working |
 | Version picker in the game list, one column per runtime | Working |
+| Poster grid view of games, and search | Working |
+| Version library — every version held, where it came from, what runs it | Working |
+| Per-game panel with a version picker per runtime | Working |
 | Game posters, read from Steam's own artwork cache | Working |
 | Runtime version detection, in nested folders as well as the root | Working |
 | Runtime collection: discovery from games, import, signature checking, removal | Working |
@@ -225,14 +228,17 @@ arbitrary until you know why:
   pair, so choosing one takes every file of that kind beside it and refuses the import, naming what is
   missing, if any are absent. What is taken is copied into the collection's own folder under the data
   directory, so deleting or moving the folder it was downloaded to does not empty the collection.
-- **The version picker lives in the game list, one column per runtime.** DLSS, DLSS Frame Generation,
-  DLSS Ray Reconstruction, FSR and XeSS each have their own column, each holding that runtime's
-  versions for that game and nothing else. Set up as many games as you like, then Preview and Apply.
-  Previously the only picker was one flat list for whichever game was selected, where "310.2.1"
-  appeared once for DLSS and once for Frame Generation and only the surrounding lines said which was
-  which — and only one game could be set at a time.
-- **Choosing a version for one runtime installs only that one.** The three DLSS parts routinely hold
-  the same version number, which is why they get separate columns rather than a shared one.
+- **Three ways to look at things.** The games as a list with versions side by side; the games as a
+  poster grid, each card carrying the versions it runs, for seeing a whole library at a glance; and
+  the version library, which is what you actually hold — every version, newest first, where it came
+  from, whether it is trusted, and how many games already run it. Search filters whichever is showing.
+- **Versions are changed in one place: the selected game's panel.** It names the game and its install
+  path, and gives each runtime its own dropdown beneath its own label. The list shows what each game
+  runs; the panel is what you change. There is deliberately no control in the list rows — a picker in
+  every row makes the whole list look editable and puts two controls on the same value.
+- **Choosing a version for one runtime installs only that one.** DLSS, DLSS Frame Generation and DLSS
+  Ray Reconstruction get separate dropdowns because they routinely hold the same version number, and
+  one list of bare numbers cannot say which of them a version belongs to.
 - **NVIDIA supports those three only at matching versions.** Where a choice would leave them out of
   step, the preview says so and names the part that would be left behind. It does not refuse, and it
   does not quietly fix it: the user chooses what goes in their own library.

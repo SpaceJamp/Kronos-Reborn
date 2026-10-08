@@ -447,6 +447,85 @@ public sealed record PreviewLine(string GameName, string Summary, bool HasWarnin
 /// <param name="Choice">The chosen version, and which runtime it is for.</param>
 public sealed record PendingChange(GameRow Game, RuntimeChoice Choice);
 
+/// <summary>How the games are laid out.</summary>
+public enum ViewMode
+{
+    /// <summary>One row per game, with the versions side by side.</summary>
+    List,
+
+    /// <summary>One poster card per game, with the versions it runs across the bottom.</summary>
+    PosterGrid,
+}
+
+/// <summary>
+/// One version in the collection, as the library shows it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is the answer to a question the rest of the interface cannot answer: what is actually
+/// available to install. The game list shows what each game runs; the pickers show what could be put
+/// in a particular game. Neither says what the collection holds in total, where a version came from,
+/// or whether it can be trusted.
+/// </para>
+/// <para>
+/// Games currently running it is included because it is the practical question: a version that three
+/// games already run is one that is known to work on this machine.
+/// </para>
+/// </remarks>
+/// <param name="Entry">The catalog entry being shown.</param>
+/// <param name="UsedBy">Names of the games that already run this version.</param>
+public sealed record LibraryEntry(CatalogEntry Entry, IReadOnlyList<string> UsedBy)
+{
+    /// <summary>Which runtime this version is for.</summary>
+    public RuntimeKind Kind => Entry.Kind;
+
+    /// <summary>Its name, such as "DLSS Frame Gen".</summary>
+    public string KindLabel => RuntimeKindNames.Display(Entry.Kind);
+
+    /// <summary>The version number.</summary>
+    public string Version => Entry.Version;
+
+    /// <summary>Whether the file was brought in by the user rather than found in a game.</summary>
+    public bool IsImported => Entry.Source == RuntimeSource.Imported;
+
+    /// <summary>Where it came from, in the user's terms.</summary>
+    public string SourceText => Entry.SourceDetail;
+
+    /// <summary>Whether the signature was judged, and what that means for installing it.</summary>
+    public bool IsUntrusted => !Entry.IsInstallableWithoutWarning;
+
+    /// <summary>A short mark for the trust state, since a colour alone says nothing to everyone.</summary>
+    public string TrustText => IsUntrusted ? "⚠ untrusted" : "signed";
+
+    /// <summary>How many games already run it, and which, or that none do.</summary>
+    public string UsageText =>
+        UsedBy.Count == 0
+            ? "Not installed in any game"
+            : UsedBy.Count == 1
+                ? $"Used by {UsedBy[0]}"
+                : $"Used by {UsedBy.Count} games";
+}
+
+/// <summary>
+/// A runtime the library can be filtered to.
+/// </summary>
+/// <param name="Kind">The runtime, or null for "every runtime".</param>
+/// <param name="Label">Its name in the picker.</param>
+public sealed record LibraryKindOption(RuntimeKind? Kind, string Label)
+{
+    public static LibraryKindOption All { get; } = new(null, "All runtimes");
+}
+
+/// <summary>Which pane of the main area is showing.</summary>
+public enum MainArea
+{
+    /// <summary>The games, as a list or as poster cards.</summary>
+    Games,
+
+    /// <summary>The collection's versions, as cards.</summary>
+    Library,
+}
+
 public enum GroupMode
 {
     /// <summary>Flat list, no grouping.</summary>
@@ -509,6 +588,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
         ToggleGroupCommand = new RelayCommand(_ => GroupMode = GroupMode == GroupMode.Flat ? GroupMode.ByLibrary : GroupMode.Flat);
+
+        ToggleViewCommand = new RelayCommand(_ => ViewMode = ViewMode == ViewMode.List ? ViewMode.PosterGrid : ViewMode.List);
+
+        ToggleAreaCommand = new RelayCommand(_ => Area = Area == MainArea.Games ? MainArea.Library : MainArea.Games);
         ToggleThemeCommand = new RelayCommand(_ => _themeManager.ToggleTheme());
         OpenSettingsCommand = new RelayCommand(_ => OpenSettings());
         PreviewSwapCommand = new RelayCommand(_ => PreviewSwap(), _ => CanSwap);
@@ -617,6 +700,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Whether any game is ticked.</summary>
     public bool HasSelection => SelectedCount > 0;
 
+    /// <summary>
+    /// Whether the detail panel has a game to show.
+    /// </summary>
+    /// <remarks>
+    /// On the selected game rather than on any ticked row: the panel is about one game, and showing it
+    /// for a multi-row selection would imply the pickers applied to all of them at once, which they do
+    /// not.
+    /// </remarks>
+    public bool HasDetailPanel => SelectedGame is not null;
+
     public GroupMode GroupMode
     {
         get => _groupMode;
@@ -638,6 +731,251 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public string GroupModeText => GroupMode == GroupMode.Flat ? "Flat list" : "Group by library";
+
+    /// <summary>How the games are laid out: as a list, or as poster cards.</summary>
+    /// <remarks>
+    /// R12 applies here as it does to grouping: the choice is stored, because a preference that resets
+    /// every launch is a preference the user has to set every launch.
+    /// </remarks>
+    public ViewMode ViewMode
+    {
+        get => _settings.PosterGrid ? ViewMode.PosterGrid : ViewMode.List;
+        set
+        {
+            // The setting is the single source of truth, so a stored preference and the current view
+            // cannot disagree — which they would if this held a copy of the choice of its own.
+            if (ViewMode == value)
+            {
+                return;
+            }
+
+            _persistence.SaveSettings(_settings.With(posterGrid: value == ViewMode.PosterGrid));
+
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ViewModeText));
+            OnPropertyChanged(nameof(IsListView));
+            OnPropertyChanged(nameof(IsGridView));
+        }
+    }
+
+    /// <summary>What the view toggle says it will switch to.</summary>
+    public string ViewModeText => ViewMode == ViewMode.List ? "▦ Grid" : "☰ List";
+
+    /// <summary>Whether the list is the one showing.</summary>
+    public bool IsListView => ViewMode == ViewMode.List;
+
+    /// <summary>Whether the poster grid is the one showing.</summary>
+    public bool IsGridView => ViewMode == ViewMode.PosterGrid;
+
+    /// <summary>
+    /// Text typed into the search box, filtering the games as it changes.
+    /// </summary>
+    /// <remarks>
+    /// Applied by the collection view rather than by rebuilding the collection, so filtering does not
+    /// discard the rows' chosen versions. Rebuilding would silently throw away a change the user had
+    /// made and was about to apply.
+    /// </remarks>
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (string.Equals(_searchText, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _searchText = value ?? string.Empty;
+            OnPropertyChanged();
+
+            ApplyFilter();
+        }
+    }
+
+    /// <summary>Whether the search found nothing, so an empty library reads as a bad search.</summary>
+    public bool IsSearchMissingEverything => _searchText.Length > 0 && Games.Count == 0;
+
+    private string _searchText = string.Empty;
+
+    /// <summary>Applies the search text to whichever view of the games is showing.</summary>
+    // ------------------------------------------------------------ The version library
+
+    /// <summary>Which pane of the main area is showing.</summary>
+    public MainArea Area
+    {
+        get => _area;
+        set
+        {
+            if (_area == value)
+            {
+                return;
+            }
+
+            _area = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowingGames));
+            OnPropertyChanged(nameof(ShowingLibrary));
+        }
+    }
+
+    /// <summary>Whether the games pane is the one showing.</summary>
+    public bool ShowingGames => Area == MainArea.Games;
+
+    /// <summary>Whether the library pane is the one showing.</summary>
+    public bool ShowingLibrary => Area == MainArea.Library;
+
+    /// <summary>Switches between the games and the version library.</summary>
+    public ICommand ToggleAreaCommand { get; }
+
+    /// <summary>What the area toggle says it will switch to.</summary>
+    public string AreaText => Area == MainArea.Games ? "Versions ▤" : "◀ Games";
+
+    /// <summary>Which runtime the library is filtered to.</summary>
+    public LibraryKindOption LibraryKind
+    {
+        get
+        {
+            var kinds = LibraryKindOptions;
+
+            return kinds.FirstOrDefault(o => o.Kind == _libraryKind) is { } found
+                ? found
+                : kinds[0];
+        }
+        set
+        {
+            if (value is not null && _libraryKind == value.Kind)
+            {
+                return;
+            }
+
+            _libraryKind = value?.Kind;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LibraryEntries));
+            OnPropertyChanged(nameof(LibrarySummary));
+        }
+    }
+
+    /// <summary>The runtimes the library can be filtered to, "all" first.</summary>
+    public IReadOnlyList<LibraryKindOption> LibraryKindOptions =>
+        [LibraryKindOption.All, .. LibraryKinds.Select(k => new LibraryKindOption(k, RuntimeKindNames.Display(k)))];
+
+    /// <summary>The runtime types the library has something for.</summary>
+    public IReadOnlyList<RuntimeKind> LibraryKinds =>
+        [.. Enum.GetValues<RuntimeKind>()
+            .Where(kind => _catalog.Entries.Any(e => e.Kind == kind))];
+
+    /// <summary>The versions of the selected runtime the collection holds.</summary>
+    public IReadOnlyList<LibraryEntry> LibraryEntries
+    {
+        get
+        {
+            // No selection means everything, which is what a first visit should show rather than an
+            // empty library because nothing had been chosen yet.
+            var chosen = _libraryKind;
+
+            return
+            [
+                .. _catalog.Entries
+                    .Where(e => chosen is null || e.Kind == chosen)
+                    .OrderBy(e => RuntimeKindNames.Display(e.Kind))
+                    .ThenByDescending(e => e.Version, NewestFirst)
+                    .Select(e => new LibraryEntry(e, GamesUsing(e)))
+            ];
+        }
+    }
+
+    /// <summary>How many versions are held, and for which runtimes.</summary>
+    public string LibrarySummary =>
+        _catalog.Entries.Count == 0
+            ? "No versions held yet. Import one, or find one in a game."
+            : $"{_catalog.Entries.Count} version(s) across {LibraryKinds.Count} runtime(s).";
+
+    /// <summary>
+    /// Newest first, comparing by number rather than by text.
+    /// </summary>
+    /// <remarks>
+    /// Text ordering puts "310.9.1" before "310.2.1", which is the wrong way round and makes the
+    /// library read as though the older build were the newer one.
+    /// </remarks>
+    private static IComparer<string> NewestFirst =>
+        Comparer<string>.Create((a, b) =>
+            KronosReborn.Data.Actions.VersionComparer.IsOlder(a, b) ? -1
+            : KronosReborn.Data.Actions.VersionComparer.IsOlder(b, a) ? 1
+            : 0);
+
+    /// <summary>Names of the games that already run a given catalog entry.</summary>
+    private IReadOnlyList<string> GamesUsing(CatalogEntry entry) =>
+        [.. _games
+            .Where(g => g.Snapshot?.Runtimes.Any(r =>
+                r.Exists &&
+                r.Kind == entry.Kind &&
+                VersionNumber.AreEquivalent(r.Version, entry.Version)) == true)
+            .Select(g => g.GameName)];
+
+    private MainArea _area = MainArea.Games;
+    private RuntimeKind? _libraryKind;
+
+    private void ApplyFilter()
+    {
+        var text = _searchText.Trim();
+
+        // Both views are filtered, not just the one on screen, so switching view does not reveal games
+        // the search was meant to hide.
+        var filtered = text.Length == 0
+            ? null
+            : _games.Where(g => g.GameName.Contains(text, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (filtered is null)
+        {
+            foreach (var view in new[] { ListView, PosterView })
+            {
+                if (view is not null)
+                {
+                    view.Filter = null;
+                }
+            }
+        }
+        else
+        {
+            var keep = filtered.ToHashSet();
+
+            foreach (var view in new[] { ListView, PosterView })
+            {
+                if (view is not null)
+                {
+                    view.Filter = o => o is GameRow row && keep.Contains(row);
+                }
+            }
+        }
+
+        foreach (var view in new[] { ListView, PosterView })
+        {
+            view?.Refresh();
+        }
+
+        OnPropertyChanged(nameof(IsSearchMissingEverything));
+    }
+
+    private System.ComponentModel.ICollectionView? ListView { get; set; }
+
+    private System.ComponentModel.ICollectionView? PosterView { get; set; }
+
+    /// <summary>
+    /// Hands the view model the collection views it filters.
+    /// </summary>
+    /// <remarks>
+    /// Supplied by the window because a collection view belongs to a view. Filtering is done on the
+    /// views rather than by rebuilding <see cref="Games"/>, so that searching does not discard the
+    /// versions the user has chosen but not yet applied.
+    /// </remarks>
+    public void AttachViews(
+        System.ComponentModel.ICollectionView list,
+        System.ComponentModel.ICollectionView poster)
+    {
+        ListView = list;
+        PosterView = poster;
+        ApplyFilter();
+    }
 
     public bool IsScanning
     {
@@ -736,6 +1074,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public ICommand RefreshCommand { get; }
     public ICommand ToggleGroupCommand { get; }
+
+    /// <summary>Switches between the list and the poster grid.</summary>
+    public ICommand ToggleViewCommand { get; }
     public ICommand ToggleThemeCommand { get; }
     public ICommand OpenSettingsCommand { get; }
     public ICommand PreviewSwapCommand { get; }
@@ -865,6 +1206,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
             _selectedGame = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasDetailPanel));
             RebuildAllChoices();
             ClearPreview();
             RaiseSwapCommandStates();
@@ -1069,6 +1411,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ClearPreview();
         OnPropertyChanged(nameof(PendingChangeCount));
         OnPropertyChanged(nameof(HasPendingChanges));
+        OnPropertyChanged(nameof(LibraryEntries));
+        OnPropertyChanged(nameof(LibrarySummary));
+        OnPropertyChanged(nameof(LibraryKinds));
         RaiseSwapCommandStates();
     }
 
@@ -1084,6 +1429,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ClearPreview();
         OnPropertyChanged(nameof(PendingChangeCount));
         OnPropertyChanged(nameof(HasPendingChanges));
+        OnPropertyChanged(nameof(LibraryEntries));
+        OnPropertyChanged(nameof(LibrarySummary));
+        OnPropertyChanged(nameof(LibraryKinds));
         RaiseSwapCommandStates();
     }
 

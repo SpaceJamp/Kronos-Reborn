@@ -28,6 +28,9 @@ public sealed record Settings(
     /// <summary>Whether to group the game list by library or show flat.</summary>
     bool GroupByLibrary,
 
+    /// <summary>Whether games are shown as poster cards rather than as a list.</summary>
+    bool PosterGrid,
+
     /// <summary>Window width (restored on startup).</summary>
     double? WindowWidth,
 
@@ -49,6 +52,7 @@ public sealed record Settings(
         AllowUntrustedRuntimes: false,
         MaxHistoryPerGame: 50,
         GroupByLibrary: true,
+        PosterGrid: false,
         WindowWidth: null,
         WindowHeight: null,
         WindowMaximized: false,
@@ -61,6 +65,7 @@ public sealed record Settings(
         bool? allowUntrustedRuntimes = null,
         int? maxHistoryPerGame = null,
         bool? groupByLibrary = null,
+        bool? posterGrid = null,
         double? windowWidth = null,
         double? windowHeight = null,
         bool? windowMaximized = null,
@@ -72,6 +77,7 @@ public sealed record Settings(
             allowUntrustedRuntimes ?? AllowUntrustedRuntimes,
             maxHistoryPerGame ?? MaxHistoryPerGame,
             groupByLibrary ?? GroupByLibrary,
+        posterGrid ?? PosterGrid,
             windowWidth ?? WindowWidth,
             windowHeight ?? WindowHeight,
             windowMaximized ?? WindowMaximized,
@@ -88,6 +94,9 @@ internal sealed record SettingsData(
     bool AllowUntrustedRuntimes,
     int MaxHistoryPerGame,
     bool GroupByLibrary,
+
+    /// <summary>Whether games are shown as poster cards rather than as a list.</summary>
+    bool PosterGrid,
     double? WindowWidth,
     double? WindowHeight,
     bool WindowMaximized,
@@ -99,6 +108,7 @@ internal sealed record SettingsData(
         AllowUntrustedRuntimes,
         MaxHistoryPerGame,
         GroupByLibrary,
+        PosterGrid,
         WindowWidth,
         WindowHeight,
         WindowMaximized,
@@ -110,6 +120,7 @@ internal sealed record SettingsData(
         s.AllowUntrustedRuntimes,
         s.MaxHistoryPerGame,
         s.GroupByLibrary,
+        s.PosterGrid,
         s.WindowWidth,
         s.WindowHeight,
         s.WindowMaximized,
