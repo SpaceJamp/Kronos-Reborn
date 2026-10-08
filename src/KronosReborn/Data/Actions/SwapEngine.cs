@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -195,10 +196,28 @@ public static class SwapPlanner
             var currentVersion = currentRuntime?.Version;
             var hasCurrentVersion = currentRuntime?.Exists == true;
 
+            // R38: a swap to the version already installed has nothing to do. Offered as a plan it
+            // would copy a file onto itself, which either throws or leaves the game untouched while
+            // reporting a change — and the picker lists the game's own version first, so this is the
+            // option most likely to be chosen by accident.
+            if (hasCurrentVersion
+                && VersionNumber.AreEquivalent(currentVersion, targetEntry.Version))
+            {
+                continue;
+            }
+
             var targets = ResolveTargetFiles(game.GamePath, runtimeKind);
             if (targets.Count == 0)
             {
                 continue; // Can't install if we don't know where to put it
+            }
+
+            // Never write a file onto itself. The collection entry for a version found in a game
+            // points at that game's own DLL, so selecting it would otherwise be a self-copy.
+            if (targets.Any(target => sourceFiles.Any(
+                    source => source.Equals(target, SwapPlan.PathComparison))))
+            {
+                continue;
             }
 
             // R30/R32: downgrade warning only when both versions are known
@@ -301,8 +320,13 @@ internal static class VersionComparer
 
     private static int[] Parse(string version)
     {
-        return version.Split('.', '-', '+')
-            .Select(s => int.TryParse(s, out var n) ? n : 0)
+        // Split on dots and commas. Versions are normalised when they are read, so this should only
+        // ever see dots, but a comma-separated value that slipped through would otherwise arrive here
+        // as one unparseable token and become zero — which is what made every DLSS version compare
+        // equal to every other, and silenced the downgrade warning R30 requires. Splitting on both
+        // separators means a value that has not been normalised still compares correctly.
+        return version.Split('.', ',', '-', '+')
+            .Select(s => int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 0)
             .ToArray();
     }
 }

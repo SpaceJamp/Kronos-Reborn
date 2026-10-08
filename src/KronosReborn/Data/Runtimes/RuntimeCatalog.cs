@@ -115,7 +115,7 @@ public sealed class RuntimeCatalog : IDisposable
         }
 
         var sourceDetail = $"{gameName} ({libraryName})";
-        var id = CatalogId.For(detected.Kind, detected.Version, RuntimeSource.Discovered, sourceDetail);
+        var id = CatalogId.For(detected.Kind, detected.Version, RuntimeSource.Discovered);
 
         _lock.EnterWriteLock();
         try
@@ -195,8 +195,10 @@ public sealed class RuntimeCatalog : IDisposable
         try
         {
             var vi = System.Diagnostics.FileVersionInfo.GetVersionInfo(filePath);
-            version = string.IsNullOrWhiteSpace(vi.FileVersion) ? null : vi.FileVersion.Trim();
-            productVersion = string.IsNullOrWhiteSpace(vi.ProductVersion) ? null : vi.ProductVersion.Trim();
+            version = string.IsNullOrWhiteSpace(vi.FileVersion) ? null : VersionNumber.Normalize(vi.FileVersion);
+            productVersion = string.IsNullOrWhiteSpace(vi.ProductVersion)
+                ? null
+                : VersionNumber.Normalize(vi.ProductVersion);
         }
         catch
         {
@@ -213,7 +215,7 @@ public sealed class RuntimeCatalog : IDisposable
         var trust = sig.HasValidSignature ? RuntimeTrust.Trusted : (allowUntrusted ? RuntimeTrust.UserAccepted : RuntimeTrust.Untrusted);
 
         var sourceDetail = Path.GetFileName(filePath);
-        var id = CatalogId.For(kind, version, RuntimeSource.Imported, sourceDetail);
+        var id = CatalogId.For(kind, version, RuntimeSource.Imported);
 
         _lock.EnterWriteLock();
         try

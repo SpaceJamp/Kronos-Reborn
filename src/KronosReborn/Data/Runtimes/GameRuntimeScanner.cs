@@ -116,7 +116,17 @@ public sealed class GameRuntimeScanner
                 productVersion = null;
             }
 
-            return new DetectedRuntime(kind, fileName, relativePath, fullPath, fileVersion, productVersion, true);
+            // NVIDIA writes these with commas ("310,9,1,0"). Normalised here so that the catalog,
+            // the display and the downgrade comparison all see one form; comparing the raw text
+            // instead made every DLSS version equal to every other.
+            return new DetectedRuntime(
+                kind,
+                fileName,
+                relativePath,
+                fullPath,
+                VersionNumber.Normalize(fileVersion),
+                VersionNumber.Normalize(productVersion),
+                true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {

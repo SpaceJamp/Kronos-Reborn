@@ -190,6 +190,14 @@ arbitrary until you know why:
   `Binaries\Retail`, Portal with RTX uses `bin\.trex`. A fixed list of the usual names missed all of
   them, so the program reported no runtime at all in most of a typical library. One search is shared
   by the scanner and the swap planner, so what is detected is what a swap would replace.
+- **Versions are normalised where they are read.** NVIDIA writes its version resources with commas, so
+  DLSS reports `310,9,1,0`, while AMD and Intel use dots. Comparing the raw text split on dots, left
+  one unparseable token that became zero — every DLSS version compared equal to every other, and the
+  downgrade warning could never fire for the most common runtime there is. The interface showed
+  `310,9,1` for the same reason. It now reads `310.9.1`.
+- **One runtime version is one catalog entry.** The game a version was found in is not part of its
+  identity, so DLSS present in three games is one entry rather than three identical-looking ones —
+  and choosing any of them would have copied a file onto itself.
 - **Two spellings of one folder are one folder.** A default Steam install is recorded in the registry
   as `c:/program files (x86)/steam` and guessed as `C:\Program Files (x86)\Steam`. Comparing those as
   different made the library be scanned three times and every game appear three times over.

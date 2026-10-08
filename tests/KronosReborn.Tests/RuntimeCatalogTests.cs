@@ -138,12 +138,42 @@ public class RuntimeCatalogTests
     [Fact]
     public void CatalogIdIsDeterministic()
     {
-        var id1 = CatalogId.For(RuntimeKind.Dlss, "3.7.10", RuntimeSource.Discovered, "Game (Steam)");
-        var id2 = CatalogId.For(RuntimeKind.Dlss, "3.7.10", RuntimeSource.Discovered, "Game (Steam)");
-        var id3 = CatalogId.For(RuntimeKind.Dlss, "3.7.11", RuntimeSource.Discovered, "Game (Steam)");
+        var id1 = CatalogId.For(RuntimeKind.Dlss, "3.7.10", RuntimeSource.Discovered);
+        var id2 = CatalogId.For(RuntimeKind.Dlss, "3.7.10", RuntimeSource.Discovered);
+        var id3 = CatalogId.For(RuntimeKind.Dlss, "3.7.11", RuntimeSource.Discovered);
 
         Assert.Equal(id1, id2);
         Assert.NotEqual(id1, id3);
+    }
+
+    [Fact]
+    public void TheGameAVersionWasFoundInIsNotPartOfItsIdentity()
+    {
+        // DLSS 310.9.1 in three games is one version present on this machine, not three. While the
+        // game was part of the id it was, so the picker offered the same version three times under
+        // identical labels, and choosing one copied a file onto itself.
+        var fromWitcher = CatalogId.For(RuntimeKind.Dlss, "310.9.1", RuntimeSource.Discovered);
+        var fromPortal = CatalogId.For(RuntimeKind.Dlss, "310.9.1", RuntimeSource.Discovered);
+
+        Assert.Equal(fromWitcher, fromPortal);
+    }
+
+    [Fact]
+    public void AnImportedVersionIsNotTheSameThingAsADiscoveredOne()
+    {
+        // R16 treats the two differently, so they must not collapse into one entry.
+        var discovered = CatalogId.For(RuntimeKind.Dlss, "310.9.1", RuntimeSource.Discovered);
+        var imported = CatalogId.For(RuntimeKind.Dlss, "310.9.1", RuntimeSource.Imported);
+
+        Assert.NotEqual(discovered, imported);
+    }
+
+    [Fact]
+    public void KindsDoNotCollide()
+    {
+        Assert.NotEqual(
+            CatalogId.For(RuntimeKind.Dlss, "3.7.10", RuntimeSource.Discovered),
+            CatalogId.For(RuntimeKind.DlssG, "3.7.10", RuntimeSource.Discovered));
     }
 
     // ------------------------------------------------------------ RuntimeCatalog

@@ -61,7 +61,7 @@ public class SwapEngineTests
     public void SwapPlannerCreatesPlansForMatchingGames()
     {
         using var fixture = new SwapFixture(RuntimeKind.Dlss);
-        fixture.InstallRuntime("3.7.10");
+        fixture.InstallRuntime("3.8.0");
 
         var plans = fixture.Plan();
 
@@ -69,8 +69,51 @@ public class SwapEngineTests
         Assert.Equal(fixture.GameId, plan.GameId);
         Assert.Equal(RuntimeKind.Dlss, plan.RuntimeKind);
         Assert.Equal("3.7.10", plan.CurrentVersion);
-        Assert.False(plan.IsDowngrade); // same version
+        Assert.False(plan.IsDowngrade); // an upgrade
         Assert.False(plan.IsUntrusted); // untrusted allowed by the fixture
+    }
+
+    [Fact]
+    public void SwapPlannerProducesNothingWhenTheVersionIsAlreadyInstalled()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Dlss);
+        fixture.InstallRuntime("3.7.10"); // the version the game already runs
+
+        // R38: a swap to the version already present has nothing to do. Offered as a plan it would
+        // copy a file onto itself, and the picker lists a game's own version among the options.
+        Assert.Empty(fixture.Plan());
+    }
+
+    [Fact]
+    public void SwapPlannerProducesNothingWhenItWouldCopyAFileOntoItself()
+    {
+        using var temp = new TemporaryDirectory();
+
+        // A catalog entry discovered inside the game itself, whose version could not be read.
+        var game = Path.Combine(temp.Root, "Game");
+        Directory.CreateDirectory(game);
+        var dll = Path.Combine(game, "nvngx_dlss.dll");
+        File.WriteAllText(dll, "content");
+
+        var catalog = new RuntimeCatalog(Path.Combine(temp.Root, "catalog.json"));
+        var entry = catalog.AddFromDiscovery(
+            new DetectedRuntime(RuntimeKind.Dlss, "nvngx_dlss.dll", "nvngx_dlss.dll", dll, "3.9.0", null, true),
+            "game-1", "Test Game", "Steam");
+        Assert.NotNull(entry);
+
+        // The game reports an unknown version, so the "already installed" rule cannot catch this one:
+        // there is no version to compare. What is left is that the source file and the target file
+        // are the same file, and copying it onto itself either throws or does nothing.
+        var snapshot = new GameRuntimeSnapshot(
+            "game-1", "Test Game", game,
+            [new DetectedRuntime(RuntimeKind.Dlss, "nvngx_dlss.dll", "nvngx_dlss.dll", dll, null, null, true)]);
+
+        var plans = SwapPlanner.Plan(
+            [new SwapGameInfo("game-1", "Test Game", game, true, snapshot)],
+            catalog, RuntimeKind.Dlss, entry!.Id,
+            Settings.Default.With(allowUntrustedRuntimes: true));
+
+        Assert.Empty(plans);
     }
 
     [Fact]
@@ -91,7 +134,7 @@ public class SwapEngineTests
     public void SwapPlannerFlagsUntrustedWhenNotAllowed()
     {
         using var fixture = new SwapFixture(RuntimeKind.Dlss);
-        fixture.InstallRuntime("3.7.10");
+        fixture.InstallRuntime("3.8.0");
 
         // A dummy DLL has no signature, so the catalog entry is untrusted.
         Assert.Equal(RuntimeTrust.Untrusted, fixture.Entry!.Trust);
@@ -151,7 +194,7 @@ public class SwapEngineTests
     public void SwapPlannerPlacesFilesWhereTheGameKeepsThem()
     {
         using var fixture = new SwapFixture(RuntimeKind.Dlss);
-        fixture.InstallRuntime("3.7.10");
+        fixture.InstallRuntime("3.8.0");
 
         // The game keeps its DLSS in a subdirectory, as Unreal titles do.
         var nested = Path.Combine(fixture.GameFolder, "Binaries", "Win64");

@@ -117,12 +117,21 @@ public sealed record CatalogEntry(
 internal static class CatalogId
 {
     /// <summary>
-    /// Creates an ID from kind, version, and source detail. Deterministic so the same version
-    /// discovered twice gets the same ID.
+    /// Creates an ID from kind, version and where it came from.
     /// </summary>
-    public static string For(RuntimeKind kind, string version, RuntimeSource source, string sourceDetail)
+    /// <remarks>
+    /// The game a version was found in is deliberately not part of the ID. It used to be, and the
+    /// effect was that DLSS 310.9.1 found in three games became three catalog entries, so the picker
+    /// offered the same version three times under identical labels with no way to tell them apart —
+    /// and choosing any of them swapped a file onto itself. R13 asks for a collection of versions, and
+    /// one version present on this machine is one entry however many games carry it.
+    ///
+    /// The source kind is part of it because an imported copy is a different thing from one found in
+    /// a game: it may be signed differently and R16 treats the two differently.
+    /// </remarks>
+    public static string For(RuntimeKind kind, string version, RuntimeSource source)
     {
-        var basis = $"{kind}|{version}|{source}|{sourceDetail}";
+        var basis = $"{kind}|{version}|{source}";
         var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(basis));
         return Convert.ToHexString(hash)[..16].ToLowerInvariant();
     }

@@ -379,6 +379,31 @@ public class ArchitectureTests
         Assert.Contains(result.Problems, p => p.Summary.Contains("not present", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void VersionsAreNormalisedWhereTheyAreRead()
+    {
+        // NVIDIA writes version resources with commas, and the raw text was being used directly. That
+        // showed in the interface as "310,9,1" and, worse, broke comparison: splitting on dots left one
+        // unparseable token that became zero, so every DLSS version compared equal to every other and
+        // the downgrade warning could never fire. Normalisation is done where the version is read so
+        // that everything downstream sees one form.
+        var readers = new[]
+        {
+            Path.Combine("src", "KronosReborn", "Data", "Runtimes", "GameRuntimeScanner.cs"),
+            Path.Combine("src", "KronosReborn", "Data", "Runtimes", "RuntimeCatalog.cs"),
+        };
+
+        foreach (var relative in readers)
+        {
+            var text = File.ReadAllText(Path.Combine(RepositoryRoot, relative));
+
+            Assert.True(
+                text.Contains("VersionNumber.Normalize", StringComparison.Ordinal),
+                $"{relative} reads a version without normalising it. " +
+                "A comma-separated version then compares as zero.");
+        }
+    }
+
     // ------------------------------------------------------------ Specification
 
     [Fact]
