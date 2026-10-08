@@ -7,11 +7,38 @@ using KronosReborn.Data.Runtimes;
 namespace KronosReborn.Data.Persistence;
 
 /// <summary>
+/// One file a swap overwrote, and what it would take to put it back.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is deliberately not just a list of backup paths. Undo has to answer one question before it
+/// touches anything: <em>is the game still in the state we left it in?</em> The old model could not,
+/// because a history entry recorded only where the original had been copied to. Comparing the live
+/// file against that backup is meaningless — after a successful swap the two are guaranteed to
+/// differ, since the swap is what made them differ. That check consequently rejected every undo,
+/// which is the bug <c>PostSwapSha256</c> exists to fix.
+/// </para>
+/// <para>
+/// So the entry records the hash of the file <em>after</em> we wrote it. Undo restores only when the
+/// live file still matches, which is what R28 is actually asking.
+/// </para>
+/// </remarks>
+/// <param name="OriginalPath">The file in the game folder that was overwritten.</param>
+/// <param name="BackupPath">Where the original content was saved.</param>
+/// <param name="PostSwapSha256">SHA-256 of the file as this swap left it, lowercase hex.</param>
+public sealed record BackupRecord(
+    string OriginalPath,
+    string BackupPath,
+    string PostSwapSha256);
+
+/// <summary>
 /// A single history entry recording a swap operation on a game.
 /// </summary>
 /// <remarks>
-/// R26: undoing can be repeated as many times as swaps have been made. Each is separately
-/// reversible. This entry contains everything needed to undo or redo.
+/// R26: undoing can be repeated as many times as swaps have been made, and each is separately
+/// reversible. A swap that only added files records them in <paramref name="CreatedFiles"/> rather
+/// than <paramref name="Backups"/>, and undo deletes them again — which is why a swap that added a
+/// runtime to a game that had none is still reversible.
 /// </remarks>
 /// <param name="Timestamp">When the swap was performed.</param>
 /// <param name="GameId">The game's library identifier.</param>
@@ -22,7 +49,8 @@ namespace KronosReborn.Data.Persistence;
 /// <param name="NewVersion">The version that was installed.</param>
 /// <param name="PreviousTrust">Trust level of the previous version.</param>
 /// <param name="NewTrust">Trust level of the new version.</param>
-/// <param name="BackupPaths">Paths to the backed-up files (for undo).</param>
+/// <param name="Backups">Files that existed and were overwritten, with the state we left them in.</param>
+/// <param name="CreatedFiles">Files that did not exist before and were created by this swap.</param>
 /// <param name="WasDowngrade">Whether this was a version downgrade (R30).</param>
 /// <param name="WasUntrusted">Whether the new version was untrusted (R33).</param>
 public sealed record HistoryEntry(
@@ -35,22 +63,15 @@ public sealed record HistoryEntry(
     string NewVersion,
     RuntimeTrust PreviousTrust,
     RuntimeTrust NewTrust,
-    IReadOnlyList<string> BackupPaths,
+    IReadOnlyList<BackupRecord> Backups,
+    IReadOnlyList<string> CreatedFiles,
     bool WasDowngrade,
     bool WasUntrusted)
 {
     /// <summary>A short description for display.</summary>
     public string Describe()
     {
-        var kindName = RuntimeKind switch
-        {
-            RuntimeKind.Dlss  => "DLSS",
-            RuntimeKind.DlssG => "DLSS Frame Gen",
-            RuntimeKind.DlssR => "DLSS Ray Recon",
-            RuntimeKind.Fsr   => "FSR",
-            RuntimeKind.Xess  => "XeSS",
-            _ => RuntimeKind.ToString()
-        };
+        var kindName = RuntimeKindNames.Display(RuntimeKind);
 
         var prev = PreviousVersion ?? "none";
         var direction = WasDowngrade ? "⬇ downgrade" : "⬆ upgrade";
@@ -59,8 +80,48 @@ public sealed record HistoryEntry(
         return $"{kindName}: {prev} → {NewVersion} ({direction}{trust})";
     }
 
-    /// <summary>Whether this entry can be undone (has backups).</summary>
-    public bool CanUndo => BackupPaths.Count > 0;
+    /// <summary>
+    /// Whether undoing this entry would change the machine.
+    /// </summary>
+    /// <remarks>
+    /// True if anything at all needs restoring, which is what R25 requires. An earlier version
+    /// tested only that backups existed, so undoing a swap that had merely *added* a runtime
+    /// reported "nothing to undo" and left the added DLLs in the game forever.
+    /// </remarks>
+    public bool CanUndo => Backups.Count > 0 || CreatedFiles.Count > 0;
+
+    /// <summary>Every path this entry is responsible for putting back the way it found it.</summary>
+    public IEnumerable<string> AffectedPaths =>
+        Backups.Select(b => b.OriginalPath).Concat(CreatedFiles);
+
+    /// <summary>An entry describing the reverse of this one, written when an undo succeeds.</summary>
+    /// <remarks>
+    /// The swap that was just undone put <paramref name="preSwapSha256"/> on disk, so undoing *this*
+    /// entry means restoring that state — which is redoing the original swap. Passing the hashes
+    /// forward is what makes undo/redo nest properly instead of dead-ending after one step.
+    /// </remarks>
+    public HistoryEntry AsReverted(
+        IReadOnlyList<BackupRecord> preSwapState,
+        IReadOnlyList<string> removedFiles)
+    {
+        ArgumentNullException.ThrowIfNull(preSwapState);
+        ArgumentNullException.ThrowIfNull(removedFiles);
+
+        return new HistoryEntry(
+            Timestamp,
+            GameId,
+            GameName,
+            GamePath,
+            RuntimeKind,
+            NewVersion,
+            PreviousVersion ?? "none",
+            NewTrust,
+            PreviousTrust,
+            preSwapState,
+            removedFiles,
+            WasDowngrade,
+            WasUntrusted);
+    }
 }
 
 /// <summary>
@@ -79,6 +140,9 @@ public sealed record GameHistory(
     /// <summary>Adds a new entry at the front, enforcing the max limit by dropping oldest.</summary>
     public GameHistory Add(HistoryEntry entry, int maxEntries)
     {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxEntries);
+
         var newEntries = Entries.Insert(0, entry);
         if (newEntries.Count > maxEntries)
         {
@@ -91,6 +155,15 @@ public sealed record GameHistory(
     /// <summary>Gets the most recent entry for a specific runtime kind.</summary>
     public HistoryEntry? GetLatestFor(RuntimeKind kind)
         => Entries.FirstOrDefault(e => e.RuntimeKind == kind);
+
+    /// <summary>Gets the most recent entry that could actually be undone.</summary>
+    /// <remarks>
+    /// R29: a game whose original files are missing is reported as unrecoverable rather than being
+    /// presented as restorable, so entries with nothing to restore are skipped rather than offered
+    /// and then failing.
+    /// </remarks>
+    public HistoryEntry? GetLatestUndoableFor(RuntimeKind kind)
+        => Entries.FirstOrDefault(e => e.RuntimeKind == kind && e.CanUndo);
 }
 
 /// <summary>

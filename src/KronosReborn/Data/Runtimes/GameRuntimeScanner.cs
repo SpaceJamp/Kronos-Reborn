@@ -12,9 +12,34 @@ namespace KronosReborn.Data.Runtimes;
 /// This is pure filesystem work and version resource reading. Every failure path produces a
 /// DetectedRuntime with Exists=true but Version=null and a ReadError, which is exactly R10: the
 /// version is unknown, not guessed. The caller gets a complete list and decides how to present it.
+///
+/// This type holds no state. It is kept as a type rather than made static because it names a unit
+/// of work — scanning a game folder for runtime DLLs — and the view model constructs it as one. That
+/// is a deliberate shape, not an oversight, which is why the "make members static" analyzer finding
+/// is suppressed here.
 /// </remarks>
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Performance",
+    "CA1822:Mark members as static",
+    Justification = "Stateless by design; kept as a type so it can name a unit of work.")]
 public sealed class GameRuntimeScanner
 {
+    /// <summary>
+    /// Subdirectories of a game folder that runtime DLLs are commonly found in, in search order.
+    /// </summary>
+    /// <remarks>
+    /// Shared with the swap planner, which uses it to put a replacement DLL where the game already
+    /// keeps the original. When the two lists disagreed, a swap would write a DLL to the game root
+    /// while the game's real runtime stayed in a subdirectory.
+    ///
+    /// Written with the platform separator so that a path built from one of these compares equal to
+    /// the same path built elsewhere. A forward slash in "Binaries/Win64" produced a path that
+    /// opened the right file but never compared equal to itself.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> KnownSubdirectories =
+        ["x64", "bin", "bin64", "Win64",
+         $"Binaries{Path.DirectorySeparatorChar}Win64"];
+
     /// <summary>
     /// Scans one game's folder for all known runtime DLLs.
     /// </summary>
@@ -38,12 +63,12 @@ public sealed class GameRuntimeScanner
             // Also check common subdirectories where games sometimes place these
             if (!File.Exists(fullPath))
             {
-                foreach (var sub in new[] { "x64", "bin", "bin64", "Win64", "Binaries/Win64" })
+                foreach (var sub in KnownSubdirectories)
                 {
                     var candidate = Path.Combine(game.InstallPath, sub, fileName);
                     if (File.Exists(candidate))
                     {
-                        relativePath = Path.Combine(sub, fileName).Replace('/', Path.DirectorySeparatorChar);
+                        relativePath = Path.Combine(sub, fileName);
                         fullPath = candidate;
                         break;
                     }
@@ -88,7 +113,7 @@ public sealed class GameRuntimeScanner
         return results;
     }
 
-    private DetectedRuntime ReadOne(
+    private static DetectedRuntime ReadOne(
         RuntimeKind kind,
         string fileName,
         string relativePath,

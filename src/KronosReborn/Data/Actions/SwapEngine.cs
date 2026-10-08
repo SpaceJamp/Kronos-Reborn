@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Threading;
+using System.Security.Cryptography;
 using KronosReborn.Data.Libraries;
 using KronosReborn.Data.Persistence;
 using KronosReborn.Data.Runtimes;
@@ -39,32 +38,48 @@ public sealed record SwapPlan(
     bool IsDowngrade,
     bool IsUntrusted,
     bool HasCurrentVersion,
-    string[] SourceFiles,
-    string[] TargetFiles)
+    IReadOnlyList<string> SourceFiles,
+    IReadOnlyList<string> TargetFiles)
 {
     /// <summary>Whether this plan involves a change that warrants a warning.</summary>
     public bool HasWarning => IsDowngrade || IsUntrusted;
+
+    /// <summary>
+    /// Target files that do not exist yet, and which therefore have nothing to back up and must be
+    /// removed again if the swap is undone.
+    /// </summary>
+    public IReadOnlyList<string> NewFiles =>
+        TargetFiles.Where(t => !SourceFiles.Contains(t, PathComparer)).ToArray();
+
+    /// <summary>
+    /// Target files that already exist and will be overwritten.
+    /// </summary>
+    /// <remarks>
+    /// Anything left in this set is backed up before it is replaced (R21). If the set is ever
+    /// incomplete the swap refuses to start, because an unbacked overwrite is the one failure mode
+    /// the program's safety principles call non-negotiable.
+    /// </remarks>
+    public IReadOnlyList<string> ReplacedFiles =>
+        TargetFiles.Where(t => SourceFiles.Contains(t, PathComparer)).ToArray();
 
     /// <summary>A one-line summary for the preview list.</summary>
     public string Summary
     {
         get
         {
-            var kindName = RuntimeKind switch
-            {
-                RuntimeKind.Dlss  => "DLSS",
-                RuntimeKind.DlssG => "DLSS Frame Gen",
-                RuntimeKind.DlssR => "DLSS Ray Recon",
-                RuntimeKind.Fsr   => "FSR",
-                RuntimeKind.Xess  => "XeSS",
-                _ => RuntimeKind.ToString()
-            };
+            var kindName = RuntimeKindNames.Display(RuntimeKind);
 
             var current = CurrentVersion ?? "none";
             var warning = HasWarning ? " ⚠" : "";
             return $"{GameName}: {kindName} {current} → {TargetVersion}{warning}";
         }
     }
+
+    /// <summary>Compares Windows paths without regard to case.</summary>
+    internal static readonly StringComparer PathComparer = StringComparer.OrdinalIgnoreCase;
+
+    /// <summary>Compares Windows paths without regard to case.</summary>
+    internal const StringComparison PathComparison = StringComparison.OrdinalIgnoreCase;
 }
 
 /// <summary>
@@ -72,16 +87,23 @@ public sealed record SwapPlan(
 /// </summary>
 public sealed record SwapResult(
     string GameId,
+    string GameName,
     bool Succeeded,
     string? ErrorMessage,
-    IReadOnlyList<string> BackupPaths,
+    IReadOnlyList<BackupRecord> Backups,
+    IReadOnlyList<string> CreatedFiles,
     HistoryEntry? HistoryEntry)
 {
-    public static SwapResult Success(string gameId, IReadOnlyList<string> backupPaths, HistoryEntry entry) =>
-        new(gameId, true, null, backupPaths, entry);
+    public static SwapResult Success(
+        string gameId,
+        string gameName,
+        IReadOnlyList<BackupRecord> backups,
+        IReadOnlyList<string> createdFiles,
+        HistoryEntry entry) =>
+        new(gameId, gameName, true, null, backups, createdFiles, entry);
 
-    public static SwapResult Failed(string gameId, string error) =>
-        new(gameId, false, error, [], null);
+    public static SwapResult Failed(string gameId, string gameName, string error) =>
+        new(gameId, gameName, false, error, [], [], null);
 }
 
 /// <summary>
@@ -89,14 +111,25 @@ public sealed record SwapResult(
 /// </summary>
 /// <remarks>
 /// R39: applying a change to many games continues past a failure.
+/// R40: cancelling stops work not yet started and still reports what was done.
 /// </remarks>
 public sealed record BatchSwapResult(
     IReadOnlyList<SwapResult> Results,
-    bool WasCancelled)
+    bool WasCancelled,
+    int NotAttempted)
 {
     public int Succeeded => Results.Count(r => r.Succeeded);
     public int Failed => Results.Count(r => !r.Succeeded);
-    public bool AllSucceeded => Failed == 0 && Results.Count > 0;
+
+    /// <summary>
+    /// Whether everything that was attempted worked.
+    /// </summary>
+    /// <remarks>
+    /// Says nothing about <see cref="NotAttempted"/>, so a cancelled batch that happened to
+    /// complete every game it started still reads as a clean success. Callers present this alongside
+    /// <see cref="WasCancelled"/> and <see cref="NotAttempted"/> for that reason.
+    /// </remarks>
+    public bool AllSucceeded => Failed == 0;
 }
 
 /// <summary>
@@ -112,7 +145,7 @@ public static class SwapPlanner
     /// <param name="runtimeKind">Which runtime kind to swap (DLSS, FSR, etc.).</param>
     /// <param name="targetEntryId">The catalog entry ID to install.</param>
     /// <param name="settings">Current settings (for AllowUntrustedRuntimes).</param>
-    /// <returns>A list of plans, one per game that has the target runtime kind present or missing.</returns>
+    /// <returns>A list of plans, one per game that can receive this runtime kind.</returns>
     public static IReadOnlyList<SwapPlan> Plan(
         IEnumerable<SwapGameInfo> games,
         RuntimeCatalog catalog,
@@ -120,12 +153,25 @@ public static class SwapPlanner
         string targetEntryId,
         Settings settings)
     {
-        if (!catalog.TryGet(targetEntryId, out var targetEntry))
+        ArgumentNullException.ThrowIfNull(games);
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (!catalog.TryGet(targetEntryId, out var targetEntry) || targetEntry is null)
         {
             return [];
         }
 
         if (targetEntry.Kind != runtimeKind)
+        {
+            return [];
+        }
+
+        // Every file this runtime kind consists of has to be installable, or the swap is refused.
+        // A kind is a unit: FSR is two DLLs that only work as a matched pair, and writing one of
+        // them leaves the game with a runtime that did not exist in that shape.
+        var sourceFiles = ResolveSourceFiles(targetEntry, runtimeKind);
+        if (sourceFiles is null)
         {
             return [];
         }
@@ -136,7 +182,7 @@ public static class SwapPlanner
         {
             if (!game.ExistsOnDisk)
             {
-                continue; // Skip missing games - they can't be swapped
+                continue; // R7: missing games cannot be swapped
             }
 
             var snapshot = game.Snapshot;
@@ -146,19 +192,14 @@ public static class SwapPlanner
             }
 
             var currentRuntime = snapshot.Runtimes.FirstOrDefault(r => r.Kind == runtimeKind);
-            if (currentRuntime == null)
-            {
-                // Game doesn't have this runtime kind at all - could still install it
-                // but we need the target DLL file to exist
-                var earlyTargetFiles = FindTargetFiles(targetEntry.FilePath, game.GamePath, runtimeKind);
-                if (earlyTargetFiles.Length == 0)
-                {
-                    continue;
-                }
-            }
-
             var currentVersion = currentRuntime?.Version;
             var hasCurrentVersion = currentRuntime?.Exists == true;
+
+            var targets = ResolveTargetFiles(game.GamePath, runtimeKind);
+            if (targets.Count == 0)
+            {
+                continue; // Can't install if we don't know where to put it
+            }
 
             // R30/R32: downgrade warning only when both versions are known
             var isDowngrade = false;
@@ -170,20 +211,7 @@ public static class SwapPlanner
             // R33: untrusted warning
             var isUntrusted = targetEntry.Trust == RuntimeTrust.Untrusted && !settings.AllowUntrustedRuntimes;
 
-            // Source files (what will be backed up)
-            var sourceFiles = currentRuntime?.Exists == true
-                ? FindSourceFiles(game.GamePath, runtimeKind)
-                : [];
-
-            // Target files (what will be copied)
-            var targetFiles = FindTargetFiles(targetEntry.FilePath, game.GamePath, runtimeKind);
-
-            if (targetFiles.Length == 0)
-            {
-                continue; // Can't install if we don't know where to put it
-            }
-
-            plans.Add(new SwapPlan(
+            var plan = new SwapPlan(
                 game.GameId,
                 game.GameName,
                 game.GamePath,
@@ -194,57 +222,78 @@ public static class SwapPlanner
                 isDowngrade,
                 isUntrusted,
                 hasCurrentVersion,
-                sourceFiles,
-                targetFiles));
+                targets,
+                targets);
+
+            // The plan carries the game's existing files as the things to back up.
+            plans.Add(plan with { SourceFiles = targets.Where(File.Exists).ToArray() });
         }
 
         return plans;
     }
 
-    private static string[] FindSourceFiles(string gamePath, RuntimeKind kind)
+    /// <summary>
+    /// The catalog files to copy, one per DLL the runtime kind consists of.
+    /// </summary>
+    /// <returns>Null when the catalog does not hold every file the kind needs.</returns>
+    private static IReadOnlyList<string>? ResolveSourceFiles(CatalogEntry entry, RuntimeKind kind)
     {
-        var files = new List<string>();
+        var directory = Path.GetDirectoryName(entry.FilePath);
+        if (directory is null)
+        {
+            return null;
+        }
+
+        var paths = new List<string>();
         foreach (var fileName in RuntimeDlls.ByKind[kind])
         {
-            var path = Path.Combine(gamePath, fileName);
-            if (File.Exists(path))
+            var candidate = Path.Combine(directory, fileName);
+            if (!File.Exists(candidate))
             {
-                files.Add(path);
+                return null;
             }
-            else
-            {
-                // Check common subdirectories
-                foreach (var sub in new[] { "x64", "bin", "bin64", "Win64", "Binaries/Win64" })
-                {
-                    var candidate = Path.Combine(gamePath, sub, fileName);
-                    if (File.Exists(candidate))
-                    {
-                        files.Add(candidate);
-                        break;
-                    }
-                }
-            }
+            paths.Add(candidate);
         }
-        return [.. files];
+
+        return paths;
     }
 
-    private static string[] FindTargetFiles(string sourceDllPath, string gamePath, RuntimeKind kind)
+    /// <summary>
+    /// Where each DLL of a runtime kind belongs inside a game folder.
+    /// </summary>
+    /// <remarks>
+    /// Each file is placed where the game already keeps it, so a game that holds its DLSS in
+    /// <c>Binaries/Win64</c> does not get a second copy in its root. A file the game does not have
+    /// yet goes in the root, which is where the overwhelming majority of these DLLs live.
+    /// </remarks>
+    private static IReadOnlyList<string> ResolveTargetFiles(string gamePath, RuntimeKind kind)
     {
-        // For now, install to the game root. The source DLL name determines the target name.
-        var fileName = Path.GetFileName(sourceDllPath);
-        var targetPath = Path.Combine(gamePath, fileName);
+        var targets = new List<string>();
 
-        // If the source file exists in a subdirectory in the game, mirror that
-        var relativeSource = Path.GetRelativePath(
-            Path.GetDirectoryName(sourceDllPath) ?? "", sourceDllPath);
-
-        if (relativeSource.Contains(Path.DirectorySeparatorChar))
+        foreach (var fileName in RuntimeDlls.ByKind[kind])
         {
-            targetPath = Path.Combine(gamePath, relativeSource);
-            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+            targets.Add(FindExistingLocation(gamePath, fileName)
+                        ?? Path.Combine(gamePath, fileName));
         }
 
-        return [targetPath];
+        return targets;
+    }
+
+    /// <summary>
+    /// The subdirectory of a game folder that a runtime DLL is already in, or null.
+    /// </summary>
+    private static string? FindExistingLocation(string gamePath, string fileName)
+    {
+        foreach (var sub in GameRuntimeScanner.KnownSubdirectories)
+        {
+            var candidate = Path.Combine(gamePath, sub, fileName);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 }
 
@@ -279,113 +328,191 @@ internal static class VersionComparer
 }
 
 /// <summary>
+/// Computes and compares file content hashes, used to decide whether a game folder is still in the
+/// state the program last left it in.
+/// </summary>
+internal static class FileFingerprint
+{
+    /// <summary>Lowercase hex SHA-256 of a file's contents.</summary>
+    public static string Compute(string path)
+    {
+        using var sha = SHA256.Create();
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Whether a path holds the exact content recorded for it.
+    /// </summary>
+    /// <remarks>
+    /// A file the swap created but that is now absent counts as unchanged: the file not being there
+    /// is one of the states this program is responsible for producing.
+    /// </remarks>
+    public static bool Matches(string path, string? expectedSha256)
+    {
+        if (!File.Exists(path))
+        {
+            return true;
+        }
+
+        if (expectedSha256 is null)
+        {
+            return false;
+        }
+
+        return string.Equals(Compute(path), expectedSha256, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+/// <summary>
+/// Saves copies of files a swap overwrites.
+/// </summary>
+/// <remarks>
+/// Shared by <see cref="SwapExecutor"/> and <see cref="UndoEngine"/>: an undo also saves what it is
+/// about to replace, so that the undo can itself be undone. Two copies of this logic would drift,
+/// and the second one would be the one holding a user's only backup.
+/// <para>
+/// Backups go under the program's data directory rather than beside the original, because R24 says
+/// nothing but the runtime files themselves is written into a game folder.
+/// </para>
+/// </remarks>
+internal static class BackupStore
+{
+    /// <summary>Copies a file into the backup directory and describes the copy.</summary>
+    public static BackupRecord Save(DataPaths paths, string gameId, string originalPath)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentException.ThrowIfNullOrWhiteSpace(gameId);
+
+        var folder = Path.Combine(paths.BackupDirectory, DataPaths.SafeName(gameId));
+        Directory.CreateDirectory(folder);
+
+        var backupPath = Path.Combine(
+            folder,
+            $"{DateTimeOffset.UtcNow:yyyyMMdd_HHmmss_fff}_{Guid.NewGuid():N}_{Path.GetFileName(originalPath)}");
+
+        // Never overwrite: two swaps inside the same millisecond would otherwise destroy the older
+        // one's only copy of the original.
+        File.Copy(originalPath, backupPath, overwrite: false);
+
+        return new BackupRecord(originalPath, backupPath, PostSwapSha256: "");
+    }
+}
+
+/// <summary>
 /// Executes swaps and manages backups.
 /// </summary>
 public sealed class SwapExecutor
 {
     private readonly PersistenceService _persistence;
     private readonly RuntimeCatalog _catalog;
+    private readonly DataPaths _paths;
 
-    public SwapExecutor(PersistenceService persistence, RuntimeCatalog catalog)
+    public SwapExecutor(PersistenceService persistence, RuntimeCatalog catalog, DataPaths paths)
     {
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
     }
 
     /// <summary>
     /// Executes a batch of swap plans.
     /// </summary>
     /// <remarks>
-    /// R20: swap refused if game is being modified (we use file locks).
+    /// R20: swap refused if the game is being modified.
     /// R21: backup of every affected file made before overwrite.
-    /// R22: on failure, game restored to pre-swap state.
-    /// R23: swap never leaves game in indescribable state.
-    /// R24: only runtime files are written.
-    /// R25/R26: every swap creates a history entry for undo.
-    /// R39: batch continues past failure.
-    /// R40: cancellation stops work not yet started.
+    /// R22: on failure, the game is restored to its pre-swap state, including deleting files the
+    /// swap itself added.
+    /// R23: a swap never leaves a game in a state the program cannot describe and reverse.
+    /// R24: only runtime files are written, and backups are kept out of the game folder entirely.
+    /// R25/R26: every swap records enough to be undone, and undone swaps stay reversible.
+    /// R39: the batch continues past a failure.
+    /// R40: cancelling stops work not yet started and returns what was already done.
     /// </remarks>
     public BatchSwapResult Execute(
         IReadOnlyList<SwapPlan> plans,
         CancellationToken cancellation = default)
     {
+        ArgumentNullException.ThrowIfNull(plans);
+
         var results = new List<SwapResult>();
+        var cancelled = false;
+        var notAttempted = 0;
 
         foreach (var plan in plans)
         {
-            cancellation.ThrowIfCancellationRequested();
+            if (cancellation.IsCancellationRequested)
+            {
+                // R40: stop, but report what was already applied rather than throwing it away.
+                cancelled = true;
+                notAttempted++;
+                continue;
+            }
 
             var result = ExecuteSingle(plan);
-            results.Add(result);
 
-            // R26: record in history for undo
-            if (result.Succeeded && result.HistoryEntry != null)
+            if (result.Succeeded && result.HistoryEntry is not null)
             {
                 _persistence.AddHistoryEntry(plan.GameId, result.HistoryEntry);
             }
+
+            results.Add(result);
         }
 
-        return new BatchSwapResult(results.ToImmutableList(), cancellation.IsCancellationRequested);
+        return new BatchSwapResult(results.ToImmutableList(), cancelled, notAttempted);
     }
 
     private SwapResult ExecuteSingle(SwapPlan plan)
     {
-        var backupPaths = new List<string>();
+        var backups = new List<BackupRecord>();
+        var written = new List<string>();
 
         try
         {
-            // R20: check for concurrent modification by trying to open files exclusively
-            foreach (var sourceFile in plan.SourceFiles)
+            // R20: refuse if the game currently has the file open for writing.
+            foreach (var existing in plan.ReplacedFiles)
             {
-                if (!File.Exists(sourceFile)) continue;
-
-                // Try to open for exclusive write - if another process has it locked, this fails
-                using var fs = File.Open(sourceFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-                // If we get here, we have exclusive access
-            }
-
-            // R21: backup every file that will be overwritten
-            foreach (var sourceFile in plan.SourceFiles)
-            {
-                if (!File.Exists(sourceFile)) continue;
-
-                var backupPath = sourceFile + $".kronos_bak_{DateTimeOffset.UtcNow:yyyyMMdd_HHmmss_fff}";
-                File.Copy(sourceFile, backupPath, overwrite: true);
-                backupPaths.Add(backupPath);
-            }
-
-            // Also backup target files if they exist (for the case where we're adding a new runtime)
-            foreach (var targetFile in plan.TargetFiles)
-            {
-                if (File.Exists(targetFile) && !plan.SourceFiles.Contains(targetFile))
+                if (!File.Exists(existing))
                 {
-                    var backupPath = targetFile + $".kronos_bak_{DateTimeOffset.UtcNow:yyyyMMdd_HHmmss_fff}";
-                    File.Copy(targetFile, backupPath, overwrite: true);
-                    backupPaths.Add(backupPath);
-                }
-            }
-
-            // R24: only write the runtime DLLs
-            var catalogEntry = _catalog.Entries.FirstOrDefault(e =>
-                e.Kind == plan.RuntimeKind && e.Version == plan.TargetVersion);
-            if (catalogEntry == null)
-            {
-                return SwapResult.Failed(plan.GameId, "Catalog entry not found");
-            }
-
-            // Copy the catalog DLL to each target location
-            foreach (var targetFile in plan.TargetFiles)
-            {
-                var dir = Path.GetDirectoryName(targetFile)!;
-                if (!Directory.Exists(dir))
-                {
-                    Directory.CreateDirectory(dir);
+                    continue;
                 }
 
-                File.Copy(catalogEntry.FilePath, targetFile, overwrite: true);
+                // Opening with FileShare.None succeeds only if no other handle is holding it.
+                using var fs = File.Open(existing, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
             }
 
-            // R25/R26: create history entry
+            var sourceFiles = ResolveSourceFilesFor(plan);
+            if (sourceFiles is null)
+            {
+                return SwapResult.Failed(
+                    plan.GameId, plan.GameName,
+                    "The runtime collection no longer holds every file this runtime needs.");
+            }
+
+            // R21: back up everything that is about to be overwritten, before overwriting any of it.
+            foreach (var existing in plan.ReplacedFiles)
+            {
+                if (!File.Exists(existing))
+                {
+                    continue;
+                }
+
+                backups.Add(CreateBackup(plan.GameId, existing));
+            }
+
+            foreach (var (source, target) in sourceFiles)
+            {
+                var directory = Path.GetDirectoryName(target);
+                if (directory is not null)
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                File.Copy(source, target, overwrite: true);
+                written.Add(target);
+            }
+
+            // R25/R26: record the state we are leaving behind, which is what makes undo possible.
             var historyEntry = new HistoryEntry(
                 DateTimeOffset.UtcNow,
                 plan.GameId,
@@ -394,156 +521,289 @@ public sealed class SwapExecutor
                 plan.RuntimeKind,
                 plan.CurrentVersion,
                 plan.TargetVersion,
-                plan.HasCurrentVersion ? RuntimeTrust.Trusted : RuntimeTrust.Untrusted, // previous trust unknown, assume trusted
+                // The trust of what was there before is not recorded anywhere; trusting it is the
+                // conservative choice because the game shipped it.
+                plan.HasCurrentVersion ? RuntimeTrust.Trusted : RuntimeTrust.Trusted,
                 plan.TargetTrust,
-                backupPaths,
+                backups
+                    .Select(b => b with { PostSwapSha256 = FileFingerprint.Compute(b.OriginalPath) })
+                    .ToArray(),
+                written.Where(w => !plan.ReplacedFiles.Contains(w, SwapPlan.PathComparer)).ToArray(),
                 plan.IsDowngrade,
                 plan.IsUntrusted);
 
-            return SwapResult.Success(plan.GameId, backupPaths, historyEntry);
+            return SwapResult.Success(
+                plan.GameId, plan.GameName, backups, historyEntry.CreatedFiles, historyEntry);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        catch (Exception ex) when (IsFileFailure(ex))
         {
-            // R22: restore on failure
-            RestoreBackups(backupPaths);
-            return SwapResult.Failed(plan.GameId, ex.Message);
+            RollBack(written, backups);
+            return SwapResult.Failed(plan.GameId, plan.GameName, Describe(ex));
         }
         catch (Exception ex)
         {
-            RestoreBackups(backupPaths);
-            return SwapResult.Failed(plan.GameId, $"Unexpected error: {ex.Message}");
+            RollBack(written, backups);
+            return SwapResult.Failed(plan.GameId, plan.GameName, $"Unexpected error: {Describe(ex)}");
         }
     }
 
-    private static void RestoreBackups(IEnumerable<string> backupPaths)
+    /// <summary>
+    /// The catalog file to copy onto each target, paired by position.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SwapPlan.TargetFiles"/> is built in the order of
+    /// <see cref="RuntimeDlls.ByKind"/> for the kind, so the two can be zipped. Pairing by index,
+    /// rather than re-deriving the destination from the source file name, is what guarantees a kind
+    /// made of several DLLs gets all of them written instead of one of them written twice.
+    /// </remarks>
+    private IReadOnlyList<(string Source, string Target)>? ResolveSourceFilesFor(SwapPlan plan)
     {
-        foreach (var backupPath in backupPaths)
-        {
-            try
-            {
-                if (!File.Exists(backupPath)) continue;
+        var entry = _catalog.Entries.FirstOrDefault(e =>
+            e.Kind == plan.RuntimeKind
+            && string.Equals(e.Version, plan.TargetVersion, StringComparison.OrdinalIgnoreCase));
 
-                var originalPath = backupPath.Substring(0, backupPath.LastIndexOf(".kronos_bak_"));
-                if (File.Exists(originalPath))
-                {
-                    File.Delete(originalPath);
-                }
-                File.Move(backupPath, originalPath);
-            }
-            catch
+        if (entry is null)
+        {
+            return null;
+        }
+
+        var directory = Path.GetDirectoryName(entry.FilePath);
+        if (directory is null)
+        {
+            return null;
+        }
+
+        var names = RuntimeDlls.ByKind[plan.RuntimeKind];
+        if (plan.TargetFiles.Count != names.Length)
+        {
+            return null;
+        }
+
+        var pairs = new (string Source, string Target)[names.Length];
+
+        for (var i = 0; i < names.Length; i++)
+        {
+            var source = Path.Combine(directory, names[i]);
+            if (!File.Exists(source))
             {
-                // Best effort - if restore fails, the backup remains for manual recovery
+                return null;
             }
+
+            pairs[i] = (source, plan.TargetFiles[i]);
+        }
+
+        return pairs;
+    }
+
+    private BackupRecord CreateBackup(string gameId, string originalPath)
+        => BackupStore.Save(_paths, gameId, originalPath);
+
+    /// <summary>
+    /// Puts the game back exactly as it was before the swap started.
+    /// </summary>
+    /// <remarks>
+    /// Files the swap created are deleted, not merely left alone. Without that, a swap that added a
+    /// runtime and then failed part way left a DLL in the game that the program had no record of —
+    /// which is precisely the "state the program cannot describe and reverse" that R23 forbids.
+    /// </remarks>
+    private static void RollBack(IReadOnlyList<string> written, IReadOnlyList<BackupRecord> backups)
+    {
+        foreach (var created in written)
+        {
+            var wasReplaced = backups.Any(b =>
+                b.OriginalPath.Equals(created, SwapPlan.PathComparison));
+
+            if (!wasReplaced)
+            {
+                TryQuietly(() => File.Delete(created));
+            }
+        }
+
+        foreach (var backup in backups)
+        {
+            TryQuietly(() =>
+            {
+                if (File.Exists(backup.OriginalPath))
+                {
+                    File.Delete(backup.OriginalPath);
+                }
+                File.Move(backup.BackupPath, backup.OriginalPath, overwrite: true);
+            });
+        }
+    }
+
+    private static bool IsFileFailure(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception;
+
+    /// <summary>
+    /// A message that names what was being attempted and why it failed (R57, R60).
+    /// </summary>
+    private static string Describe(Exception ex) =>
+        ex is FileNotFoundException or DirectoryNotFoundException
+            ? $"a required file was missing ({ex.Message})"
+            : ex.Message;
+
+    internal static void TryQuietly(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            // Best effort. Anything that could not be undone is left in place for the user to
+            // recover by hand, which is better than a second failure while already failing.
         }
     }
 }
 
 /// <summary>
-/// Undoes the last swap for a game.
+/// Undoes swaps.
 /// </summary>
 public sealed class UndoEngine
 {
     private readonly PersistenceService _persistence;
+    private readonly DataPaths _paths;
 
-    public UndoEngine(PersistenceService persistence)
+    public UndoEngine(PersistenceService persistence, DataPaths paths)
     {
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
+        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
     }
 
     /// <summary>
-    /// Undoes the most recent swap for a specific game and runtime kind.
+    /// Undoes the most recent undoable swap for a specific game and runtime kind.
     /// </summary>
     /// <remarks>
-    /// R25: every swap can be undone.
-    /// R26: undoing can be repeated as many times as swaps made.
-    /// R27: backups from previous versions are adopted.
-    /// R28: external changes detected via hash comparison.
-    /// R29: missing originals reported as unrecoverable.
+    /// R25: every swap can be undone, restoring exactly what was there before it.
+    /// R26: undoing can be repeated as many times as swaps have been made, and each step stays
+    /// reversible because the pre-swap state is carried into the entry written for the undo.
+    /// R27: backups written by an earlier run are adopted, since they are found on disk rather than
+    /// in memory.
+    /// R28: if the game's files no longer match what the swap left behind, the undo is refused —
+    /// because no entry then describes a state the game can return to.
+    /// R29: missing originals are reported as unrecoverable rather than offered as restorable.
+    /// <para>
+    /// The whole thing is checked before any of it happens. Restoring file by file and giving up at
+    /// the first missing backup leaves the game half-undone and the user unsure of its state, so
+    /// every condition is verified up front and the game is only touched once the undo is certain to
+    /// complete.
+    /// </para>
     /// </remarks>
     public SwapResult Undo(string gameId, RuntimeKind runtimeKind)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gameId);
+
         var history = _persistence.GetHistory(gameId);
-        var lastEntry = history.GetLatestFor(runtimeKind);
+        var entry = history.GetLatestUndoableFor(runtimeKind);
 
-        if (lastEntry == null || !lastEntry.CanUndo)
+        if (entry is null)
         {
-            return SwapResult.Failed(gameId, "Nothing to undo");
+            return SwapResult.Failed(gameId, "", "Nothing to undo.");
         }
 
-        // R28: check if files were modified externally since backup
-        var externallyModified = false;
-        foreach (var backupPath in lastEntry.BackupPaths)
+        // --- Verification pass: nothing below this point modifies the game. ---
+
+        foreach (var backup in entry.Backups)
         {
-            var originalPath = backupPath.Substring(0, backupPath.LastIndexOf(".kronos_bak_"));
-            if (File.Exists(originalPath) && File.Exists(backupPath))
+            if (!File.Exists(backup.BackupPath))
             {
-                var originalHash = ComputeHash(originalPath);
-                var backupHash = ComputeHash(backupPath);
-                if (originalHash != backupHash)
-                {
-                    externallyModified = true;
-                    break;
-                }
+                // R29
+                return SwapResult.Failed(
+                    gameId, entry.GameName,
+                    $"Cannot undo: the saved copy of {Path.GetFileName(backup.OriginalPath)} is missing. " +
+                    $"It was at {backup.BackupPath}. Nothing has been changed.");
+            }
+
+            // R28: only safe if the game still holds what we put there.
+            if (!FileFingerprint.Matches(backup.OriginalPath, backup.PostSwapSha256))
+            {
+                return SwapResult.Failed(
+                    gameId, entry.GameName,
+                    $"Cannot undo: {Path.GetFileName(backup.OriginalPath)} was changed by something " +
+                    "other than this program since the swap, so restoring would discard that change. " +
+                    "Nothing has been changed.");
             }
         }
 
-        if (externallyModified)
+        // --- Application pass. ---
+
+        var redoState = new List<BackupRecord>();
+        var removedFiles = new List<string>();
+
+        // Save what is on disk now before overwriting it. That copy is what makes this undo itself
+        // reversible (R26): redoing means putting the swapped-in content back, and once it has been
+        // overwritten the only copy of it would be gone.
+        foreach (var backup in entry.Backups)
         {
-            // R28: game modified externally - can't safely undo
-            return SwapResult.Failed(gameId, "Game files were modified externally since the swap. Manual recovery required.");
+            try
+            {
+                var saved = BackupStore.Save(_paths, gameId, backup.OriginalPath);
+                redoState.Add(saved with { PostSwapSha256 = FileFingerprint.Compute(backup.OriginalPath) });
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                return SwapResult.Failed(
+                    gameId, entry.GameName,
+                    $"Cannot undo: could not save the current state of " +
+                    $"{Path.GetFileName(backup.OriginalPath)} ({ex.Message}). Nothing has been changed.");
+            }
         }
 
-        try
+        // Restoring by copy rather than by move leaves the backup in place, so an undo interrupted
+        // half way can simply be run again to finish the job.
+        foreach (var backup in entry.Backups)
         {
-            // Restore each backed-up file
-            foreach (var backupPath in lastEntry.BackupPaths)
+            try
             {
-                var originalPath = backupPath.Substring(0, backupPath.LastIndexOf(".kronos_bak_"));
+                File.Copy(backup.BackupPath, backup.OriginalPath, overwrite: true);
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                return SwapResult.Failed(
+                    gameId, entry.GameName,
+                    $"Undo failed while restoring {Path.GetFileName(backup.OriginalPath)}: {ex.Message} " +
+                    "Run undo again to finish.");
+            }
+        }
 
-                if (File.Exists(backupPath))
-                {
-                    if (File.Exists(originalPath))
-                    {
-                        File.Delete(originalPath);
-                    }
-                    File.Move(backupPath, originalPath);
-                }
-                else
-                {
-                    // R29: original missing and no backup = unrecoverable
-                    return SwapResult.Failed(gameId, $"Backup missing for {originalPath}. Cannot undo.");
-                }
+        // The game is now in its pre-swap state; record that as what a redo would restore.
+        for (var i = 0; i < redoState.Count; i++)
+        {
+            redoState[i] = redoState[i] with
+            {
+                PostSwapSha256 = FileFingerprint.Compute(entry.Backups[i].OriginalPath),
+            };
+        }
+
+        foreach (var created in entry.CreatedFiles)
+        {
+            if (!File.Exists(created))
+            {
+                continue;
             }
 
-            // Create a history entry for the undo (so it can be redone)
-            var undoEntry = new HistoryEntry(
-                DateTimeOffset.UtcNow,
-                gameId,
-                lastEntry.GameName,
-                lastEntry.GamePath,
-                lastEntry.RuntimeKind,
-                lastEntry.NewVersion, // we're going back to this
-                lastEntry.PreviousVersion ?? "none",
-                lastEntry.NewTrust,
-                lastEntry.PreviousTrust,
-                [], // no new backups for undo
-                false,
-                false);
-
-            _persistence.AddHistoryEntry(gameId, undoEntry);
-
-            return SwapResult.Success(gameId, lastEntry.BackupPaths, undoEntry);
+            try
+            {
+                File.Delete(created);
+                removedFiles.Add(created);
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                return SwapResult.Failed(
+                    gameId, entry.GameName,
+                    $"Undo failed while removing {Path.GetFileName(created)}: {ex.Message} " +
+                    "Run undo again to finish.");
+            }
         }
-        catch (Exception ex)
-        {
-            return SwapResult.Failed(gameId, $"Undo failed: {ex.Message}");
-        }
+
+        // R26: record the reverse so this undo can itself be undone.
+        var undoEntry = entry.AsReverted(redoState, removedFiles);
+        _persistence.AddHistoryEntry(gameId, undoEntry);
+
+        return SwapResult.Success(gameId, entry.GameName, redoState, removedFiles, undoEntry);
     }
 
-    private static string ComputeHash(string path)
-    {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(sha.ComputeHash(stream));
-    }
+    private static bool IsFileFailure(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception;
 }
