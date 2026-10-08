@@ -10,257 +10,247 @@ using Xunit;
 namespace KronosReborn.Tests;
 
 /// <summary>
-/// Tests for treating DLSS, DLSS Frame Generation and DLSS Ray Reconstruction as one runtime.
+/// Tests for DLSS, DLSS Frame Generation and DLSS Ray Reconstruction being three separate things.
 /// </summary>
 /// <remarks>
 /// <para>
-/// These are three separate files with three separate names, and the program has always known them
-/// apart. What it did not know was that they have to move together. NVIDIA ships them at matching
-/// versions, and every game checked on a real library carried them in step — one on 310.2.1 with
-/// Frame Generation 310.2.1, the rest on 310.9.1 with 310.9.1 — while none of them carried Ray
-/// Reconstruction at all.
+/// These are three files with three names, offered as three separate choices, and the user makes the
+/// choice for each independently. Installing one never installs another. That is the behaviour these
+/// tests pin down, because an earlier version of the program bundled them: picking a DLSS version
+/// quietly wrote the Frame Generation file too, so the user could not choose a version for one part
+/// without changing the other.
 /// </para>
 /// <para>
-/// So swapping DLSS on its own is how a game ends up running Frame Generation built for a different
-/// Super Resolution version. These tests pin down that the rest of the stack comes along, that a
-/// part is never added to a game that did not ship with it, and that a part which cannot come along
-/// is said so rather than passed over in silence.
+/// What is kept is the knowledge that NVIDIA supports the three only at matching versions. That is
+/// reported in the preview rather than acted on, so a combination the user chose deliberately is not
+/// overridden and not hidden.
 /// </para>
 /// </remarks>
 public class DlssFamilyTests
 {
+    // -------------------------------------------------------------- Three separate choices
+
     [Fact]
-    public void TheThreeDlssKindsAreOneMatchedSet()
+    public void TheThreeDlssKindsAreDistinctChoices()
     {
-        // The whole rule rests on this grouping, so it is asserted rather than assumed.
-        Assert.Equal(
-            [RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR],
-            RuntimeDlls.Related(RuntimeKind.Dlss));
+        // Each is its own kind with its own file name, which is what makes them separately
+        // selectable in the first place.
+        Assert.Equal("nvngx_dlss.dll", RuntimeDlls.ByKind[RuntimeKind.Dlss][0]);
+        Assert.Equal("nvngx_dlssg.dll", RuntimeDlls.ByKind[RuntimeKind.DlssG][0]);
+        Assert.Equal("nvngx_dlssr.dll", RuntimeDlls.ByKind[RuntimeKind.DlssR][0]);
 
-        Assert.Equal(
-            [RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR],
-            RuntimeDlls.Related(RuntimeKind.DlssG));
-
-        Assert.Equal(
-            [RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR],
-            RuntimeDlls.Related(RuntimeKind.DlssR));
+        // And each has a name of its own in the interface. If these were ever collapsed into one
+        // label, the picker would show three identical entries with no way to tell them apart.
+        Assert.Equal("DLSS", RuntimeKindNames.Display(RuntimeKind.Dlss));
+        Assert.Equal("DLSS Frame Gen", RuntimeKindNames.Display(RuntimeKind.DlssG));
+        Assert.Equal("DLSS Ray Recon", RuntimeKindNames.Display(RuntimeKind.DlssR));
     }
 
     [Fact]
-    public void FsrAndXessAreSelfContained()
-    {
-        // FSR is two files, but they are one runtime, not three parts of a matched set. It stands
-        // alone, as XeSS does.
-        Assert.Equal([RuntimeKind.Fsr], RuntimeDlls.Related(RuntimeKind.Fsr));
-        Assert.Equal([RuntimeKind.Xess], RuntimeDlls.Related(RuntimeKind.Xess));
-
-        Assert.False(RuntimeDlls.AreRelated(RuntimeKind.Fsr, RuntimeKind.Dlss));
-        Assert.True(RuntimeDlls.AreRelated(RuntimeKind.Dlss, RuntimeKind.DlssG));
-    }
-
-    [Fact]
-    public void ChoosingADlssVersionBringsFrameGenerationWithIt()
-    {
-        using var fixture = new DlssFixture();
-        fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG);
-        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssG);
-
-        var plans = fixture.PlanWithFamily(RuntimeKind.Dlss);
-
-        // The defect this guards: only DLSS was planned, leaving Frame Generation on 310.2.1 beside a
-        // Super Resolution on 310.9.1.
-        Assert.Equal(2, plans.Count);
-        Assert.Contains(plans, p => p.RuntimeKind == RuntimeKind.Dlss);
-        Assert.Contains(plans, p => p.RuntimeKind == RuntimeKind.DlssG);
-
-        // Both to the version that was chosen, not two different ones.
-        Assert.All(plans, p => Assert.Equal("310.9.1", p.TargetVersion));
-    }
-
-    [Fact]
-    public void RayReconstructionIsBroughtAlongTooWhenTheGameHasIt()
+    public void EachPartIsOfferedSeparatelyWhenTheGameHasAllThree()
     {
         using var fixture = new DlssFixture();
         fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR);
         fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR);
 
-        var plans = fixture.PlanWithFamily(RuntimeKind.Dlss);
+        // Every part of every version the collection holds is its own option, so the user can pick a
+        // version for one part without being offered a bundle.
+        var options = fixture.OfferedVersions();
 
-        Assert.Equal(3, plans.Count);
-        Assert.Contains(plans, p => p.RuntimeKind == RuntimeKind.DlssR);
+        Assert.Equal(3, options.Count);
+        Assert.Contains(options, o => o.Kind == RuntimeKind.Dlss);
+        Assert.Contains(options, o => o.Kind == RuntimeKind.DlssG);
+        Assert.Contains(options, o => o.Kind == RuntimeKind.DlssR);
+
+        // All at the same version, but three separate entries rather than one.
+        Assert.All(options, o => Assert.Equal("310.9.1", o.Version));
     }
 
     [Fact]
-    public void StartingFromFrameGenerationAlsoBringsTheRest()
+    public void ChoosingOnePartPlansOnlyThatPart()
+    {
+        using var fixture = new DlssFixture();
+        fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR);
+        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR);
+
+        var plans = fixture.Plan(RuntimeKind.Dlss);
+
+        // The behaviour the user asked for. This was three plans before, and the two extra writes
+        // happened without being chosen.
+        Assert.Single(plans);
+        Assert.Equal(RuntimeKind.Dlss, plans[0].RuntimeKind);
+    }
+
+    [Fact]
+    public void ChoosingFrameGenerationChangesNothingElse()
+    {
+        using var fixture = new DlssFixture();
+        fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR);
+        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR);
+
+        var plans = fixture.Plan(RuntimeKind.DlssG);
+
+        Assert.Single(plans);
+        Assert.Equal(RuntimeKind.DlssG, plans[0].RuntimeKind);
+
+        fixture.Execute(plans);
+
+        // Only the chosen file was written.
+        foreach (var kind in new[] { RuntimeKind.Dlss, RuntimeKind.DlssR })
+        {
+            var file = Path.Combine(fixture.GameFolder, RuntimeDlls.ByKind[kind][0]);
+            Assert.Equal(
+                DlssFixture.OldContent(RuntimeDlls.ByKind[kind][0]),
+                File.ReadAllText(file));
+        }
+    }
+
+    [Fact]
+    public void ChoosingRayReconstructionInstallsRayReconstruction()
+    {
+        using var fixture = new DlssFixture();
+        fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssR);
+        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssR);
+
+        var plans = fixture.Plan(RuntimeKind.DlssR);
+        fixture.Execute(plans);
+
+        var rr = Path.Combine(fixture.GameFolder, RuntimeDlls.ByKind[RuntimeKind.DlssR][0]);
+        Assert.Equal(DlssFixture.NewContent(RuntimeDlls.ByKind[RuntimeKind.DlssR][0]), File.ReadAllText(rr));
+    }
+
+    [Fact]
+    public void AVersionOfOnePartDoesNotDependOnTheOthersBeingAvailable()
     {
         using var fixture = new DlssFixture();
         fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG);
-        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssG);
+        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss);
 
-        // Whichever part the user happens to pick first, the same stack is planned.
-        var plans = fixture.PlanWithFamily(RuntimeKind.DlssG);
+        // Only DLSS is in the collection. That is enough to swap DLSS: the missing Frame Generation
+        // version is the user's business, not a reason to refuse.
+        var plans = fixture.Plan(RuntimeKind.Dlss);
 
-        Assert.Equal(2, plans.Count);
-        Assert.Contains(plans, p => p.RuntimeKind == RuntimeKind.Dlss);
-        Assert.Contains(plans, p => p.RuntimeKind == RuntimeKind.DlssG);
+        Assert.Single(plans);
+        Assert.Equal("310.9.1", plans[0].TargetVersion);
+    }
+
+    // -------------------------------------------------------------- The advisory note
+
+    [Fact]
+    public void APartLeftOnAnotherVersionIsReportedInThePreview()
+    {
+        using var fixture = new DlssFixture();
+        fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG);
+        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss);
+
+        var plans = SwapPlanner.NotePartsLeftBehind(fixture.Plan(RuntimeKind.Dlss), fixture.Games());
+
+        // Frame Generation would stay on 310.2.1 while DLSS goes to 310.9.1. That is the user's
+        // choice to make, but it is said out loud rather than discovered later in the game.
+        var plan = Assert.Single(plans);
+        Assert.Equal([RuntimeKind.DlssG], plan.Unmatched);
+        Assert.True(plan.HasWarning);
+        Assert.Contains(
+            RuntimeKindNames.Display(RuntimeKind.DlssG),
+            plan.Summary,
+            StringComparison.Ordinal);
     }
 
     [Fact]
-    public void FrameGenerationIsNotAddedToAGameThatNeverHadIt()
+    public void APartAlreadyAtTheChosenVersionIsNotReported()
+    {
+        using var fixture = new DlssFixture();
+        fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG);
+        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss);
+        fixture.GivenGameIsAt(RuntimeKind.DlssG, "310.9.1");
+
+        var plans = SwapPlanner.NotePartsLeftBehind(fixture.Plan(RuntimeKind.Dlss), fixture.Games());
+
+        // Frame Generation is in step already, so there is nothing to say about it.
+        Assert.Empty(Assert.Single(plans).Unmatched);
+    }
+
+    [Fact]
+    public void APartTheGameDoesNotCarryIsNotReported()
     {
         using var fixture = new DlssFixture();
         fixture.GivenGameHas(RuntimeKind.Dlss);
         fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssG);
 
-        var plans = fixture.PlanWithFamily(RuntimeKind.Dlss);
+        var plans = SwapPlanner.NotePartsLeftBehind(fixture.Plan(RuntimeKind.Dlss), fixture.Games());
 
-        // Adding Frame Generation to a game that shipped without it is adding runtime support to that
-        // game, which the specification puts out of scope — and would leave the title running a
-        // feature its developer never enabled.
-        Assert.Single(plans);
-        Assert.Equal(RuntimeKind.Dlss, plans[0].RuntimeKind);
-
-        // And nothing is reported as left behind, because nothing was supposed to be there.
-        Assert.Empty(plans[0].Unmatched);
+        // Frame Generation is in the collection but not in the game. Adding it is out of scope, so it
+        // is neither swapped in nor reported as left behind.
+        Assert.Empty(Assert.Single(plans).Unmatched);
     }
 
     [Fact]
-    public void APartTheCollectionLacksIsSaidToBeLeftBehindRatherThanIgnored()
+    public void FsrAndXeSSAreUnaffectedByAnyOfThis()
     {
+        // They are different technologies entirely, with no cross-version coupling, so a plan for one
+        // never mentions the other.
         using var fixture = new DlssFixture();
-        fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG);
-        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss);
+        fixture.GivenGameHas(RuntimeKind.Fsr, RuntimeKind.Xess);
+        fixture.GivenCollectionHas("3.1.0", RuntimeKind.Fsr, RuntimeKind.Xess);
 
-        var plans = fixture.PlanWithFamily(RuntimeKind.Dlss);
+        var plans = SwapPlanner.NotePartsLeftBehind(fixture.Plan(RuntimeKind.Fsr), fixture.Games());
 
-        // The upgrade still happens — refusing outright would strand the game on the old DLSS until
-        // the user manually imported something.
-        Assert.Single(plans);
-
-        // But the preview says what was left behind and what would fix it. Silently half-matching a
-        // runtime is precisely the problem this rule was added to stop.
-        var dlss = plans[0];
-        Assert.Equal([RuntimeKind.DlssG], dlss.Unmatched);
-        Assert.True(dlss.HasWarning);
-
-        // The preview names the part that was left behind and the version that would fix it, so the
-        // user is not left to infer the mismatch from two lines of numbers.
-        Assert.Contains(
-            RuntimeKindNames.Display(RuntimeKind.DlssG),
-            dlss.Summary,
-            StringComparison.Ordinal);
-        Assert.Contains("310.9.1", dlss.Summary, StringComparison.Ordinal);
-        Assert.Contains("stays on the version", dlss.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(Assert.Single(plans).Unmatched);
+        Assert.Equal([RuntimeKind.Fsr], RuntimeDlls.Related(RuntimeKind.Fsr));
+        Assert.Equal([RuntimeKind.Xess], RuntimeDlls.Related(RuntimeKind.Xess));
     }
 
-    [Fact]
-    public void APartAlreadyAtTheChosenVersionIsNotTreatedAsLeftBehind()
-    {
-        using var fixture = new DlssFixture();
-        fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG);
-        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss);
-
-        // The game is already on 310.9.1 for Frame Generation; only DLSS is behind.
-        fixture.GivenGameIsAt(RuntimeKind.DlssG, "310.9.1");
-        fixture.GivenGameIsAt(RuntimeKind.Dlss, "310.2.1");
-
-        var plans = fixture.PlanWithFamily(RuntimeKind.Dlss);
-
-        Assert.Single(plans);
-
-        // The point: Frame Generation is in step already, so nothing is reported as left behind.
-        // (This plan does warn, for the unrelated reason that these test files are unsigned.)
-        Assert.Empty(plans[0].Unmatched);
-    }
+    // -------------------------------------------------------------- Partial batches
 
     [Fact]
-    public void EveryPartIsActuallyInstalledTogether()
+    public void OnePartOfAGameFailingRollsBackTheOthersAppliedToThatGame()
     {
         using var fixture = new DlssFixture();
         fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG);
         fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssG);
 
-        var result = fixture.Execute(fixture.PlanWithFamily(RuntimeKind.Dlss));
-
-        Assert.Equal(2, result.Succeeded);
-        Assert.Equal(0, result.Failed);
-
-        // Both files in the game now hold the new content, not just the one that was picked.
-        foreach (var kind in new[] { RuntimeKind.Dlss, RuntimeKind.DlssG })
-        {
-            var file = Path.Combine(fixture.GameFolder, RuntimeDlls.ByKind[kind][0]);
-            Assert.Equal(DlssFixture.NewContent(RuntimeDlls.ByKind[kind][0]), File.ReadAllText(file));
-        }
-    }
-
-    [Fact]
-    public void OnePartFailingRollsBackThePartsAlreadyAppliedToThatGame()
-    {
-        using var fixture = new DlssFixture();
-        fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG);
-        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssG);
-
-        var plans = fixture.PlanWithFamily(RuntimeKind.Dlss);
+        // A batch holding two parts of one game, which is what a caller asking for several changes
+        // at once produces. The second cannot be applied.
+        var plans = fixture.Plan(RuntimeKind.Dlss).Concat(fixture.Plan(RuntimeKind.DlssG)).ToList();
         Assert.Equal(2, plans.Count);
 
-        // Remove the collection's copy of the second part, so applying it cannot succeed. This is the
-        // real shape of the failure: the collection had the file listed, then it went away.
         File.Delete(Path.Combine(
             fixture.CollectionFolderFor(RuntimeKind.DlssG),
             RuntimeDlls.ByKind[RuntimeKind.DlssG][0]));
 
         var result = fixture.Execute(plans);
 
-        // The part that did apply must not survive on its own: the game would be running Frame
-        // Generation from 310.2.1 against a Super Resolution from 310.9.1.
+        // The part that did apply must not survive alone: the game would be running Frame Generation
+        // from one version against a Super Resolution from another.
         Assert.Equal(0, result.Succeeded);
+        Assert.Equal(2, result.Failed);
 
         foreach (var kind in new[] { RuntimeKind.Dlss, RuntimeKind.DlssG })
         {
             var file = Path.Combine(fixture.GameFolder, RuntimeDlls.ByKind[kind][0]);
             Assert.Equal(DlssFixture.OldContent(RuntimeDlls.ByKind[kind][0]), File.ReadAllText(file));
         }
-    }
 
-    [Fact]
-    public void AFailedPartIsReportedWithAReasonRatherThanVanishing()
-    {
-        using var fixture = new DlssFixture();
-        fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG);
-        fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssG);
-
-        var plans = fixture.PlanWithFamily(RuntimeKind.Dlss);
-        File.Delete(Path.Combine(
-            fixture.CollectionFolderFor(RuntimeKind.DlssG),
-            RuntimeDlls.ByKind[RuntimeKind.DlssG][0]));
-
-        var result = fixture.Execute(plans);
-
-        // R63: a summary accounts for every item. Both parts appear, and neither claims success.
+        // R63: every item in the batch is accounted for, and the rolled-back one says why.
         Assert.Equal(plans.Count, result.Results.Count);
-        Assert.All(result.Results, r => Assert.False(r.Succeeded));
-
-        // The part that was rolled back says why, so the user is not left guessing.
         Assert.Contains(result.Results, r =>
             r.ErrorMessage is not null &&
             r.ErrorMessage.Contains("rolled back", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public void OneGameFailingDoesNotStopAnotherGame()
+    public void OneGameFailingDoesNotStopAnother()
     {
         using var fixture = new DlssFixture();
         fixture.GivenGameHas(RuntimeKind.Dlss, RuntimeKind.DlssG);
         fixture.GivenCollectionHas("310.9.1", RuntimeKind.Dlss, RuntimeKind.DlssG);
-
-        // A second game in the same batch, whose own DLSS file is held open so it cannot be written.
         fixture.AddSecondGame();
+
+        // The second game's own file is held open so it cannot be written. Its collection copy is
+        // shared, so removing that would fail every game at once and prove nothing about this.
         using var locked = fixture.LockSecondGameDlss();
 
-        var plans = fixture.PlanWithFamily(RuntimeKind.Dlss);
-
-        // Both games, both parts, in one batch.
-        Assert.Equal(4, plans.Count);
+        var plans = fixture.Plan(RuntimeKind.Dlss).Concat(fixture.Plan(RuntimeKind.DlssG)).ToList();
 
         var result = fixture.Execute(plans);
 
@@ -268,34 +258,25 @@ public class DlssFamilyTests
         // all-or-nothing across games.
         Assert.True(result.Failed > 0, "the locked game should have failed");
         Assert.True(result.Succeeded > 0, "the unlocked game should still have been applied");
-
-        // And the game that succeeded really did end up with both parts at the chosen version.
-        foreach (var kind in new[] { RuntimeKind.Dlss, RuntimeKind.DlssG })
-        {
-            var file = Path.Combine(fixture.GameFolder, RuntimeDlls.ByKind[kind][0]);
-            Assert.Equal(DlssFixture.NewContent(RuntimeDlls.ByKind[kind][0]), File.ReadAllText(file));
-        }
     }
 
     /// <summary>
-    /// A game and a collection that can hold several runtime kinds at once.
+    /// A game and a collection that can hold several runtime parts at once.
     /// </summary>
     /// <remarks>
     /// The existing <see cref="SwapFixture"/> is deliberately single-kind, which is what most swap
-    /// behaviour needs. Multi-part behaviour needs a game carrying more than one runtime and a
-    /// collection holding versions of each, so this builds that instead of loosening the other.
+    /// behaviour needs. Anything involving more than one runtime part needs a game carrying several
+    /// and a collection holding versions of each, so this builds that instead of loosening the other.
     /// </remarks>
     private sealed class DlssFixture : IDisposable
     {
         private readonly TemporaryDirectory _temp = new();
         private readonly Dictionary<RuntimeKind, string> _gameVersions = [];
-        private readonly Dictionary<RuntimeKind, string?> _catalogVersion = [];
-        private readonly string _dataRoot;
+        private readonly Dictionary<RuntimeKind, string> _catalogVersions = [];
 
         public DlssFixture()
         {
-            _dataRoot = Path.Combine(_temp.Root, "data");
-            Paths = new DataPaths(_dataRoot);
+            Paths = new DataPaths(Path.Combine(_temp.Root, "data"));
             Persistence = new PersistenceService(Paths);
             Catalog = new RuntimeCatalog(Paths.CatalogPath);
 
@@ -315,28 +296,31 @@ public class DlssFamilyTests
         public string GameFolder { get; }
         public string SecondGameFolder { get; }
 
-        /// <summary>The version a swapped-in DLL reads as, so files can be told apart.</summary>
+        /// <summary>Content a swapped-in DLL holds, so files can be told apart.</summary>
         public static string NewContent(string fileName) => $"NEW-{fileName}";
 
-        /// <summary>The version a game's own DLL reads as, before any swap.</summary>
+        /// <summary>Content a game's own DLL holds, before any swap.</summary>
         public static string OldContent(string fileName) => $"OLD-{fileName}";
 
         public string CollectionFolderFor(RuntimeKind kind) =>
             Path.Combine(_temp.Root, "Collection", kind.ToString());
 
-        /// <summary>The game already carries these runtimes, at the given version.</summary>
-        public void GivenGameHas(params RuntimeKind[] kinds) => GivenGameIsAtAll(kinds, "310.2.1");
+        /// <summary>The game already carries these runtimes, at the old version.</summary>
+        public void GivenGameHas(params RuntimeKind[] kinds) => GivenAllAt(kinds, "310.2.1");
 
-        public void GivenGameIsAt(RuntimeKind kind, string version) =>
-            GivenGameIsAtAll([kind], version);
+        public void GivenGameIsAt(RuntimeKind kind, string version) => GivenAllAt([kind], version);
 
-        private void GivenGameIsAtAll(IReadOnlyList<RuntimeKind> kinds, string version)
+        private void GivenAllAt(IReadOnlyList<RuntimeKind> kinds, string version)
         {
             foreach (var kind in kinds)
             {
-                var file = RuntimeDlls.ByKind[kind][0];
+                // Every file the kind consists of. FSR is two DLLs, and a collection holding only one
+                // of them is a collection that cannot be installed from at all.
+                foreach (var file in RuntimeDlls.ByKind[kind])
+                {
+                    File.WriteAllText(Path.Combine(GameFolder, file), OldContent(file));
+                }
 
-                File.WriteAllText(Path.Combine(GameFolder, file), OldContent(file));
                 _gameVersions[kind] = version;
             }
         }
@@ -349,25 +333,32 @@ public class DlssFamilyTests
                 var folder = CollectionFolderFor(kind);
                 Directory.CreateDirectory(folder);
 
-                var file = RuntimeDlls.ByKind[kind][0];
-                File.WriteAllText(Path.Combine(folder, file), NewContent(file));
+                foreach (var file in RuntimeDlls.ByKind[kind])
+                {
+                    File.WriteAllText(Path.Combine(folder, file), NewContent(file));
+                }
 
-                _catalogVersion[kind] = version;
+                _catalogVersions[kind] = version;
 
-                var detected = new DetectedRuntime(
-                    kind, file, file, Path.Combine(folder, file), version, null, Exists: true);
-
-                Catalog.AddFromDiscovery(detected, GameId, "Test Game", "Steam");
+                var primary = RuntimeDlls.ByKind[kind][0];
+                Catalog.AddFromDiscovery(
+                    new DetectedRuntime(
+                        kind, primary, primary, Path.Combine(folder, primary), version, null, Exists: true),
+                    GameId,
+                    "Test Game",
+                    "Steam");
             }
         }
 
-        /// <summary>Puts a second game with the same runtimes into the same batch.</summary>
+        /// <summary>Puts a second game carrying the same runtimes into the batch.</summary>
         public void AddSecondGame()
         {
             foreach (var kind in _gameVersions.Keys)
             {
-                var file = RuntimeDlls.ByKind[kind][0];
-                File.WriteAllText(Path.Combine(SecondGameFolder, file), OldContent(file));
+                foreach (var file in RuntimeDlls.ByKind[kind])
+                {
+                    File.WriteAllText(Path.Combine(SecondGameFolder, file), OldContent(file));
+                }
             }
         }
 
@@ -376,9 +367,8 @@ public class DlssFamilyTests
         /// </summary>
         /// <remarks>
         /// Used to fail one game's plans without disturbing the other. Deleting the collection's copy
-        /// would not do it: every game's plan for a kind reads from the same file in the collection, so
-        /// that would fail all of them at once and prove nothing about per-game behaviour. Holding
-        /// the game's own target file is the failure that is genuinely local to one game.
+        /// would not do it: every game's plan for a kind reads from the same file, so that would fail
+        /// all of them at once and say nothing about per-game behaviour.
         /// </remarks>
         public FileStream LockSecondGameDlss()
         {
@@ -386,13 +376,20 @@ public class DlssFamilyTests
             return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
         }
 
-        public IReadOnlyList<SwapPlan> PlanWithFamily(RuntimeKind kind)
+        /// <summary>Every version the collection holds that applies to the game.</summary>
+        public IReadOnlyList<(RuntimeKind Kind, string Version)> OfferedVersions() =>
+        [
+            .. Catalog.Entries
+                .Where(e => _gameVersions.ContainsKey(e.Kind))
+                .Select(e => (e.Kind, e.Version)),
+        ];
+
+        public IReadOnlyList<SwapPlan> Plan(RuntimeKind kind)
         {
             var target = Catalog.Entries.First(e =>
-                e.Kind == kind &&
-                VersionNumber.AreEquivalent(e.Version, _catalogVersion[kind]));
+                e.Kind == kind && VersionNumber.AreEquivalent(e.Version, _catalogVersions[kind]));
 
-            return SwapPlanner.PlanWithFamily(
+            return SwapPlanner.Plan(
                 Games(),
                 Catalog,
                 kind,
@@ -400,12 +397,12 @@ public class DlssFamilyTests
                 Settings.Default.With(allowUntrustedRuntimes: true));
         }
 
-        private List<SwapGameInfo> Games()
+        /// <summary>Every game in the batch, with only the parts it actually carries.</summary>
+        public List<SwapGameInfo> Games()
         {
             var games = new List<SwapGameInfo> { GameInfo(GameId, "Test Game", GameFolder) };
 
-            if (Directory.Exists(SecondGameFolder) &&
-                Directory.EnumerateFiles(SecondGameFolder).Any())
+            if (Directory.EnumerateFiles(SecondGameFolder).Any())
             {
                 games.Add(GameInfo(SecondGameId, "Second Game", SecondGameFolder));
             }
@@ -415,8 +412,6 @@ public class DlssFamilyTests
 
         private SwapGameInfo GameInfo(string id, string name, string folder)
         {
-            // Only the kinds this fixture was told the game has; the rest are reported absent, which
-            // is how the planner decides not to add them.
             var runtimes = Enum.GetValues<RuntimeKind>()
                 .Select(kind => new DetectedRuntime(
                     kind,

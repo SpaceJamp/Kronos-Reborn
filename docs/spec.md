@@ -244,21 +244,24 @@ work on any DirectX 12 GPU.
   first. Truncating a failure list loses the information the user needed it for.
 - **R64.** Errors are never swallowed silently, including in background work. Work that fails while the
   user is looking at something else still reaches them.
-- **R65.** Runtime parts that the vendor supports only at matching versions are changed together, and
-  are never left at different versions from one another. DLSS, DLSS Frame Generation and DLSS Ray
-  Reconstruction are one runtime in up to three files and NVIDIA ships them in step. Choosing a
-  version of one brings the others a game already carries to that same version.
-- **R66.** A part that cannot be brought into step is named in the preview rather than quietly
-  skipped. Where the collection does not hold a matching version of a part the game already carries,
-  the upgrade still proceeds — refusing outright would strand the game on an old version — but the
-  preview says which part would be left behind and what would fix it.
+- **R65.** Distinct runtime kinds are separate choices, and choosing one installs only that one. DLSS,
+  DLSS Frame Generation and DLSS Ray Reconstruction are three files with three names, offered as
+  three separate pickers, and a choice made for one is never applied to another without the user
+  making that choice too.
+- **R66.** Where the vendor supports several runtimes only at matching versions, a choice that would
+  leave them out of step says so in the preview. NVIDIA supports the three DLSS kinds only at matching
+  versions, and this is reported rather than enforced: the user chooses what goes in their library,
+  and there are reasons to pair them differently that this program cannot know.
 - **R67.** A part is never added to a game that did not ship with it. Adding Frame Generation to a
   game that never had it is adding runtime support to that game, which is out of scope, and would
   leave the title running a feature its developer never enabled.
-- **R68.** A change to several parts of one game either fully applies or fully rolls back. If one part
-  fails, the parts already applied to that game are undone and reported as failed with the reason.
+- **R68.** A change to several runtimes in one game either fully applies or fully rolls back. If one
+  fails, the others already applied to that game are undone and reported as failed with the reason.
   This is safety principle 3 applied within a game, and it does not extend across games: one game
   failing does not stop the others.
+- **R69.** Where several kinds share a name, an option says which kind it is. DLSS, DLSS Frame
+  Generation and DLSS Ray Reconstruction routinely hold the same version number, so a picker listing
+  bare versions would show identical entries that differ only in the part they would install.
 
 ## Safety principles
 
@@ -387,5 +390,5 @@ None outstanding. New questions are added here as they arise, and moved into Dec
 | 0.1.0 | Clarified R27: an undo is itself reversible, so history carries forward the state needed to redo. |
 | 0.1.0 | Noted R33 against R42: the setting decides whether an untrusted file may enter the collection, and does not decide whether the user is warned when one is installed. Accepting a file is not evidence that it is genuine. |
 | 0.1.0 | Built cover images, which the Decisions section above had deferred, after establishing that Steam's own artwork cache makes them available locally with no network access and no cache to maintain. |
-| 0.1.0 | Added R65 to R68. DLSS, Frame Generation and Ray Reconstruction are supported by their vendor only at matching versions, and every game checked on a real library carried them in step, so swapping one part alone was how a game would end up running parts built for different versions. Parts a game already has now move together; a part is never added to a game that did not ship with it; a part that cannot be brought into step is named in the preview; and a game whose parts cannot all be applied is left as it was. |
+| 0.1.0 | Added R65 to R69. DLSS, DLSS Frame Generation and DLSS Ray Reconstruction are three separate things the user chooses between separately, so choosing one installs one. The picker gives each its own picker rather than one flat list of bare version numbers, because the three routinely hold the same version and a line reading only "310.2.1" does not say which of them it would install. NVIDIA supports them only at matching versions, which the preview now reports rather than acts on — it was briefly implemented as installing them together, which took the choice away, and that has been reversed. A runtime the game does not carry is never offered; a game whose several runtimes cannot all be applied is left as it was. |
 | 0.1.0 | Reduced the game list's fixed column widths and the size of the poster cell so the whole row fits the window at its minimum width. Adding posters had pushed the runtime columns off the right edge, where the version being compared was the one that could no longer be seen. Guarded by two checks over the window markup, since a column that is off screen is still present and still bound and nothing else fails. |

@@ -42,19 +42,20 @@ public sealed record SwapPlan(
     bool HasCurrentVersion,
     IReadOnlyList<string> SourceFiles,
     IReadOnlyList<string> TargetFiles,
-    IReadOnlyList<RuntimeKind>? UnmatchedParts = null)
+    IReadOnlyList<RuntimeKind>? UnmatchedParts = null,
+    GameRuntimeSnapshot? Snapshot = null)
 {
     /// <summary>
-    /// Parts of the same runtime this game already carries that could not be brought along.
+    /// Parts of the same runtime this game carries that would be left on a different version.
     /// </summary>
     /// <remarks>
-    /// DLSS, Frame Generation and Ray Reconstruction are supported at matching versions. When the
-    /// collection does not hold a companion at the version being installed, that companion cannot be
-    /// brought into step. Rather than refuse the whole upgrade — which would mean a game stuck on an
-    /// old DLSS version until the user manually imports something — the swap goes ahead and the
-    /// preview says plainly which parts were left behind, because silently leaving a game running
-    /// Frame Generation built for a different Super Resolution version is the problem this exists to
-    /// prevent.
+    /// DLSS, DLSS Frame Generation and DLSS Ray Reconstruction are three separate choices the user
+    /// makes separately, and installing one never installs another. These are the other parts of that
+    /// same runtime which this swap would leave behind, recorded so the preview can say so: NVIDIA
+    /// supports the three only at matching versions, and a mismatch is worth knowing about at the
+    /// point of choosing rather than when the game misbehaves.
+    ///
+    /// Advisory, not enforced. The user chooses what goes in their library.
     /// </remarks>
     public IReadOnlyList<RuntimeKind> Unmatched => UnmatchedParts ?? [];
 
@@ -275,7 +276,11 @@ public static class SwapPlanner
                 targets);
 
             // The plan carries the game's existing files as the things to back up.
-            plans.Add(plan with { SourceFiles = targets.Where(File.Exists).ToArray() });
+            plans.Add(plan with
+            {
+                SourceFiles = targets.Where(File.Exists).ToArray(),
+                Snapshot = snapshot,
+            });
         }
 
         return plans;
@@ -286,181 +291,68 @@ public static class SwapPlanner
     /// </summary>
     /// <returns>Null when the catalog does not hold every file the kind needs.</returns>
     /// <summary>
-    /// Plans a swap for one game together with every part of the same runtime it already carries.
+    /// <summary>
+    /// Notes on a plan which parts of the same runtime would be left on a different version.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// DLSS, Frame Generation and Ray Reconstruction are one runtime in up to three files and are only
-    /// supported at matching versions. Choosing a DLSS version therefore brings the rest of the stack
-    /// with it, so a game cannot be left running Frame Generation built for a different Super
-    /// Resolution version than the one beside it.
+    /// DLSS, DLSS Frame Generation and DLSS Ray Reconstruction are three separate things the user
+    /// picks between separately, and this does not change that: choosing one installs one. What it
+    /// records is the fact that NVIDIA supports them only at matching versions, so that a choice which
+    /// leaves them out of step says so in the preview instead of failing later in the game.
     /// </para>
     /// <para>
-    /// A part is included only when the game already has it and the collection holds that part at the
-    /// same version. Both conditions matter. Adding Frame Generation to a game that never shipped it is
-    /// adding runtime support to that game, which the specification puts out of scope, and offering a
-    /// companion version the collection does not hold would produce a plan that cannot be carried out.
+    /// Recorded rather than enforced, deliberately. Refusing the choice would take away the user's
+    /// control over their own library to solve a problem they may have a reason for — a version that
+    /// works with a title the newer one breaks, or a game whose developer documented a specific
+    /// pairing. Warning says the same thing while leaving the decision where it belongs.
+    /// </para>
+    /// <para>
+    /// A part already on the version being installed is not reported: it is in step, and there is
+    /// nothing to warn about.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<SwapPlan> PlanWithFamily(
-        IEnumerable<SwapGameInfo> games,
-        RuntimeCatalog catalog,
-        RuntimeKind runtimeKind,
-        string targetEntryId,
-        Settings settings)
+    public static IReadOnlyList<SwapPlan> NotePartsLeftBehind(
+        IEnumerable<SwapPlan> plans,
+        IEnumerable<SwapGameInfo> games)
     {
+        ArgumentNullException.ThrowIfNull(plans);
         ArgumentNullException.ThrowIfNull(games);
-        ArgumentNullException.ThrowIfNull(catalog);
 
-        if (!catalog.TryGet(targetEntryId, out var target) || target is null)
+        var byId = games.ToDictionary(g => g.GameId, StringComparer.OrdinalIgnoreCase);
+        var annotated = new List<SwapPlan>();
+
+        foreach (var plan in plans)
         {
-            return [];
-        }
-
-        var version = target.Version;
-        var all = games.ToList();
-
-        var companions = RuntimeDlls.Related(runtimeKind)
-            .Where(kind => kind != runtimeKind)
-            .Where(kind => catalog.Entries.Any(e =>
-                e.Kind == kind && VersionNumber.AreEquivalent(e.Version, version)))
-            .ToList();
-
-        var plans = Plan(all, catalog, runtimeKind, targetEntryId, settings).ToList();
-
-        foreach (var game in all)
-        {
-            var companionsForGame = new List<SwapPlan>();
-
-            foreach (var kind in companions)
+            if (plan.Snapshot is not { } snapshot || plan.CurrentVersion is null)
             {
-                companionsForGame.AddRange(PlanCompanion(game, catalog, kind, version, settings));
-            }
-
-            plans.AddRange(companionsForGame);
-
-            // Anything the game carries but that could not be planned above is recorded on the
-            // primary plan, so the preview can say the stack would be left half-matched rather than
-            // letting it pass unremarked.
-            if (plans.Count > 0 && !string.Equals(plans[0].GameId, game.GameId, StringComparison.OrdinalIgnoreCase))
-            {
+                annotated.Add(plan);
                 continue;
             }
 
-            var leftBehind = LeftBehind(game, catalog, runtimeKind, version, companionsForGame);
-
-            if (leftBehind.Count > 0)
-            {
-                var index = plans.ToList().FindIndex(p =>
-                    string.Equals(p.GameId, game.GameId, StringComparison.OrdinalIgnoreCase) &&
-                    p.RuntimeKind == runtimeKind);
-
-                if (index >= 0)
-                {
-                    plans[index] = plans[index] with { UnmatchedParts = leftBehind };
-                }
-            }
-        }
-
-        return plans;
-    }
-
-    /// <summary>
-    /// Parts of the same runtime a game carries that this swap would leave at a different version.
-    /// </summary>
-    private static IReadOnlyList<RuntimeKind> LeftBehind(
-        SwapGameInfo game,
-        RuntimeCatalog catalog,
-        RuntimeKind runtimeKind,
-        string version,
-        IReadOnlyList<SwapPlan> plannedCompanions)
-    {
-        if (game.Snapshot is not { } snapshot)
-        {
-            return [];
-        }
-
-        var planned = plannedCompanions.Select(p => p.RuntimeKind).ToHashSet();
-
-        return
-        [
-            .. RuntimeDlls.Related(runtimeKind)
-                .Where(kind => kind != runtimeKind && !planned.Contains(kind))
-                .Where(kind =>
-                    snapshot.Runtimes.Any(r => r.Kind == kind && r.Exists))
-                // A part the game already runs at the chosen version is in step, and nothing about it
-                // is being left behind. Only a part that would end up on a different version counts.
-                .Where(kind =>
-                    !VersionNumber.AreEquivalent(
+            IReadOnlyList<RuntimeKind> leftBehind =
+            [
+                .. RuntimeDlls.Related(plan.RuntimeKind)
+                    .Where(kind => kind != plan.RuntimeKind)
+                    .Where(kind =>
+                        snapshot.Runtimes.Any(r => r.Kind == kind && r.Exists))
+                    .Where(kind => !VersionNumber.AreEquivalent(
                         snapshot.Runtimes.First(r => r.Kind == kind).Version,
-                        version))
-                .Where(kind =>
-                    !catalog.Entries.Any(e =>
-                        e.Kind == kind && VersionNumber.AreEquivalent(e.Version, version))),
-        ];
+                        plan.TargetVersion)),
+            ];
+
+            annotated.Add(leftBehind.Count == 0 ? plan : plan with { UnmatchedParts = leftBehind });
+        }
+
+        return annotated;
     }
 
     /// <summary>
-    /// Plans one companion part of a matched set for one game, where that game already has it.
+    /// The parts of the same runtime this game carries, keyed by game, for looking a snapshot up.
     /// </summary>
-    private static IReadOnlyList<SwapPlan> PlanCompanion(
-        SwapGameInfo game,
-        RuntimeCatalog catalog,
-        RuntimeKind kind,
-        string version,
-        Settings settings)
-    {
-        _ = settings;
-
-        if (!game.ExistsOnDisk || game.Snapshot is not { } snapshot)
-        {
-            return [];
-        }
-
-        var current = snapshot.Runtimes.FirstOrDefault(r => r.Kind == kind);
-        if (current is not { Exists: true })
-        {
-            // The game does not carry this part, and adding it is out of scope.
-            return [];
-        }
-
-        // Already running it: nothing to do.
-        if (VersionNumber.AreEquivalent(current.Version, version))
-        {
-            return [];
-        }
-
-        var entry = catalog.Entries.FirstOrDefault(e =>
-            e.Kind == kind && VersionNumber.AreEquivalent(e.Version, version));
-
-        if (entry is null)
-        {
-            return [];
-        }
-
-        var targets = ResolveTargetFiles(game.GamePath, kind);
-        if (targets.Count == 0)
-        {
-            return [];
-        }
-
-        return
-        [
-            new SwapPlan(
-                game.GameId,
-                game.GameName,
-                game.GamePath,
-                kind,
-                current.Version,
-                version,
-                entry.Trust,
-                IsDowngrade: false,
-                IsUntrusted: entry.Trust != RuntimeTrust.Trusted,
-                HasCurrentVersion: true,
-                SourceFiles: targets.Where(File.Exists).ToArray(),
-                TargetFiles: targets)
-        ];
-    }
+    internal static IReadOnlyDictionary<string, SwapGameInfo> IndexByGame(
+        IEnumerable<SwapGameInfo> games) =>
+        games.ToDictionary(g => g.GameId, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The catalog files to copy, one per DLL the runtime kind consists of.
