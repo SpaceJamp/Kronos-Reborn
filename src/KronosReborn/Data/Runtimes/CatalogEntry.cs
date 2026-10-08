@@ -103,8 +103,17 @@ public sealed record CatalogEntry(
         }
     }
 
-    /// <summary>Whether this entry can be used for installation without a warning.</summary>
-    public bool IsInstallableWithoutWarning => Trust == RuntimeTrust.Trusted || Trust == RuntimeTrust.UserAccepted;
+    /// <summary>
+    /// Whether this entry is signed by a runtime vendor.
+    /// </summary>
+    /// <remarks>
+    /// <c>UserAccepted</c> is deliberately not included. Accepting an untrusted file says the user is
+    /// willing for it to be used; it does not make the file genuine. R33 asks for a warning before a
+    /// runtime from an untrusted source is installed, and it does not carve out files the user
+    /// previously accepted, so a runtime that was accepted explicitly still warns every time it is
+    /// about to be put into a game.
+    /// </remarks>
+    public bool IsInstallableWithoutWarning => Trust == RuntimeTrust.Trusted;
 
     /// <summary>Whether this entry represents the same runtime as another (same kind and version).</summary>
     public bool Matches(CatalogEntry other) =>

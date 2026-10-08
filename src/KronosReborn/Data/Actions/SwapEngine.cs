@@ -227,8 +227,12 @@ public static class SwapPlanner
                 isDowngrade = VersionComparer.IsOlder(targetEntry.Version, currentVersion);
             }
 
-            // R33: untrusted warning
-            var isUntrusted = targetEntry.Trust == RuntimeTrust.Untrusted && !settings.AllowUntrustedRuntimes;
+            // R33: warn before swapping in a runtime from an untrusted source. This covers a file the user
+            // explicitly accepted at import time as well as one that was never accepted: R42 governs
+            // whether an untrusted file may enter the collection, while R33 governs whether the user is
+            // told when it is about to be put into a game. Accepting it once is not a statement that
+            // it is genuine, and the warning is the only thing standing between the two.
+            var isUntrusted = targetEntry.Trust != RuntimeTrust.Trusted;
 
             var plan = new SwapPlan(
                 game.GameId,

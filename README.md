@@ -56,12 +56,32 @@ Windows on ARM, while FSR and XeSS would.
 | Runtime version detection, in nested folders as well as the root | Working |
 | Runtime collection: discovery from games, import, signature checking, removal | Working |
 | Persistence: settings, per-game history, atomic writes, corrupt-file recovery | Working |
+| Importing a runtime version from a file, with signature check before it is accepted | Working |
 | Swapping, including runtimes made of several DLLs, with preview and rollback | Working |
 | Undoing a swap, repeatably | Working |
 | Settings interface | Not built — values load and persist, but nothing edits them |
 | Undo through the interface | Launches and undo the newest change for the selected game |
 | GOG, Epic, Battle.net and the other libraries | Not started |
 | Batch preview and apply from the interface | Engine and tests exist; the selection flow is partial |
+
+### Where runtime versions come from
+
+There is no download, deliberately. The specification records the decision: a version found in a
+game already on this machine, or a file the user obtained themselves and imported. Adding a download
+would make the program depend on a service somebody else runs, which C3 rules out, and would put a
+third-party CDN inside the trust boundary that the signature check exists to keep outside.
+
+To get a version your library does not have: download it yourself, then use **Import…**. The file is
+read, its version and publisher are shown, and its signature is judged **before** anything is copied.
+If it is not signed by NVIDIA, AMD or Intel the button says so and asks; accepting it records it as
+user-accepted rather than trusted.
+
+Two details worth knowing:
+
+- **A runtime is imported whole.** FSR is two DLLs that only work as a pair, so choosing one takes
+  every file of that kind beside it, and refuses the import with their names if any are missing.
+- **What is imported is copied, not referenced.** The collection keeps its own copy under the data
+  directory, so deleting or moving the folder you downloaded to does not empty it.
 
 The specification is in [`docs/spec.md`](docs/spec.md) and is the authority on what the program is
 meant to do. Requirements are cited by number in comments next to the code that satisfies them, and

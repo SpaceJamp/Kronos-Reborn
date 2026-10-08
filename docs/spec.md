@@ -356,3 +356,4 @@ None outstanding. New questions are added here as they arise, and moved into Dec
 | 0.1.0 | Recorded what undoing a swap actually requires: a history entry must hold the state the program left behind, not only where the original was saved, so that R28 can distinguish "still as we left it" from "changed by something else". |
 | 0.1.0 | Clarified R21 and R24: a runtime kind is installed whole, and backups are held outside the game folder, so nothing but the runtime files themselves is written into a game installation. |
 | 0.1.0 | Clarified R27: an undo is itself reversible, so history carries forward the state needed to redo. |
+| 0.1.0 | Noted R33 against R42: the setting decides whether an untrusted file may enter the collection, and does not decide whether the user is warned when one is installed. Accepting a file is not evidence that it is genuine. |

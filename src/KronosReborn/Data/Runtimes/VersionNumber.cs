@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 
 namespace KronosReborn.Data.Runtimes;
@@ -122,5 +123,44 @@ public static class VersionNumber
             .Select(part => int.TryParse(
                 part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : 0)
             .ToArray();
+    }
+
+    /// <summary>
+    /// Reads and normalises the version a file's own resources declare.
+    /// </summary>
+    /// <remarks>
+    /// One place to do this, because the scanner, the catalog and the importer all need it and a
+    /// file that was read one way in one of them and another way in another would produce a catalog
+    /// entry the swap engine could not match.
+    ///
+    /// Returns false when the file could not be read at all, and true with a null version when it was
+    /// read but declares none. That difference matters: R59 requires "could not be read" and "there
+    /// is nothing here" to be reported differently.
+    /// </remarks>
+    public static bool TryRead(
+        string path,
+        out string? version,
+        out string? productVersion,
+        out string? error)
+    {
+        version = null;
+        productVersion = null;
+        error = null;
+
+        try
+        {
+            var info = System.Diagnostics.FileVersionInfo.GetVersionInfo(path);
+
+            version = Normalize(info.FileVersion);
+            productVersion = Normalize(info.ProductVersion);
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                      or System.ComponentModel.Win32Exception)
+        {
+            error = $"{ex.GetType().Name}: {ex.Message}";
+            return false;
+        }
     }
 }

@@ -178,6 +178,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly Settings _settings;
     private readonly ThemeManager _themeManager;
     private readonly DataPaths _paths;
+    private readonly IFilePicker? _filePicker;
     private readonly SwapExecutor _executor;
     private readonly UndoEngine _undo;
     private CancellationTokenSource _operationCancellation = new();
@@ -187,6 +188,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private IReadOnlyList<RuntimeOption> _runtimeOptions = [];
     private IReadOnlyList<SwapPlan> _pendingPlans = [];
     private IReadOnlyList<ScanProblem> _problems = [];
+    private RuntimeImportPreview? _importPreview;
 
     private GroupMode _groupMode = GroupMode.ByLibrary;
     private GameRow? _selectedGame;
@@ -201,13 +203,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         PersistenceService persistence,
         Settings settings,
         ThemeManager themeManager,
-        DataPaths paths)
+        DataPaths paths,
+        IFilePicker? filePicker = null)
     {
         _catalog = catalog;
         _persistence = persistence;
         _settings = settings;
         _themeManager = themeManager;
         _paths = paths;
+        _filePicker = filePicker;
 
         _executor = new SwapExecutor(persistence, catalog, paths);
         _undo = new UndoEngine(persistence, paths);
@@ -224,6 +228,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         UndoCommand = new RelayCommand(_ => UndoSelected(), _ => SelectedGame is not null && !IsWorking);
         CancelCommand = new RelayCommand(
             _ => _operationCancellation.Cancel(), _ => IsBusy);
+
+        // Choosing a file needs the window, which the view model does not have. The picker is supplied to
+        // it, so the command can stay a command and every command the model exposes is one the window
+        // binds — a command that exists but is not bound is a feature nobody can reach.
+        BeginImportCommand = new RelayCommand(
+            _ => BeginImport(_filePicker?.AskForRuntimeFile()), _ => !IsBusy && _filePicker is not null);
+        ConfirmImportCommand = new RelayCommand(_ => ConfirmImport(), _ => CanConfirmImport);
+        DiscardImportCommand = new RelayCommand(_ => DiscardImport(), _ => HasImportPreview);
 
         _games.CollectionChanged += OnGamesCollectionChanged;
 
@@ -380,6 +392,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ((RelayCommand)PreviewSwapCommand).RaiseCanExecuteChanged();
         ((RelayCommand)ApplySwapCommand).RaiseCanExecuteChanged();
         ((RelayCommand)UndoCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)BeginImportCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)ConfirmImportCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)DiscardImportCommand).RaiseCanExecuteChanged();
     }
 
     public string StatusText
@@ -439,6 +454,115 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand ApplySwapCommand { get; }
     public ICommand UndoCommand { get; }
     public ICommand CancelCommand { get; }
+    public ICommand BeginImportCommand { get; }
+    public ICommand ConfirmImportCommand { get; }
+    public ICommand DiscardImportCommand { get; }
+
+    /// <summary>What importing the chosen file would do, once a file has been chosen.</summary>
+    public RuntimeImportPreview? ImportPreview
+    {
+        get => _importPreview;
+        private set
+        {
+            _importPreview = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasImportPreview));
+            OnPropertyChanged(nameof(ImportPreviewText));
+            OnPropertyChanged(nameof(ImportConfirmLabel));
+            RaiseSwapCommandStates();
+        }
+    }
+
+    public bool HasImportPreview => ImportPreview is not null;
+
+    /// <summary>The import preview, as a sentence for the interface to show.</summary>
+    public string ImportPreviewText => ImportPreview?.Summary ?? string.Empty;
+
+    /// <summary>
+    /// What the confirming button should say.
+    /// </summary>
+    /// <remarks>
+    /// R42 says accepting untrusted runtime versions is off by default, which implies a switch that
+    /// turns it on. That setting now has exactly one job: when it is on, an untrusted file needs no
+    /// separate acknowledgement, because the user has already said in advance that they accept them.
+    /// With it off — the default — the button says plainly that it is accepting an untrusted file.
+    ///
+    /// Either way the runtime still warns before being installed into a game. R33 is not affected by
+    /// this setting, and that separation is the point of having both requirements.
+    /// </remarks>
+    public string ImportConfirmLabel =>
+        ImportPreview is { NeedsAcceptance: true } && !_settings.AllowUntrustedRuntimes
+            ? "Add anyway (untrusted)"
+            : "Add to collection";
+
+    /// <summary>Whether the previewed import can be carried out right now.</summary>
+    private bool CanConfirmImport =>
+        !IsBusy
+        && ImportPreview is { Error: null, CanImport: true }
+        && (ImportPreview.NeedsAcceptance || ImportPreview.Trust == RuntimeTrust.Trusted);
+
+    /// <summary>
+    /// Inspects a file the user chose and shows what importing it would do.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is copied and nothing enters the collection until the user confirms. R16 requires the
+    /// signature to be checked before an import is accepted, and safety principle 5 is warn before
+    /// rather than after — which needs a moment between choosing and acting.
+    /// </remarks>
+    public void BeginImport(string? filePath)
+    {
+        ImportPreview = RuntimeImporter.Inspect(filePath);
+    }
+
+    /// <summary>Carries out the previewed import, accepting an untrusted file if the user said to.</summary>
+    public void ConfirmImport()
+    {
+        if (ImportPreview is not { Error: null } preview || !CanConfirmImport)
+        {
+            return;
+        }
+
+        var acceptUntrusted = preview.NeedsAcceptance;
+
+        IsWorking = true;
+
+        try
+        {
+            // The preview no longer names the chosen file, so it is taken from the files it reported.
+            // Inspecting again would re-read them, which is also a check that nothing has changed
+            // underneath between the warning and the action.
+            var chosen = preview.Files.Count > 0 ? preview.Files[0] : null;
+
+            if (chosen is null)
+            {
+                StatusText = "The file to import could not be identified.";
+                return;
+            }
+
+            var result = new RuntimeImporter(_catalog, _paths).Import(chosen, acceptUntrusted);
+
+            if (result.Succeeded && result.Entry is not null)
+            {
+                StatusText =
+                    $"Added {RuntimeKindNames.Display(result.Entry.Kind)} {result.Entry.Version} " +
+                    $"to the collection, from {preview.FileName}.";
+                ImportPreview = null;
+                RefreshRuntimeOptions();
+            }
+            else
+            {
+                // R56/R57: say what failed and why, and keep running.
+                StatusText = result.Error ?? "The import did not succeed.";
+            }
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    /// <summary>Abandons the previewed import without doing anything.</summary>
+    public void DiscardImport() => ImportPreview = null;
 
     /// <summary>The game whose runtimes the panel is showing.</summary>
     public GameRow? SelectedGame

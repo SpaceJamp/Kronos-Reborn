@@ -39,7 +39,7 @@ public partial class MainWindow : Window
         var catalog = new RuntimeCatalog(paths.CatalogPath);
         _themeManager = new ThemeManager(_settings);
 
-        _viewModel = new MainViewModel(catalog, _persistence, _settings, _themeManager, paths);
+        _viewModel = new MainViewModel(catalog, _persistence, _settings, _themeManager, paths, new RuntimeFilePicker(this));
 
         DataContext = _viewModel;
 
@@ -66,6 +66,31 @@ public partial class MainWindow : Window
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         ApplyGrouping(_viewModel.GroupMode);
     }
+
+    /// <summary>
+    /// Asks the user for a runtime file, using the system dialog.
+    /// </summary>
+    /// <remarks>
+    /// This is the one place a modal dialog is right. Choosing a file is a request for information
+    /// from the system, not a question put to the user; everything the program then needs to say about
+    /// that file — its version, who signed it, whether it can be used — is shown inline, because a
+    /// dialog that could equally be answered on the main window should not be one.
+    /// </remarks>
+    private sealed class RuntimeFilePicker(Window owner) : IFilePicker
+    {
+        public string? AskForRuntimeFile()
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Choose a graphics runtime file to add to the collection",
+                Filter = "Runtime files (*.dll)|*.dll|All files (*.*)|*.*",
+                CheckFileExists = true,
+            };
+
+            return dialog.ShowDialog(owner) == true ? dialog.FileName : null;
+        }
+    }
+
 
     /// <summary>
     /// Keeps the list's grouping in step with the toolbar toggle.

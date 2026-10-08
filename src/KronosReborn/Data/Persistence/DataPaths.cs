@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using KronosReborn.Data.Runtimes;
 
 namespace KronosReborn.Data.Persistence;
 
@@ -59,6 +60,20 @@ public sealed class DataPaths
     /// that verifies game files, shows all files in a launcher, or deletes unknown DLLs.
     /// </remarks>
     public string BackupDirectory => Path.Combine(Root, "backups");
+
+    /// <summary>
+    /// Directory holding copies of the runtime versions the collection owns.
+    /// </summary>
+    /// <remarks>
+    /// One folder per kind and version, each holding every file that kind consists of. An imported
+    /// runtime is copied in rather than referenced where it was found, so the collection keeps working
+    /// when the folder it came from is moved, deleted, or replaced by the launcher that provided it.
+    /// </remarks>
+    public string RuntimesDirectory => Path.Combine(Root, "runtimes");
+
+    /// <summary>Where the collection's own copy of one runtime version lives.</summary>
+    public string RuntimeFolder(RuntimeKind kind, string version) =>
+        Path.Combine(RuntimesDirectory, kind.ToString(), SafeName(version));
 
     /// <summary>Creates the data directory if it is not already there.</summary>
     public string EnsureCreated()

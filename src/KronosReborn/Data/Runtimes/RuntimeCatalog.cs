@@ -172,49 +172,50 @@ public sealed class RuntimeCatalog : IDisposable
     }
 
     /// <summary>
-    /// Imports a runtime version from a file the user provides.
+    /// <summary>
+    /// Records a runtime version the collection now owns a copy of.
     /// </summary>
     /// <remarks>
-    /// R15: user can import from a file. R16: checked for valid signature. R17: source recorded.
+    /// The single write path for an imported version. The files live in <paramref name="folder"/>,
+    /// which is the collection's own copy under the data directory rather than wherever the user
+    /// downloaded them to.
+    ///
+    /// The signature has already been judged by <see cref="RuntimeImporter"/>, which is where the
+    /// user is shown it and where R16 is enforced; this only records the outcome. Passing an entry
+    /// that is neither trusted nor explicitly accepted would put an unchecked file into the
+    /// collection, so it is refused here as well rather than trusted to be called correctly once.
     /// </remarks>
-    /// <param name="filePath">Path to the DLL file to import.</param>
-    /// <param name="kind">The runtime kind (must match the file).</param>
-    /// <param name="allowUntrusted">If true, accept even without valid signature (R42).</param>
-    /// <returns>The added entry, or null if the file could not be read or version is unknown.</returns>
-    public CatalogEntry? ImportFromFile(string filePath, RuntimeKind kind, bool allowUntrusted = false)
+    /// <param name="kind">Which runtime this is.</param>
+    /// <param name="version">The normalised version.</param>
+    /// <param name="folder">The folder holding every file this kind consists of.</param>
+    /// <param name="sourceDetail">Where the user obtained it, recorded as R17 requires.</param>
+    /// <param name="trust">How its signature was judged.</param>
+    /// <returns>The entry, or null if it was refused.</returns>
+    public CatalogEntry? AddImport(
+        RuntimeKind kind,
+        string version,
+        string folder,
+        string sourceDetail,
+        RuntimeTrust trust)
     {
-        if (!File.Exists(filePath))
+        ArgumentException.ThrowIfNullOrWhiteSpace(version);
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+
+        if (trust == RuntimeTrust.Untrusted)
         {
             return null;
         }
 
-        // Read version from the file
-        string? version = null;
-        string? productVersion = null;
+        var primary = RuntimeDlls.ByKind[kind]
+            .Select(name => Path.Combine(folder, name))
+            .FirstOrDefault(File.Exists);
 
-        try
+        if (primary is null)
         {
-            var vi = System.Diagnostics.FileVersionInfo.GetVersionInfo(filePath);
-            version = string.IsNullOrWhiteSpace(vi.FileVersion) ? null : VersionNumber.Normalize(vi.FileVersion);
-            productVersion = string.IsNullOrWhiteSpace(vi.ProductVersion)
-                ? null
-                : VersionNumber.Normalize(vi.ProductVersion);
-        }
-        catch
-        {
-            // Ignore - version will be null
-        }
-
-        if (string.IsNullOrWhiteSpace(version))
-        {
-            // R10: unknown version not guessed, don't add
             return null;
         }
 
-        var sig = SignatureVerifier.Check(filePath);
-        var trust = sig.HasValidSignature ? RuntimeTrust.Trusted : (allowUntrusted ? RuntimeTrust.UserAccepted : RuntimeTrust.Untrusted);
-
-        var sourceDetail = Path.GetFileName(filePath);
+        var signature = SignatureVerifier.Check(primary);
         var id = CatalogId.For(kind, version, RuntimeSource.Imported);
 
         _lock.EnterWriteLock();
@@ -222,14 +223,16 @@ public sealed class RuntimeCatalog : IDisposable
         {
             if (_entries.TryGetValue(id, out var existing))
             {
-                // Update trust if this import is trusted and the existing wasn't
+                // Already have this version. An import that turned out to be trusted upgrades an
+                // earlier untrusted acceptance rather than sitting beside it.
                 if (trust == RuntimeTrust.Trusted && existing.Trust != RuntimeTrust.Trusted)
                 {
-                    var updated = existing with { Trust = trust, SignatureInfo = sig.Details };
-                    _entries = _entries.SetItem(id, updated);
+                    var improved = existing with { Trust = trust, SignatureInfo = signature.Details };
+                    _entries = _entries.SetItem(id, improved);
                     Save();
-                    return updated;
+                    return improved;
                 }
+
                 return existing;
             }
 
@@ -237,16 +240,17 @@ public sealed class RuntimeCatalog : IDisposable
                 id,
                 kind,
                 version,
-                productVersion,
+                null,
                 RuntimeSource.Imported,
                 sourceDetail,
-                filePath,
+                primary,
                 trust,
                 DateTimeOffset.UtcNow,
-                sig.Details);
+                signature.Details);
 
             _entries = _entries.Add(id, entry);
             Save();
+
             return entry;
         }
         finally

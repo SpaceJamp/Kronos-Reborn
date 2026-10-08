@@ -316,6 +316,12 @@
                             Command="{Binding UndoCommand}"
                             Margin="4,0,0,0" />
 
+                    <Button x:Name="ImportButton" Content="Import…"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding BeginImportCommand}"
+                            Margin="4,0,0,0"
+                            ToolTip="Add a runtime version you obtained elsewhere to the collection" />
+
                     <Button Content="Cancel"
                             Style="{StaticResource ToolbarButtonStyle}"
                             Command="{Binding CancelCommand}"
@@ -327,7 +333,7 @@
                 <StackPanel Grid.Column="1"
                             Margin="16,0,0,0"
                             VerticalAlignment="Center"
-                            MaxWidth="420">
+                            MaxWidth="460">
                     <ItemsControl ItemsSource="{Binding Preview}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -337,6 +343,28 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+
+                    <!--
+                    What importing a file would do. Shown before anything is copied, because R16
+                    requires the signature to be checked first and the user asked about an untrusted
+                    file before it is accepted.
+                    -->
+                    <StackPanel Visibility="{Binding HasImportPreview, Converter={StaticResource BoolToVisibility}}"
+                                Margin="0,8,0,0">
+                        <TextBlock Text="{Binding ImportPreviewText}"
+                                   Style="{StaticResource SubtitleStyle}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource WarningBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <Button Content="{Binding ImportConfirmLabel}"
+                                    Style="{StaticResource ToolbarButtonStyle}"
+                                    Command="{Binding ConfirmImportCommand}" />
+                            <Button Content="Not now"
+                                    Style="{StaticResource ToolbarButtonStyle}"
+                                    Command="{Binding DiscardImportCommand}"
+                                    Margin="6,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
 
                     <ItemsControl ItemsSource="{Binding Problems}"
                                   Visibility="{Binding HasProblems, Converter={StaticResource BoolToVisibility}}">

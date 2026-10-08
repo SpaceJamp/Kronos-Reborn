@@ -70,7 +70,28 @@ public class SwapEngineTests
         Assert.Equal(RuntimeKind.Dlss, plan.RuntimeKind);
         Assert.Equal("3.7.10", plan.CurrentVersion);
         Assert.False(plan.IsDowngrade); // an upgrade
-        Assert.False(plan.IsUntrusted); // untrusted allowed by the fixture
+
+        // The fixture's collection entry is unsigned, so it warns however the settings read. R42
+        // governs whether an untrusted file may enter the collection; R33 governs whether the user is
+        // told when one is about to be installed, and it does not exempt files accepted earlier.
+        Assert.True(plan.IsUntrusted);
+        Assert.True(plan.HasWarning);
+    }
+
+    [Fact]
+    public void AnUntrustedRuntimeWarnsEvenWhenTheSettingsAcceptIt()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Dlss);
+        fixture.InstallRuntime("3.8.0");
+        fixture.AllowUntrusted = true;
+
+        var plan = Assert.Single(fixture.Plan());
+
+        // Before this, an untrusted source produced no warning at all once the setting was on, which
+        // meant the one setting that made untrusted files usable also removed the only notice the
+        // user got about them.
+        Assert.True(plan.IsUntrusted);
+        Assert.Contains("⚠", plan.Summary, StringComparison.Ordinal);
     }
 
     [Fact]

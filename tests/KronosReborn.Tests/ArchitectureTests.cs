@@ -389,8 +389,9 @@ public class ArchitectureTests
         // that everything downstream sees one form.
         var readers = new[]
         {
+            // These are the places a version is read out of a file and handed on.
             Path.Combine("src", "KronosReborn", "Data", "Runtimes", "GameRuntimeScanner.cs"),
-            Path.Combine("src", "KronosReborn", "Data", "Runtimes", "RuntimeCatalog.cs"),
+            Path.Combine("src", "KronosReborn", "Data", "Runtimes", "RuntimeImporter.cs"),
         };
 
         foreach (var relative in readers)
@@ -398,10 +399,24 @@ public class ArchitectureTests
             var text = File.ReadAllText(Path.Combine(RepositoryRoot, relative));
 
             Assert.True(
-                text.Contains("VersionNumber.Normalize", StringComparison.Ordinal),
-                $"{relative} reads a version without normalising it. " +
+                text.Contains("VersionNumber.", StringComparison.Ordinal),
+                $"{relative} handles a version without normalising it. " +
                 "A comma-separated version then compares as zero.");
         }
+
+        // One place reads a version out of a file at all, so one place normalises it.
+        var versionNumber = File.ReadAllText(
+            Path.Combine(RepositoryRoot, "src", "KronosReborn", "Data", "Runtimes", "VersionNumber.cs"));
+
+        Assert.Contains("FileVersionInfo", versionNumber, StringComparison.Ordinal);
+
+        var catalog = File.ReadAllText(
+            Path.Combine(RepositoryRoot, "src", "KronosReborn", "Data", "Runtimes", "RuntimeCatalog.cs"));
+
+        Assert.DoesNotContain(
+            "FileVersionInfo.GetVersionInfo",
+            catalog,
+            StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------ Specification
