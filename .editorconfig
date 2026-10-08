@@ -1,0 +1,53 @@
+# Editor and formatter settings.
+#
+# This file exists so that `dotnet format --verify-no-changes` in CI has something definite to
+# check against. With no .editorconfig, formatting decisions fall back to defaults that belong to
+# whichever version of the .NET SDK is running, so a newer SDK can want to rewrite files that the
+# previous one was happy with and fail a build that had passed. Everything below is stated
+# explicitly for that reason, not because it is contentious.
+#
+# Anything added here changes what the format gate accepts, so add it deliberately.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.{csproj,props,targets,config}]
+indent_size = 2
+
+[*.md]
+# Markdown uses trailing spaces for a hard line break, so they cannot be trimmed.
+trim_trailing_whitespace = false
+
+[*.cs]
+indent_size = 4
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_prefer_braces = true:suggestion
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_using_directive_placement = outside_namespace:suggestion
+dotnet_sort_system_directives_first = true
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+dotnet_style_readonly_field = true:suggestion
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:suggestion
+dotnet_naming_rule.private_fields_underscore.severity = suggestion
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_prefix
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_prefix.required_prefix = _
+dotnet_naming_style.underscore_prefix.capitalization = camel_case

@@ -1,0 +1,17 @@
+# Everything in this repository uses LF and UTF-8 without a BOM.
+#
+# Without this, the line ending of a checked-out file depends on the machine's git configuration:
+# a default clone on Windows produces CRLF and one on Linux produces LF, so the same commit
+# produces different bytes and a formatting check over the working tree can disagree with itself.
+# Pinning it here makes the working tree identical everywhere, which is what makes the format
+# check in CI mean anything.
+* text=auto eol=lf
+
+# Lock files are generated; leave them exactly as written.
+packages.lock.json -text
+
+# Binary assets, for the day there are any.
+*.png binary
+*.ico binary
+*.zip binary
+*.exe binary
