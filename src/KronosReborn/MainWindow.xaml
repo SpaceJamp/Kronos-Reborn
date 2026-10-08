@@ -18,9 +18,13 @@
         <ui:InverseBooleanConverter x:Key="InverseBool" />
 
         <CollectionViewSource x:Key="GamesViewSource" Source="{Binding Games}">
-            <CollectionViewSource.GroupDescriptions>
-                <PropertyGroupDescription PropertyName="LibraryName" />
-            </CollectionViewSource.GroupDescriptions>
+            <!--
+            The grouping is toggled from code-behind rather than declared here. It used to be declared
+            unconditionally on LibraryName, which meant the toolbar button changed a property and
+            relabelled itself while the list never regrouped: a control that appeared to work and did
+            nothing. MainWindow keeps this in step with GroupMode.
+            -->
+            <CollectionViewSource.GroupDescriptions />
         </CollectionViewSource>
     </Window.Resources>
 
@@ -28,6 +32,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />  <!-- Toolbar -->
             <RowDefinition Height="*" />     <!-- Game list -->
+            <RowDefinition Height="Auto" />  <!-- Runtime bar -->
             <RowDefinition Height="Auto" />  <!-- Status bar -->
         </Grid.RowDefinitions>
 
@@ -94,6 +99,7 @@
                 CornerRadius="4">
             <ListView x:Name="GameListView"
                       ItemsSource="{Binding Source={StaticResource GamesViewSource}}"
+                        SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
                       SelectionMode="Extended"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling"
@@ -270,8 +276,94 @@
             </StackPanel>
         </Border>
 
-        <!-- Status Bar -->
+        <!--
+            Runtime bar: the swap surface.
+
+            Inline rather than a dialog, because the specification asks for a single window and says
+            not to use a modal dialog for a question that can be asked inline. Selecting a game fills
+            the picker with the versions the collection holds for that game; Preview says what would
+            change before anything does, and Apply is only enabled once a preview exists.
+        -->
         <Border Grid.Row="2"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="12,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding SelectedGame.GameName, FallbackValue='No game selected'}"
+                               Style="{StaticResource SubtitleStyle}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,12,0" />
+
+                    <ComboBox ItemsSource="{Binding RuntimeOptions}"
+                              SelectedItem="{Binding SelectedRuntime}"
+                              DisplayMemberPath="Label"
+                              MinWidth="220"
+                              VerticalAlignment="Center"
+                              IsEnabled="{Binding HasRuntimeOptions}"
+                              ToolTip="Runtime versions available for the selected game" />
+
+                    <Button Content="Preview"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding PreviewSwapCommand}"
+                            Margin="8,0,0,0" />
+
+                    <Button Content="Apply"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding ApplySwapCommand}"
+                            Margin="4,0,0,0"
+                            IsEnabled="{Binding HasPreview}" />
+
+                    <Button Content="Undo"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding UndoCommand}"
+                            Margin="4,0,0,0" />
+
+                    <Button Content="Cancel"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding CancelCommand}"
+                            Margin="12,0,0,0"
+                            Visibility="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                </StackPanel>
+
+                <!-- Preview and problems, R37/R63: warnings and every failure are shown, never dropped. -->
+                <StackPanel Grid.Column="1"
+                            Margin="16,0,0,0"
+                            VerticalAlignment="Center"
+                            MaxWidth="420">
+                    <ItemsControl ItemsSource="{Binding Preview}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Summary}"
+                                           Style="{StaticResource SubtitleStyle}"
+                                           TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <ItemsControl ItemsSource="{Binding Problems}"
+                                  Visibility="{Binding HasProblems, Converter={StaticResource InverseBool}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding OneLine}"
+                                           Style="{StaticResource SubtitleStyle}"
+                                           Foreground="{DynamicResource WarningBrush}"
+                                           TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="3"
                 Background="{DynamicResource SurfaceBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,1,0,0"
