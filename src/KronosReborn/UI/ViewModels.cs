@@ -50,6 +50,8 @@ public sealed class GameRow : INotifyPropertyChanged
             OnPropertyChanged(nameof(DlssRVersion));
             OnPropertyChanged(nameof(FsrVersion));
             OnPropertyChanged(nameof(XessVersion));
+            OnPropertyChanged(nameof(HasDlssG));
+            OnPropertyChanged(nameof(HasDlssR));
             OnPropertyChanged(nameof(HasAnyRuntime));
             OnPropertyChanged(nameof(HasUnknownVersions));
             OnPropertyChanged(nameof(StatusText));
@@ -62,6 +64,17 @@ public sealed class GameRow : INotifyPropertyChanged
     public string? DlssRVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.DlssR)?.Version;
     public string? FsrVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.Fsr)?.Version;
     public string? XessVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.Xess)?.Version;
+
+    /// <summary>Whether this game has DLSS Frame Generation, so the row can label it.</summary>
+    /// <remarks>
+    /// The markup used to bind the label to the version string itself. A string is not a boolean, so
+    /// the binding could not produce a Visibility and the label was always on screen. Visibility is
+    /// asked for here instead, where the answer is unambiguous.
+    /// </remarks>
+    public bool HasDlssG => !string.IsNullOrWhiteSpace(DlssGVersion);
+
+    /// <summary>Whether this game has DLSS Ray Reconstruction.</summary>
+    public bool HasDlssR => !string.IsNullOrWhiteSpace(DlssRVersion);
 
     public bool HasAnyRuntime => Snapshot?.HasAnyRuntime == true;
     public bool HasUnknownVersions => Snapshot?.HasUnknownVersions == true;
@@ -239,6 +252,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             }
             OnPropertyChanged();
             OnPropertyChanged(nameof(VisibleGames));
+            OnPropertyChanged(nameof(HasGames));
             UpdateSelectedCount();
         }
     }
@@ -278,11 +292,30 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void UpdateSelectedCount()
     {
+        var previous = _selectedCount;
         SelectedCount = _games?.Count(g => g.IsSelected) ?? 0;
+
+        if (previous != _selectedCount)
+        {
+            OnPropertyChanged(nameof(HasSelection));
+        }
+
         RaiseSwapCommandStates();
     }
 
     public IEnumerable<GameRow> VisibleGames => _games;
+
+    /// <summary>Whether there is at least one game to show.</summary>
+    /// <remarks>
+    /// The empty-state panel used to bind to <c>Games.Count</c> through a converter. A count is not a
+    /// boolean, so the binding could not produce a Visibility and the panel stayed on screen over the
+    /// whole list — the list was found and populated, and then hidden by the message saying there was
+    /// nothing there. Visibility is asked for here instead.
+    /// </remarks>
+    public bool HasGames => _games.Count > 0;
+
+    /// <summary>Whether any game is ticked.</summary>
+    public bool HasSelection => SelectedCount > 0;
 
     public GroupMode GroupMode
     {

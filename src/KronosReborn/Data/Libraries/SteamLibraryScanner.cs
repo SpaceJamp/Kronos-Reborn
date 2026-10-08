@@ -83,6 +83,16 @@ public sealed class SteamLibraryScanner
         }
 
         var manifests = Path.Combine(libraryRoot, "steamapps");
+
+        // R59: "could not be read" and "there is nothing in here" are different problems, and telling
+        // the user a stale folder could not be listed is telling them something false. A folder with
+        // no steamapps in it simply is not a Steam library — an abandoned install, or a leftover
+        // directory — and it is skipped in silence.
+        if (!PathNormalizer.DirectoryExists(manifests))
+        {
+            return;
+        }
+
         var libraryName = NameFor(libraryRoot, steamRoot);
 
         IEnumerable<string> files;

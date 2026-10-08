@@ -16,16 +16,7 @@
 
     <Window.Resources>
         <ui:InverseBooleanConverter x:Key="InverseBool" />
-
-        <CollectionViewSource x:Key="GamesViewSource" Source="{Binding Games}">
-            <!--
-            The grouping is toggled from code-behind rather than declared here. It used to be declared
-            unconditionally on LibraryName, which meant the toolbar button changed a property and
-            relabelled itself while the list never regrouped: a control that appeared to work and did
-            nothing. MainWindow keeps this in step with GroupMode.
-            -->
-            <CollectionViewSource.GroupDescriptions />
-        </CollectionViewSource>
+        <ui:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     </Window.Resources>
 
     <Grid>
@@ -79,7 +70,7 @@
                            Style="{StaticResource SubtitleStyle}"
                            VerticalAlignment="Center"
                            Margin="0,0,12,0"
-                           Visibility="{Binding SelectedCount, Converter={StaticResource InverseBool}, ConverterParameter=Inverse}" />
+                           Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}" />
 
                 <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="0,0,12,0" />
 
@@ -98,7 +89,7 @@
                 BorderThickness="1"
                 CornerRadius="4">
             <ListView x:Name="GameListView"
-                      ItemsSource="{Binding Source={StaticResource GamesViewSource}}"
+                      ItemsSource="{Binding Games, Mode=OneWay}"
                         SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
                       SelectionMode="Extended"
                       VirtualizingPanel.IsVirtualizing="True"
@@ -135,7 +126,7 @@
                                                    FontStyle="Italic"
                                                    FontSize="{StaticResource FontSizeSmall}"
                                                    VerticalAlignment="Center"
-                                                   Visibility="{Binding IsMissing, Converter={StaticResource InverseBool}, ConverterParameter=Inverse}" />
+                                                   Visibility="{Binding IsMissing, Converter={StaticResource BoolToVisibility}}" />
                                     </StackPanel>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
@@ -156,12 +147,12 @@
                                         <TextBlock Text=" FG"
                                                    FontSize="{StaticResource FontSizeSmall}"
                                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                                   Visibility="{Binding DlssGVersion, Converter={StaticResource InverseBool}, ConverterParameter=Inverse}"
+                                                   Visibility="{Binding HasDlssG, Converter={StaticResource BoolToVisibility}}"
                                                    VerticalAlignment="Center" Margin="4,0,0,0" />
                                         <TextBlock Text=" RR"
                                                    FontSize="{StaticResource FontSizeSmall}"
                                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                                   Visibility="{Binding DlssRVersion, Converter={StaticResource InverseBool}, ConverterParameter=Inverse}"
+                                                   Visibility="{Binding HasDlssR, Converter={StaticResource BoolToVisibility}}"
                                                    VerticalAlignment="Center" Margin="4,0,0,0" />
                                     </StackPanel>
                                 </DataTemplate>
@@ -256,7 +247,7 @@
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="4"
-                Visibility="{Binding Games.Count, Converter={StaticResource InverseBool}}">
+                Visibility="{Binding HasGames, Converter={StaticResource InverseBool}}">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
                 <TextBlock Text="📂" FontSize="48" HorizontalAlignment="Center" />
                 <TextBlock Text="No games found"
@@ -329,7 +320,7 @@
                             Style="{StaticResource ToolbarButtonStyle}"
                             Command="{Binding CancelCommand}"
                             Margin="12,0,0,0"
-                            Visibility="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                            Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
 
                 <!-- Preview and problems, R37/R63: warnings and every failure are shown, never dropped. -->
@@ -348,7 +339,7 @@
                     </ItemsControl>
 
                     <ItemsControl ItemsSource="{Binding Problems}"
-                                  Visibility="{Binding HasProblems, Converter={StaticResource InverseBool}}">
+                                  Visibility="{Binding HasProblems, Converter={StaticResource BoolToVisibility}}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding OneLine}"

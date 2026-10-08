@@ -71,32 +71,40 @@ public partial class MainWindow : Window
     /// Keeps the list's grouping in step with the toolbar toggle.
     /// </summary>
     /// <remarks>
-    /// The grouping used to be declared unconditionally in XAML, so the toggle changed a property and
-    /// relabelled its own button while the list stayed grouped. Grouping is a view concern, so it is
-    /// adjusted here rather than pushed into the view model.
+    /// Grouping is applied to the list's own view rather than to a CollectionViewSource declared in
+    /// the resources. A CollectionViewSource there is a Freezable, and one declared in a resource
+    /// dictionary does not reliably inherit the DataContext, which is a well-known way to end up with
+    /// a view over nothing while the bound collection is full. Asking for the default view of the
+    /// collection the list is already showing has no such failure mode.
     /// </remarks>
     private void ApplyGrouping(GroupMode mode)
     {
-        var view = Resources["GamesViewSource"] as System.Windows.Data.CollectionViewSource;
-
-        if (view is null)
+        if (GameListView.ItemsSource is not System.Collections.IEnumerable source)
         {
             return;
         }
 
-        var descriptions = view.GroupDescriptions;
-        descriptions.Clear();
+        if (System.Windows.Data.CollectionViewSource.GetDefaultView(source)
+            is not System.ComponentModel.ICollectionView view)
+        {
+            return;
+        }
+
+        view.GroupDescriptions.Clear();
 
         if (mode == GroupMode.ByLibrary)
         {
-            descriptions.Add(
+            view.GroupDescriptions.Add(
                 new System.Windows.Data.PropertyGroupDescription(nameof(GameRow.LibraryName)));
         }
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.GroupMode))
+        // The list gets a new collection after each refresh, and a new collection has a new view, so
+        // the grouping has to be applied again or it silently reverts to flat.
+        if (e.PropertyName == nameof(MainViewModel.GroupMode)
+            || e.PropertyName == nameof(MainViewModel.Games))
         {
             ApplyGrouping(_viewModel.GroupMode);
         }

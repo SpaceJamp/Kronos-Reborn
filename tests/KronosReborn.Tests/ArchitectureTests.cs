@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using KronosReborn.Data.Libraries;
 using KronosReborn.Data.Runtimes;
 using Xunit;
 
@@ -248,6 +249,134 @@ public class ArchitectureTests
             offenders.Count == 0,
             "These tests read the user's local application data directory. Use a temporary directory:" +
             Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    [Fact]
+    public void EveryVisibilityBindingInTheWindowCanProduceAVisibility()
+    {
+        // This is the guard for a failure nothing else could see. The empty-state panel was bound to
+        // Games.Count through a converter that returned a bool; WPF cannot turn a bool into a
+        // Visibility, so the binding was discarded and the panel kept its default of Visible. It sat
+        // over a fully populated list for ever, showing "No games found" over seven found games. The
+        // status bar said the right thing the whole time, which is what made it look like discovery
+        // was broken rather than the window.
+        //
+        // So: every Visibility binding must go through one of the two converters that return a
+        // Visibility, and its source must be a boolean property rather than a count or a string.
+        var xaml = File.ReadAllText(Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
+
+        var converters = new[] { "InverseBool", "BoolToVisibility" };
+        var offenders = new List<string>();
+        var bindings = new List<Match>();
+
+        foreach (Match match in Regex.Matches(
+                     xaml, @"Visibility=""\{Binding ([^,}]+)[^}]*Converter=\{StaticResource ([^}]+)\}\}"""))
+        {
+            bindings.Add(match);
+
+            var source = match.Groups[1].Value.Trim();
+            var converter = match.Groups[2].Value.Trim();
+
+            if (!converters.Contains(converter, StringComparer.Ordinal))
+            {
+                offenders.Add($"'{source}' uses converter '{converter}', which does not return a Visibility");
+                continue;
+            }
+
+            if (source.Contains('.', StringComparison.Ordinal))
+            {
+                offenders.Add(
+                    $"'{source}' is a member access, not a boolean property; a count or a string " +
+                    "cannot produce a Visibility");
+            }
+        }
+
+        // Without this the test would pass if the pattern stopped matching the markup at all, which is
+        // how a guard quietly becomes decoration. It failed exactly that way the first time.
+        Assert.True(
+            bindings.Count >= 6,
+            $"Only {bindings.Count} visibility bindings were recognised in MainWindow.xaml. " +
+            "The pattern itself has probably stopped matching, which would make this test check nothing.");
+
+        Assert.True(
+            offenders.Count == 0,
+            "These visibility bindings cannot work:" + Environment.NewLine +
+            string.Join(Environment.NewLine, offenders));
+    }
+
+    [Fact]
+    public void TheVisibilityConvertersReturnAVisibilityRatherThanABoolean()
+    {
+        // The other half of the same guard, at the source. Checking only the markup would miss a
+        // converter that is used correctly by markup and still returns the wrong type.
+        var converters = File.ReadAllText(
+            Path.Combine(RepositoryRoot, "src", "KronosReborn", "UI", "Converters.cs"));
+
+        foreach (var name in new[] { "BooleanToVisibilityConverter", "InverseBooleanConverter" })
+        {
+            Assert.True(
+                converters.Contains(name, StringComparison.Ordinal),
+                $"{name} is missing from Converters.cs.");
+
+            Assert.True(
+                converters.Contains("Visibility.Visible", StringComparison.Ordinal)
+                && converters.Contains("Visibility.Collapsed", StringComparison.Ordinal),
+                $"{name} does not appear to return a Visibility.");
+        }
+    }
+
+    [Fact]
+    public void TheGameListIsBoundDirectlyRatherThanThroughAResource()
+    {
+        // A CollectionViewSource declared in a resource dictionary is a Freezable and does not
+        // reliably inherit the DataContext, which produces a view over nothing while the bound
+        // collection is full. Binding the list to the collection and grouping its default view keeps
+        // the data path explicit.
+        var xaml = File.ReadAllText(Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
+
+        var listView = Regex.Match(xaml, @"<ListView\b.*?>", RegexOptions.Singleline).Value;
+
+        Assert.Contains("ItemsSource=\"{Binding Games", listView, StringComparison.Ordinal);
+        Assert.DoesNotContain("StaticResource GamesViewSource", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnAbsentLibraryIsNotReportedAsAFailure()
+    {
+        // R59: "this could not be read" and "there is nothing in here" are different problems. A
+        // leftover Steam folder with no steamapps in it is the second, and reporting the first tells
+        // the user something false about a folder that is not a problem at all.
+        using var temp = new TemporaryDirectory();
+
+        var library = Path.Combine(temp.Root, "AbandonedSteam");
+        Directory.CreateDirectory(library);
+
+        var result = new SteamLibraryScanner().Scan(library, TestContext.Current.CancellationToken);
+
+        Assert.Empty(result.Games);
+        Assert.Empty(result.Problems);
+    }
+
+    [Fact]
+    public void ALibraryThatCannotBeReadIsStillReported()
+    {
+        // The counterpart, so the fix above cannot be read as "report nothing ever".
+        using var temp = new TemporaryDirectory();
+
+        var steamRoot = Path.Combine(temp.Root, "Steam");
+        var apps = Path.Combine(steamRoot, "steamapps");
+        Directory.CreateDirectory(apps);
+
+        // A library listed by Steam but not on this machine is worth telling the user about, because
+        // it is what an unplugged drive looks like.
+        File.WriteAllText(
+            Path.Combine(apps, "libraryfolders.vdf"),
+            "\"libraryfolders\"\n{\n    \"0\"\n    {\n        \"path\" \"" +
+            Path.Combine(temp.Root, "NotConnected").Replace("\\", "\\\\") + "\"\n    }\n}\n");
+
+        var result = new SteamLibraryScanner().Scan(steamRoot, TestContext.Current.CancellationToken);
+
+        Assert.Contains(result.Problems, p => p.Summary.Contains("not present", StringComparison.OrdinalIgnoreCase));
     }
 
     // ------------------------------------------------------------ Specification
