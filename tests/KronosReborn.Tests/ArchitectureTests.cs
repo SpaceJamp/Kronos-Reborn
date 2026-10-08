@@ -282,6 +282,58 @@ public class ArchitectureTests
     }
 
     [Fact]
+    public void EveryRuntimeTheInterfaceSupportsHasItsOwnColumnInTheGameList()
+    {
+        // DLSS, DLSS Frame Generation and DLSS Ray Reconstruction are three separate choices the user
+        // makes separately. Sharing one column — or sharing one picker — makes a version number
+        // ambiguous, because all three routinely hold the same one: on a real library both DLSS and
+        // Frame Generation hold 310.2.1 and 310.9.1, so a line reading only "310.2.1" does not say
+        // which of them would be installed.
+        //
+        // The version columns were read-only text at one point, with the only picker in a bar for the
+        // selected game. This is what stops that coming back.
+        var xaml = File.ReadAllText(
+            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
+
+        foreach (var column in new[] { "DLSS", "DLSS FG", "DLSS RR", "FSR", "XeSS" })
+        {
+            Assert.Contains($"Header=\"{column}\"", xaml, StringComparison.Ordinal);
+        }
+
+        // Each runtime column binds to its own property on the row rather than to one shared list, so
+        // the cells cannot end up showing each other's choices.
+        foreach (var property in new[]
+                 {
+                     "DlssChoice", "DlssGChoice", "DlssRChoice", "FsrChoice", "XessChoice",
+                 })
+        {
+            Assert.Contains(
+                $"Content=\"{{Binding {property}}}\"",
+                xaml,
+                StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void EachRuntimeColumnUsesTheSamePickerMarkup()
+    {
+        // Five copies of the same markup would drift: one gets its warning removed, another loses its
+        // tooltip, and nothing fails. One template means there is one copy to get wrong.
+        var xaml = File.ReadAllText(
+            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
+
+        var uses = Regex.Count(
+            xaml,
+            @"ContentTemplate=""\{StaticResource RuntimePickerTemplate\}""",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(5));
+
+        Assert.Equal(5, uses);
+
+        Assert.Contains("x:Key=\"RuntimePickerTemplate\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PostersAreShownSmallEnoughToKeepRowsCompact()
     {
         // Steam's artwork is up to 600x900. Shown near its own size, each row is as tall as a poster

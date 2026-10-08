@@ -21,17 +21,42 @@ namespace KronosReborn.Tests;
 /// gets its own picker listing only its own versions.
 /// </para>
 /// </remarks>
-public class RuntimeGroupTests
+public class RuntimeChoiceTests
 {
     [Fact]
-    public void EachRuntimeTheGameCarriesGetsItsOwnGroup()
+    public void EveryRuntimeHasItsOwnCellInEveryRow()
     {
-        var groups = Groups(Dlss: true, DlssG: true, DlssR: true);
+        var choices = Groups(Dlss: true, DlssG: true, DlssR: true);
 
-        Assert.Equal(3, groups.Count);
+        // One per kind, always. A row's column binds to a real object every time rather than sometimes
+        // binding to nothing, which leaves the interface with no way to tell absence from a fault.
+        Assert.Equal(5, choices.Count);
         Assert.Equal(
-            [RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR],
-            groups.Select(g => g.Kind));
+            Enum.GetValues<RuntimeKind>().OrderBy(RuntimeKindNames.Display),
+            choices.Select(c => c.Kind));
+
+        // And only the three the game carries are offered.
+        Assert.True(choices.Single(c => c.Kind == RuntimeKind.Dlss).IsAvailable);
+        Assert.True(choices.Single(c => c.Kind == RuntimeKind.DlssG).IsAvailable);
+        Assert.True(choices.Single(c => c.Kind == RuntimeKind.DlssR).IsAvailable);
+        Assert.False(choices.Single(c => c.Kind == RuntimeKind.Fsr).IsAvailable);
+        Assert.False(choices.Single(c => c.Kind == RuntimeKind.Xess).IsAvailable);
+    }
+
+    [Fact]
+    public void EachRuntimeTheGameCarriesCanBeOfferedIndependently()
+    {
+        // Three separate cells for the three DLSS parts, which is the whole point of them being
+        // separate: a version chosen for one has nothing to do with the other two.
+        var choices = Groups(Dlss: true, DlssG: true, DlssR: true);
+
+        var dlss = choices.Single(c => c.Kind == RuntimeKind.Dlss);
+        dlss.Selected = dlss.Options.Single(o => o.Version == "310.9.1");
+
+        Assert.True(dlss.HasChange);
+        Assert.All(
+            choices.Where(c => c.Kind != RuntimeKind.Dlss),
+            c => Assert.False(c.HasChange));
     }
 
     [Fact]
@@ -74,27 +99,36 @@ public class RuntimeGroupTests
         // upgrading what it has.
         var groups = Groups(Dlss: true, DlssG: true, DlssR: false);
 
-        Assert.DoesNotContain(groups, g => g.Kind == RuntimeKind.DlssR);
-        Assert.Equal(2, groups.Count);
+        var rr = groups.Single(g => g.Kind == RuntimeKind.DlssR);
+
+        Assert.False(rr.IsAvailable);
+        Assert.Empty(rr.Options);
+        Assert.Null(rr.Selected);
+        Assert.False(rr.HasChange);
+
+        // The cell is collapsed rather than bound to nothing, which is what IsAvailable drives.
+        Assert.True(groups.Single(g => g.Kind == RuntimeKind.DlssG).IsAvailable);
     }
 
     [Fact]
     public void ARuntimeWithNoVersionsInTheCollectionIsNotOffered()
     {
         // The game carries Frame Generation, but the collection holds no version of it. An empty
-        // picker is a control that looks usable and does nothing, so the runtime is left out instead;
+        // picker is a control that looks usable and does nothing, so the cell is collapsed instead;
         // the Import button is how a version gets added.
         var groups = Groups(versions: [(RuntimeKind.Dlss, "310.9.1")]);
 
-        Assert.DoesNotContain(groups, g => g.Kind == RuntimeKind.DlssG);
-        Assert.Equal(RuntimeKind.Dlss, Assert.Single(groups).Kind);
+        Assert.False(groups.Single(g => g.Kind == RuntimeKind.DlssG).IsAvailable);
+        Assert.True(groups.Single(g => g.Kind == RuntimeKind.Dlss).IsAvailable);
     }
 
     [Fact]
-    public void AGameWithNothingShowableHasNoGroups()
+    public void AGameWithNoRuntimesHasNothingToOffer()
     {
         // Steamworks Common Redistributables and similar carry no runtimes at all.
-        Assert.Empty(Groups(Dlss: false, DlssG: false, DlssR: false, Xess: false, Fsr: false));
+        var groups = Groups(Dlss: false, DlssG: false, DlssR: false, Xess: false, Fsr: false);
+
+        Assert.All(groups, g => Assert.False(g.IsAvailable));
     }
 
     [Fact]
@@ -171,7 +205,7 @@ public class RuntimeGroupTests
         var dlss = Groups(versions: [(RuntimeKind.Dlss, "310.9.1")]).Single(g => g.Kind == RuntimeKind.Dlss);
 
         var told = 0;
-        dlss.OnChanged += (_, _) => told++;
+        dlss.Changed += (_, _) => told++;
 
         dlss.Selected = dlss.Options.Single();
 
@@ -191,7 +225,7 @@ public class RuntimeGroupTests
     }
 
     [Fact]
-    public void GroupsAreNamedAfterTheirRuntimeNotTheirFiles()
+    public void CellsAreNamedAfterTheirRuntimeNotTheirFiles()
     {
         var groups = Groups(DlssR: true);
 
@@ -200,10 +234,50 @@ public class RuntimeGroupTests
         var labels = groups.Select(g => g.Label).ToList();
 
         Assert.Equal(
-            ["DLSS", "DLSS Frame Gen", "DLSS Ray Recon"],
+            ["DLSS", "DLSS Frame Gen", "DLSS Ray Recon", "FSR", "XeSS"],
             labels);
         Assert.DoesNotContain(labels, l => l.Contains(".dll", StringComparison.Ordinal));
         Assert.DoesNotContain(labels, l => l.Contains("nvngx", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ChoosingTheVersionAlreadyInstalledIsNotAPendingChange()
+    {
+        var dlss = Groups(currentDlss: "310.2.1", versions: [(RuntimeKind.Dlss, "310.2.1")])
+            .Single(g => g.Kind == RuntimeKind.Dlss);
+
+        dlss.Selected = dlss.Options.Single();
+
+        // What makes a row a pending change. If selecting the installed version counted as one, every
+        // row would appear to have something waiting and Apply would have nothing to do.
+        Assert.False(dlss.HasChange);
+    }
+
+    [Fact]
+    public void ClearingAChoiceRemovesItFromThePendingChanges()
+    {
+        var dlss = Groups(currentDlss: "310.2.1", versions: [(RuntimeKind.Dlss, "310.9.1")])
+            .Single(g => g.Kind == RuntimeKind.Dlss);
+
+        dlss.Selected = dlss.Options.Single();
+        Assert.True(dlss.HasChange);
+
+        dlss.Selected = null;
+        Assert.False(dlss.HasChange);
+    }
+
+    [Fact]
+    public void VersionsSeparatedDifferentlyDoNotCountAsAChange()
+    {
+        // NVIDIA writes 310,2,1,0 in some builds. Choosing the same version written differently must not
+        // look like a pending change, or every row with an NVIDIA-written version appears to be waiting
+        // for something that would change nothing.
+        var dlss = Groups(currentDlss: "310,2,1,0", versions: [(RuntimeKind.Dlss, "310.2.1")])
+            .Single(g => g.Kind == RuntimeKind.Dlss);
+
+        dlss.Selected = dlss.Options.Single();
+
+        Assert.False(dlss.HasChange);
     }
 
     [Fact]
@@ -227,7 +301,7 @@ public class RuntimeGroupTests
     /// tests is what happens when two runtimes hold the same version, which a generated list would
     /// never produce by accident.
     /// </remarks>
-    private static IReadOnlyList<RuntimeGroup> Groups(
+    private static IReadOnlyList<RuntimeChoice> Groups(
         bool Dlss = true,
         bool DlssG = true,
         bool DlssR = false,
@@ -286,7 +360,7 @@ public class RuntimeGroupTests
                 null))
             .ToArray();
 
-        return RuntimeGroup.Build(snapshot, entries);
+        return RuntimeChoice.Build(snapshot, entries);
     }
 
     /// <summary>One version of every runtime the game carries.</summary>

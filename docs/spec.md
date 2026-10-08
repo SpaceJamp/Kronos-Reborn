@@ -262,6 +262,16 @@ work on any DirectX 12 GPU.
 - **R69.** Where several kinds share a name, an option says which kind it is. DLSS, DLSS Frame
   Generation and DLSS Ray Reconstruction routinely hold the same version number, so a picker listing
   bare versions would show identical entries that differ only in the part they would install.
+- **R70.** Every runtime kind has its own version picker in the game's own row, so a change can be
+  made to any number of games and then seen as a whole before anything is written. Kinds that share a
+  version number are what makes this necessary rather than merely tidy: one shared column, or one
+  picker for the selected game, cannot say which of them a version belongs to.
+- **R71.** Choosing a version in one cell affects that cell only. The pending changes are the cells
+  whose chosen version differs from the one installed, and a version equal to the installed one is not
+  among them — including where the two are written differently, as NVIDIA writes 310,2,1,0 and
+  310.9.1 for the same build.
+- **R72.** A runtime a game cannot take is not offered at all, and its cell is empty rather than
+  holding a control that looks usable and does nothing. A game carrying no runtimes offers nothing.
 
 ## Safety principles
 
@@ -391,4 +401,5 @@ None outstanding. New questions are added here as they arise, and moved into Dec
 | 0.1.0 | Noted R33 against R42: the setting decides whether an untrusted file may enter the collection, and does not decide whether the user is warned when one is installed. Accepting a file is not evidence that it is genuine. |
 | 0.1.0 | Built cover images, which the Decisions section above had deferred, after establishing that Steam's own artwork cache makes them available locally with no network access and no cache to maintain. |
 | 0.1.0 | Added R65 to R69. DLSS, DLSS Frame Generation and DLSS Ray Reconstruction are three separate things the user chooses between separately, so choosing one installs one. The picker gives each its own picker rather than one flat list of bare version numbers, because the three routinely hold the same version and a line reading only "310.2.1" does not say which of them it would install. NVIDIA supports them only at matching versions, which the preview now reports rather than acts on — it was briefly implemented as installing them together, which took the choice away, and that has been reversed. A runtime the game does not carry is never offered; a game whose several runtimes cannot all be applied is left as it was. |
+| 0.1.0 | Added R70 to R72. The version picker moved into the game list, one column per runtime, replacing read-only version text and a single picker for whichever game was selected. The old arrangement could set one game at a time and could not say which of the three DLSS parts a bare version number belonged to. The window's minimum width is now 1120px to fit five runtime columns; the fit check reads that from the markup, so it follows rather than being restated. |
 | 0.1.0 | Reduced the game list's fixed column widths and the size of the poster cell so the whole row fits the window at its minimum width. Adding posters had pushed the runtime columns off the right edge, where the version being compared was the one that could no longer be seen. Guarded by two checks over the window markup, since a column that is off screen is still present and still bound and nothing else fails. |

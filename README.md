@@ -52,7 +52,8 @@ Windows on ARM, while FSR and XeSS would.
 
 | Area | State |
 | --- | --- |
-| Steam library discovery, manifests, deduplication | Working |
+| | Steam library discovery, manifests, deduplication | Working |
+| Version picker in the game list, one column per runtime | Working |
 | Game posters, read from Steam's own artwork cache | Working |
 | Runtime version detection, in nested folders as well as the root | Working |
 | Runtime collection: discovery from games, import, signature checking, removal | Working |
@@ -63,7 +64,7 @@ Windows on ARM, while FSR and XeSS would.
 | Settings interface | Not built — values load and persist, but nothing edits them |
 | Undo through the interface | Launches and undo the newest change for the selected game |
 | GOG, Epic, Battle.net and the other libraries | Not started |
-| Batch preview and apply from the interface | Engine and tests exist; the selection flow is partial |
+| Batch preview and apply from the interface | Working — set versions in any number of rows, then preview and apply |
 
 ### Where runtime versions come from
 
@@ -224,11 +225,14 @@ arbitrary until you know why:
   pair, so choosing one takes every file of that kind beside it and refuses the import, naming what is
   missing, if any are absent. What is taken is copied into the collection's own folder under the data
   directory, so deleting or moving the folder it was downloaded to does not empty the collection.
-- **DLSS, DLSS Frame Generation and DLSS Ray Reconstruction are three separate things**, and the
-  picker treats them that way: one picker each, listing only that runtime's versions, showing what
-  the game runs now beside it. Choosing a version for one installs one. The three routinely hold the
-  same version number, which is why a single flat list of versions could not work — a line reading
-  only "310.2.1" would not say which of them it would install.
+- **The version picker lives in the game list, one column per runtime.** DLSS, DLSS Frame Generation,
+  DLSS Ray Reconstruction, FSR and XeSS each have their own column, each holding that runtime's
+  versions for that game and nothing else. Set up as many games as you like, then Preview and Apply.
+  Previously the only picker was one flat list for whichever game was selected, where "310.2.1"
+  appeared once for DLSS and once for Frame Generation and only the surrounding lines said which was
+  which — and only one game could be set at a time.
+- **Choosing a version for one runtime installs only that one.** The three DLSS parts routinely hold
+  the same version number, which is why they get separate columns rather than a shared one.
 - **NVIDIA supports those three only at matching versions.** Where a choice would leave them out of
   step, the preview says so and names the part that would be left behind. It does not refuse, and it
   does not quietly fix it: the user chooses what goes in their own library.

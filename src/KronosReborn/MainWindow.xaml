@@ -7,8 +7,8 @@
         xmlns:ui="clr-namespace:KronosReborn.UI"
         mc:Ignorable="d"
         Title="Kronos Reborn"
-        Height="720" Width="1100"
-        MinHeight="500" MinWidth="900"
+        Height="760" Width="1240"
+        MinHeight="500" MinWidth="1120"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource BackgroundBrush}"
         Foreground="{DynamicResource TextPrimaryBrush}"
@@ -17,6 +17,47 @@
     <Window.Resources>
         <ui:InverseBooleanConverter x:Key="InverseBool" />
         <ui:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <!--
+            The cell used for every runtime column in the game list: this game's version picker for
+            one runtime, or nothing at all where the game does not carry that runtime.
+
+            A DataTemplate rather than markup repeated five times, so the five columns cannot drift
+            apart — a change to how a version is chosen has to apply to DLSS and XeSS equally, and
+            there is only one copy of it to get wrong.
+            -->
+        <DataTemplate x:Key="RuntimePickerTemplate">
+            <DataTemplate.Triggers>
+                <!--
+                    Availability rather than a null Content. Every row binds to a real choice object so
+                    that no binding silently resolves to nothing, which leaves the cell looking as
+                    though it were working.
+                    -->
+                <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+
+            <StackPanel>
+                <ComboBox ItemsSource="{Binding Options}"
+                          SelectedItem="{Binding Selected}"
+                          MinWidth="96"
+                          FontFamily="Consolas"
+                          FontSize="{StaticResource FontSizeSmall}"
+                          ToolTip="{Binding Label}" />
+
+                <!--
+                    What the choice would do, under the picker it applies to.
+
+                    A dropdown left on the version already installed does nothing at all, and saying
+                    so is better than a user pressing Apply and being told nothing happened.
+                    -->
+                <TextBlock Text="{Binding StatusText}"
+                           FontSize="{StaticResource FontSizeSmall}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,1,0,0" />
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -177,54 +218,74 @@
                                         DisplayMemberBinding="{Binding LibraryName}" />
 
                         <!-- DLSS -->
-                        <GridViewColumn Header="DLSS" Width="92">
+                        <!--
+                        One column per runtime, each holding that runtime's version picker for this
+                        game.
+
+                        These were read-only text before, and the only way to change a version was to
+                        select a game and pick from a single list of every runtime at once — where
+                        "310.2.1" appeared once for DLSS and once for Frame Generation, distinguishable
+                        only by the lines around them. Here each runtime's choice is its own cell in
+                        its own column, so the three DLSS parts are visibly three decisions, each
+                        carrying only its own versions, and any number of games can be set up before
+                        anything is applied.
+
+                        A cell is blank where the game does not carry that runtime: R45 says a runtime
+                        a game does not have is not offered, since installing one is adding runtime
+                        support to the game rather than upgrading what it has.
+                        -->
+                        <GridViewColumn Header="DLSS" Width="104">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding DlssVersion, TargetNullValue='—'}"
-                                                   Foreground="{Binding DlssVersion, Converter={StaticResource StringToBrush}, ConverterParameter=HasValue}"
-                                                   FontFamily="Consolas" />
-                                        <TextBlock Text=" FG"
-                                                   FontSize="{StaticResource FontSizeSmall}"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                                   Visibility="{Binding HasDlssG, Converter={StaticResource BoolToVisibility}}"
-                                                   VerticalAlignment="Center" Margin="4,0,0,0" />
-                                        <TextBlock Text=" RR"
-                                                   FontSize="{StaticResource FontSizeSmall}"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                                   Visibility="{Binding HasDlssR, Converter={StaticResource BoolToVisibility}}"
-                                                   VerticalAlignment="Center" Margin="4,0,0,0" />
-                                    </StackPanel>
+                                    <ContentControl Content="{Binding DlssChoice}"
+                                                    ContentTemplate="{StaticResource RuntimePickerTemplate}"
+                                                    VerticalAlignment="Center" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <!-- FSR -->
-                        <GridViewColumn Header="FSR" Width="80">
+                        <GridViewColumn Header="DLSS FG" Width="104">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding FsrVersion, TargetNullValue='—'}"
-                                               Foreground="{Binding FsrVersion, Converter={StaticResource StringToBrush}, ConverterParameter=HasValue}"
-                                               FontFamily="Consolas"
-                                               VerticalAlignment="Center" />
+                                    <ContentControl Content="{Binding DlssGChoice}"
+                                                    ContentTemplate="{StaticResource RuntimePickerTemplate}"
+                                                    VerticalAlignment="Center" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <!-- XeSS -->
-                        <GridViewColumn Header="XeSS" Width="80">
+                        <GridViewColumn Header="DLSS RR" Width="104">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding XessVersion, TargetNullValue='—'}"
-                                               Foreground="{Binding XessVersion, Converter={StaticResource StringToBrush}, ConverterParameter=HasValue}"
-                                               FontFamily="Consolas"
-                                               VerticalAlignment="Center" />
+                                    <ContentControl Content="{Binding DlssRChoice}"
+                                                    ContentTemplate="{StaticResource RuntimePickerTemplate}"
+                                                    VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="FSR" Width="104">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ContentControl Content="{Binding FsrChoice}"
+                                                    ContentTemplate="{StaticResource RuntimePickerTemplate}"
+                                                    VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="XeSS" Width="104">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ContentControl Content="{Binding XessChoice}"
+                                                    ContentTemplate="{StaticResource RuntimePickerTemplate}"
+                                                    VerticalAlignment="Center" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
                         <!-- Last Changed -->
-                        <GridViewColumn Header="Last Changed" Width="120"
+                        <GridViewColumn Header="Last Changed" Width="110"
                                         DisplayMemberBinding="{Binding LastChangedText}" />
                     </GridView>
                 </ListView.View>
@@ -333,52 +394,20 @@
                                Margin="0,0,12,0" />
 
                     <!--
-                    One picker per runtime, because DLSS, DLSS Frame Generation and DLSS Ray
-                    Reconstruction are three separate things the user chooses between separately.
+                    No picker here any more.
 
-                    A single flat list of every version of every runtime cannot express that: it shows
-                    "310.2.1" three times over with only the surrounding lines saying which is which,
-                    and picking the wrong line installs the wrong DLL. Here each runtime has its own
-                    row and its own versions, so a choice is visibly a choice about that runtime and
-                    nothing else is installed alongside it.
+                    The version choices live in the game's own row, one column per runtime, because
+                    that is what lets a change be made to several games and then seen as a whole
+                    before anything is written. A picker for one selected game could only ever change
+                    one thing at a time, and this bar had become the reason the list could not be used
+                    the way the list is for.
                     -->
-                    <ItemsControl ItemsSource="{Binding RuntimeGroups}"
-                                  VerticalAlignment="Center"
-                                  Visibility="{Binding HasRuntimeGroups, Converter={StaticResource BoolToVisibility}}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal"
-                                            VerticalAlignment="Center"
-                                            Margin="0,0,10,0">
-                                    <TextBlock Text="{Binding Label}"
-                                               Style="{StaticResource SubtitleStyle}"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,6,0"
-                                               ToolTip="{Binding CurrentText}" />
-
-                                    <ComboBox ItemsSource="{Binding Options}"
-                                              SelectedItem="{Binding Selected}"
-                                              DisplayMemberPath="Label"
-                                              MinWidth="150"
-                                              VerticalAlignment="Center"
-                                              ToolTip="Versions of this runtime the collection holds" />
-
-                                    <TextBlock Text="{Binding StatusText}"
-                                               Style="{StaticResource SubtitleStyle}"
-                                               Foreground="{DynamicResource TextSecondaryBrush}"
-                                               VerticalAlignment="Center"
-                                               Margin="6,0,0,0"
-                                               MinWidth="120" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
+                    <TextBlock Text="{Binding PendingChangeCount, StringFormat='{}{0} version(s) chosen'}"
+                               Style="{StaticResource SubtitleStyle}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,12,0"
+                               Visibility="{Binding HasPendingChanges, Converter={StaticResource BoolToVisibility}}" />
                     <Button Content="Preview"
                             Style="{StaticResource ToolbarButtonStyle}"
                             Command="{Binding PreviewSwapCommand}"

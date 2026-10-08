@@ -39,6 +39,99 @@ public sealed class GameRow : INotifyPropertyChanged
         Snapshot = snapshot;
     }
 
+    /// <summary>
+    /// The runtime choices for this game, one per runtime kind.
+    /// </summary>
+    /// <remarks>
+    /// Each choice is independent: choosing a version for DLSS Frame Generation changes nothing
+    /// about the DLSS choice beside it, and the two are applied separately. That matters because
+    /// DLSS, Frame Generation and Ray Reconstruction are three separate things that routinely hold
+    /// the same version number, so a single picker per game could not say which one it was for.
+    /// </remarks>
+    public IReadOnlyList<RuntimeChoice> Choices { get; private set; } = [];
+
+    /// <summary>The choice shown in this game's DLSS column.</summary>
+    public RuntimeChoice DlssChoice => ChoiceFor(RuntimeKind.Dlss);
+
+    /// <summary>The choice shown in this game's DLSS Frame Generation column.</summary>
+    public RuntimeChoice DlssGChoice => ChoiceFor(RuntimeKind.DlssG);
+
+    /// <summary>The choice shown in this game's DLSS Ray Reconstruction column.</summary>
+    public RuntimeChoice DlssRChoice => ChoiceFor(RuntimeKind.DlssR);
+
+    /// <summary>The choice shown in this game's FSR column.</summary>
+    public RuntimeChoice FsrChoice => ChoiceFor(RuntimeKind.Fsr);
+
+    /// <summary>The choice shown in this game's XeSS column.</summary>
+    public RuntimeChoice XessChoice => ChoiceFor(RuntimeKind.Xess);
+
+    /// <summary>Whether any runtime in this row has a version chosen that is not the one installed.</summary>
+    public bool HasAnyChange => Choices.Any(c => c.HasChange);
+
+    private RuntimeChoice ChoiceFor(RuntimeKind kind) =>
+        Choices.FirstOrDefault(c => c.Kind == kind) ?? Unavailable(kind);
+
+    /// <summary>
+    /// Rebuilds this row's runtime choices from the collection.
+    /// </summary>
+    /// <remarks>
+    /// Called after every scan and after an import, so a version added to the collection appears in
+    /// every game that could use it without the user having to reselect anything.
+    /// </remarks>
+    public void RebuildChoices(IReadOnlyList<CatalogEntry> catalogEntries)
+    {
+        foreach (var existing in Choices)
+        {
+            existing.Changed -= OnChoiceChanged;
+        }
+
+        Choices = RuntimeChoice.Build(Snapshot, catalogEntries);
+
+        foreach (var choice in Choices)
+        {
+            choice.Changed += OnChoiceChanged;
+        }
+
+        OnPropertyChanged(nameof(DlssChoice));
+        OnPropertyChanged(nameof(DlssGChoice));
+        OnPropertyChanged(nameof(DlssRChoice));
+        OnPropertyChanged(nameof(FsrChoice));
+        OnPropertyChanged(nameof(XessChoice));
+        OnPropertyChanged(nameof(HasAnyChange));
+    }
+
+    /// <summary>Raised when any version in this row is chosen or cleared.</summary>
+    public event EventHandler? ChoiceChanged;
+
+    /// <summary>Starts or stops listening to this row's choices.</summary>
+    public void WatchChoices(EventHandler handler, bool subscribe)
+    {
+        if (subscribe)
+        {
+            ChoiceChanged += handler;
+        }
+        else
+        {
+            ChoiceChanged -= handler;
+        }
+    }
+
+    private void OnChoiceChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(HasAnyChange));
+        ChoiceChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// A stand-in for a runtime this game cannot be offered.
+    /// </summary>
+    /// <remarks>
+    /// Returned so a column always binds to a real object. A binding to null would give the interface
+    /// nothing to bind and would have to special-case absence at every use.
+    /// </remarks>
+    private static RuntimeChoice Unavailable(RuntimeKind kind) =>
+        new(kind, RuntimeKindNames.Display(kind), null, [], isAvailable: false);
+
     /// <summary>Cover art the library has already downloaded, or null.</summary>
     public string? PosterPath { get; }
 
@@ -186,18 +279,20 @@ public sealed record RuntimeOption(
 /// <param name="CurrentVersion">What the game runs now, or null when it runs nothing.</param>
 /// <param name="IsSameVersionAsTarget">Whether the game already runs the selected version.</param>
 /// <param name="Options">Every version the collection holds for this runtime.</param>
-public sealed class RuntimeGroup : INotifyPropertyChanged
+public sealed class RuntimeChoice : INotifyPropertyChanged
 {
-    public RuntimeGroup(
+    public RuntimeChoice(
         RuntimeKind kind,
         string label,
         string? currentVersion,
-        IReadOnlyList<RuntimeOption> options)
+        IReadOnlyList<RuntimeOption> options,
+        bool isAvailable = true)
     {
         Kind = kind;
         Label = label;
         CurrentVersion = currentVersion;
         Options = options;
+        IsAvailable = isAvailable;
     }
 
     /// <summary>Which runtime this group is about.</summary>
@@ -255,6 +350,7 @@ public sealed class RuntimeGroup : INotifyPropertyChanged
             _selected = value;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Selected)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusText)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasChange)));
             RaiseChanged();
         }
     }
@@ -262,13 +358,13 @@ public sealed class RuntimeGroup : INotifyPropertyChanged
     private RuntimeOption? _selected;
 
     /// <summary>Raised when the chosen version for this runtime changes.</summary>
-    public event EventHandler? OnChanged;
+    public event EventHandler? Changed;
 
     /// <inheritdoc />
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>Tells the view model a version was chosen for this runtime.</summary>
-    public void RaiseChanged() => OnChanged?.Invoke(this, EventArgs.Empty);
+    public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 
     internal void SetSelectedWithoutNotification(RuntimeOption? option)
     {
@@ -277,45 +373,59 @@ public sealed class RuntimeGroup : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusText)));
     }
 
-    /// <summary>The runtime groups for a game, one per runtime it actually carries.</summary>
+    /// <summary>Whether this runtime can be chosen for at all.</summary>
     /// <remarks>
-    /// R45: a runtime the game does not have is not offered. There is nothing to replace, and
-    /// installing it would be adding runtime support to a game, which is out of scope.
+    /// False when the game does not carry the runtime, or when the collection holds no version of it.
+    /// In both cases there is nothing a picker here could offer: R45 says a runtime the game does not
+    /// have is not offered, because installing one is adding runtime support to a game rather than
+    /// upgrading what it has. An empty picker would be worse than none, since it looks usable.
     /// </remarks>
-    public static IReadOnlyList<RuntimeGroup> Build(
+    public bool IsAvailable { get; }
+
+    /// <summary>Whether a version has been chosen that differs from the one installed.</summary>
+    /// <remarks>
+    /// This is what makes a row a pending change. It is false when nothing is chosen and false when
+    /// what is chosen is already installed, so a dropdown left on its current version never puts a
+    /// game in the list of things to apply.
+    /// </remarks>
+    public bool HasChange =>
+        Selected is not null
+        && !VersionNumber.AreEquivalent(CurrentVersion, Selected.Version);
+
+    /// <summary>The runtime choices for one game: one per kind, whether or not it is available.</summary>
+    /// <remarks>
+    /// Every kind is returned, including unavailable ones, so that a row's column always binds to the
+    /// same object and the interface does not have to cope with a binding that sometimes resolves and
+    /// sometimes does not.
+    /// </remarks>
+    public static IReadOnlyList<RuntimeChoice> Build(
         GameRuntimeSnapshot? snapshot,
         IReadOnlyList<CatalogEntry> catalogEntries)
     {
-        if (snapshot is null)
-        {
-            return [];
-        }
+        return
+        [
+            .. Enum.GetValues<RuntimeKind>()
+                .Select(kind =>
+                {
+                    var detected = snapshot?.Runtimes.FirstOrDefault(r => r.Kind == kind);
 
-        var groups = new List<RuntimeGroup>();
+                    var options = catalogEntries
+                        .Where(e => e.Kind == kind)
+                        .OrderBy(e => e.Version)
+                        .Select(e => new RuntimeOption(e.Id, e.Kind, e.Version, e.Trust))
+                        .ToArray();
 
-        foreach (var kind in Enum.GetValues<RuntimeKind>().OrderBy(RuntimeKindNames.Display))
-        {
-            var detected = snapshot.Runtimes.FirstOrDefault(r => r.Kind == kind);
-            if (detected is not { Exists: true })
-            {
-                continue;
-            }
+                    // R45: not offered unless the game carries it and the collection has something.
+                    var available = detected is { Exists: true } && options.Length > 0;
 
-            var options = catalogEntries
-                .Where(e => e.Kind == kind)
-                .OrderBy(e => e.Version)
-                .Select(e => new RuntimeOption(e.Id, e.Kind, e.Version, e.Trust))
-                .ToArray();
-
-            if (options.Length == 0)
-            {
-                continue;
-            }
-
-            groups.Add(new RuntimeGroup(kind, RuntimeKindNames.Display(kind), detected.Version, options));
-        }
-
-        return groups;
+                    return new RuntimeChoice(
+                        kind,
+                        RuntimeKindNames.Display(kind),
+                        detected?.Version,
+                        options,
+                        available);
+                }),
+        ];
     }
 }
 
@@ -330,6 +440,13 @@ public sealed record PreviewLine(string GameName, string Summary, bool HasWarnin
 /// <summary>
 /// Grouping mode for the game list.
 /// </summary>
+/// <summary>
+/// One version choice waiting to be applied: a game, and the runtime within it.
+/// </summary>
+/// <param name="Game">The game whose file would be written.</param>
+/// <param name="Choice">The chosen version, and which runtime it is for.</param>
+public sealed record PendingChange(GameRow Game, RuntimeChoice Choice);
+
 public enum GroupMode
 {
     /// <summary>Flat list, no grouping.</summary>
@@ -358,14 +475,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private ObservableCollection<GameRow> _games = new();
     private ObservableCollection<PreviewLine> _preview = new();
-    private IReadOnlyList<RuntimeGroup> _runtimeGroups = [];
     private IReadOnlyList<SwapPlan> _pendingPlans = [];
     private IReadOnlyList<ScanProblem> _problems = [];
     private RuntimeImportPreview? _importPreview;
 
     private GroupMode _groupMode = GroupMode.ByLibrary;
     private GameRow? _selectedGame;
-    private RuntimeOption? _selectedRuntime;
     private bool _isScanning;
     private bool _isWorking;
     private string _statusText = "Ready";
@@ -720,7 +835,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     $"Added {RuntimeKindNames.Display(result.Entry.Kind)} {result.Entry.Version} " +
                     $"to the collection, from {preview.FileName}.";
                 ImportPreview = null;
-                RefreshRuntimeOptions();
+                RebuildAllChoices();
             }
             else
             {
@@ -750,47 +865,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
             _selectedGame = value;
             OnPropertyChanged();
-            RefreshRuntimeOptions();
-            ClearPreview();
-            RaiseSwapCommandStates();
-        }
-    }
-
-    /// <summary>Runtime versions the collection holds that could apply to the selected game.</summary>
-    public IReadOnlyList<RuntimeGroup> RuntimeGroups
-    {
-        get => _runtimeGroups;
-        private set
-        {
-            _runtimeGroups = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(HasRuntimeGroups));
-        }
-    }
-
-    public bool HasRuntimeGroups => RuntimeGroups.Count > 0;
-
-    /// <summary>
-    /// Every runtime version in the collection, flattened.
-    /// </summary>
-    /// <remarks>
-    /// Kept because the preview names the games a version would change and the user selects those
-    /// from one list, which spans the groups. Reading it off <see cref="RuntimeGroups"/> rather than
-    /// keeping a second copy means a version cannot appear in one and not the other.
-    /// </remarks>
-    public IReadOnlyList<RuntimeOption> RuntimeOptions =>
-        [.. RuntimeGroups.SelectMany(g => g.Options)];
-
-    public bool HasRuntimeOptions => RuntimeOptions.Count > 0;
-
-    /// <summary>The version chosen to install.</summary>
-    public RuntimeOption? SelectedRuntime
-    {
-        get => _selectedRuntime;
-        set
-        {
-            _selectedRuntime = value;
-            OnPropertyChanged();
+            RebuildAllChoices();
             ClearPreview();
             RaiseSwapCommandStates();
         }
@@ -801,9 +876,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public bool HasPreview => _preview.Count > 0;
 
-    /// <summary>Whether a swap can be previewed right now.</summary>
-    private bool CanSwap =>
-        !IsBusy && SelectedGame is { ExistsOnDisk: true } && SelectedRuntime is not null;
+    /// <summary>Whether anything has been chosen that could be previewed.</summary>
+    /// <remarks>
+    /// Based on the choices made in the rows rather than on a selection, because the rows are where
+    /// the choices are now made. A game being selected in the list no longer has any bearing on what
+    /// would be swapped.
+    /// </remarks>
+    private bool CanSwap => !IsBusy && PendingChangeCount > 0;
 
     /// <summary>Anything that went wrong during discovery, for the user to read.</summary>
     public IReadOnlyList<ScanProblem> Problems
@@ -860,7 +939,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 _catalog.AddFromSnapshot(snapshot, "Steam");
             }
 
-            RefreshRuntimeOptions();
+            RebuildAllChoices();
 
             var missing = outcome.Rows.Count(r => r.IsMissing);
             var unknown = outcome.Rows.Count(r => r.HasUnknownVersions);
@@ -953,85 +1032,99 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     // ------------------------------------------------------------ Swapping
 
-    private void RefreshRuntimeOptions()
+    /// <summary>
+    /// Every game with a version chosen that is not the one it runs.
+    /// </summary>
+    /// <remarks>
+    /// This is what Preview and Apply act on. The choice is made in the game's own row rather than in
+    /// a panel for a selected game, so a change can be made to any number of games and then looked at
+    /// as a whole before anything is written. That is the whole reason the choices live where they do:
+    /// seeing several games side by side is the only way to tell that four of them are being moved to
+    /// the same version.
+    /// </remarks>
+    private IReadOnlyList<PendingChange> PendingChanges() =>
+    [
+        .. _games
+            .Where(g => g.ExistsOnDisk)
+            .SelectMany(g => g.Choices.Where(c => c.HasChange).Select(c => new PendingChange(g, c)))
+            .ToArray(),
+    ];
+
+    /// <summary>How many version choices are waiting to be applied.</summary>
+    public int PendingChangeCount => PendingChanges().Count;
+
+    /// <summary>Whether any version choice is waiting to be applied.</summary>
+    public bool HasPendingChanges => PendingChangeCount > 0;
+
+    /// <summary>Rebuilds every row's choices from the collection and tells the interface.</summary>
+    private void RebuildAllChoices()
     {
-        foreach (var group in RuntimeGroups)
+        foreach (var game in _games)
         {
-            group.OnChanged -= OnRuntimeGroupChanged;
+            game.WatchChoices(OnGameChoiceChanged, subscribe: false);
+            game.RebuildChoices(_catalog.Entries);
+            game.WatchChoices(OnGameChoiceChanged, subscribe: true);
         }
 
-        if (SelectedGame is null)
-        {
-            RuntimeGroups = [];
-            SelectedRuntime = null;
-            return;
-        }
-
-        // R45: one group per runtime the game actually carries, each listing only the versions the
-        // collection holds for that runtime. Grouped rather than flat, because DLSS, DLSS Frame
-        // Generation and DLSS Ray Reconstruction are three separate choices and a flat list of bare
-        // version numbers does not say which one is being picked.
-        var groups = RuntimeGroup.Build(SelectedGame.Snapshot, _catalog.Entries);
-
-        foreach (var group in groups)
-        {
-            group.OnChanged += OnRuntimeGroupChanged;
-        }
-
-        RuntimeGroups = groups;
-        SelectedRuntime = null;
+        ClearPreview();
+        OnPropertyChanged(nameof(PendingChangeCount));
+        OnPropertyChanged(nameof(HasPendingChanges));
+        RaiseSwapCommandStates();
     }
 
     /// <summary>
-    /// Recolours the choices when a version is picked, because any part of the same runtime that
-    /// would be left on a different version is worth seeing straight away.
+    /// Reacts to a version being chosen in any row.
     /// </summary>
     /// <remarks>
-    /// The preview is the authoritative answer, and this is not a substitute for it: it says the
-    /// relationship without applying anything. Clearing the preview matters, because a preview built
-    /// before this choice no longer describes what Apply would do.
+    /// The preview is dropped, because it was built from a set of choices that no longer holds. Leaving
+    /// it on screen would mean Apply acting on something other than what the user is looking at.
     /// </remarks>
-    private void OnRuntimeGroupChanged(object? sender, EventArgs e)
+    private void OnGameChoiceChanged(object? sender, EventArgs e)
     {
-        if (sender is not RuntimeGroup group)
-        {
-            return;
-        }
-
-        var option = group.Selected;
-
-        // Only one part is installed per apply, so the choice itself is what the preview is built
-        // from. Changing parts is a matter of choosing again and previewing again.
-        SelectedRuntime = option;
         ClearPreview();
+        OnPropertyChanged(nameof(PendingChangeCount));
+        OnPropertyChanged(nameof(HasPendingChanges));
+        RaiseSwapCommandStates();
     }
 
     /// <summary>
     /// Builds the preview: what would change, for which games, and what would warn.
     /// </summary>
     /// <remarks>
-    /// R35/R36: the user can ask what would happen across the selected games. R37: downgrades and
-    /// untrusted sources are marked so they are visible before anything is applied. R38: a preview
-    /// that finds nothing says so rather than appearing to have succeeded.
+    /// R35/R36: the user can ask what would happen across every game with a choice made. R37:
+    /// downgrades and untrusted sources are marked so they are visible before anything is applied.
+    /// R38: a preview that finds nothing says so rather than appearing to have succeeded.
     /// </remarks>
     private void PreviewSwap()
     {
-        if (SelectedGame is null || SelectedRuntime is null)
+        var pending = PendingChanges();
+
+        if (pending.Count == 0)
         {
             return;
         }
 
-        var targets = SelectedGamesForSwap().ToList();
+        // Exactly the runtime that was chosen in that row, for that game. DLSS, DLSS Frame
+        // Generation and DLSS Ray Reconstruction are three separate choices and the user makes them
+        // separately; installing one never installs another. That NVIDIA supports them only at
+        // matching versions is then said in the preview rather than acted on, because it is the
+        // user's library and there are reasons to pair them differently that this program cannot know.
+        var plans = pending
+            .Select(p => new SwapGameInfo(
+                p.Game.GameId, p.Game.GameName, p.Game.InstallPath, p.Game.ExistsOnDisk, p.Game.Snapshot))
+            .ToArray();
 
-        // Exactly the kind that was picked. DLSS, DLSS Frame Generation and DLSS Ray Reconstruction
-        // are three separate choices and the user makes them separately; installing one never
-        // installs another. That NVIDIA supports them only at matching versions is then said in the
-        // preview rather than acted on, because it is the user's library and there are reasons to
-        // pair them differently that this program cannot know.
-        _pendingPlans = SwapPlanner.NotePartsLeftBehind(
-            SwapPlanner.Plan(
-                targets, _catalog, SelectedRuntime.Kind, SelectedRuntime.EntryId, _settings),
-            targets);
+        _pendingPlans = pending
+            .SelectMany(p => SwapPlanner.Plan(
+                plans,
+                _catalog,
+                p.Choice.Kind,
+                p.Choice.Selected!.EntryId,
+                _settings))
+            .Distinct()
+            .ToArray();
+
+        _pendingPlans = SwapPlanner.NotePartsLeftBehind(_pendingPlans, plans);
 
         _preview.Clear();
         foreach (var plan in _pendingPlans)
@@ -1041,12 +1134,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         OnPropertyChanged(nameof(HasPreview));
 
-        StatusText = _pendingPlans.Count == 0
-            ? $"Nothing to do: {SelectedGame.GameName} already runs " +
-              $"{RuntimeKindNames.Display(SelectedRuntime.Kind)} {SelectedRuntime.Version}."
-            : $"{_pendingPlans.Count} change(s) across {targets.Count} game(s). Review, then apply.";
-    }
+        var games = _pendingPlans.Select(p => p.GameId).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
+        StatusText = _pendingPlans.Count == 0
+            ? "Nothing to do: every version chosen is the one already installed."
+            : $"{_pendingPlans.Count} change(s) across {games} game(s). Review, then apply.";
+    }
     /// <summary>
     /// Applies the previewed swap.
     /// </summary>
@@ -1071,7 +1164,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             StatusText = Describe(batch);
 
             ClearPreview();
-            RefreshRuntimeOptions();
+            RebuildAllChoices();
 
             // Re-read what the games now run, so the list reflects what was just done.
             IsWorking = false;
@@ -1150,7 +1243,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             }
 
             ClearPreview();
-            RefreshRuntimeOptions();
+            RebuildAllChoices();
         }
         finally
         {
