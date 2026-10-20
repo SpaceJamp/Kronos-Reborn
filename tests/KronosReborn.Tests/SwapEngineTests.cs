@@ -195,7 +195,11 @@ public class SwapEngineTests
     [InlineData(RuntimeKind.DlssG)]
     [InlineData(RuntimeKind.DlssR)]
     [InlineData(RuntimeKind.Fsr)]
+    [InlineData(RuntimeKind.FsrVk)]
     [InlineData(RuntimeKind.Xess)]
+    [InlineData(RuntimeKind.XessFg)]
+    [InlineData(RuntimeKind.XessDx11)]
+    [InlineData(RuntimeKind.Xell)]
     public void SwapPlannerTargetsEveryDllOfTheKind(RuntimeKind kind)
     {
         using var fixture = new SwapFixture(kind);
@@ -236,7 +240,11 @@ public class SwapEngineTests
     [InlineData(RuntimeKind.DlssG)]
     [InlineData(RuntimeKind.DlssR)]
     [InlineData(RuntimeKind.Fsr)]
+    [InlineData(RuntimeKind.FsrVk)]
     [InlineData(RuntimeKind.Xess)]
+    [InlineData(RuntimeKind.XessFg)]
+    [InlineData(RuntimeKind.XessDx11)]
+    [InlineData(RuntimeKind.Xell)]
     public void SwapInstallsEveryDllOfTheKind(RuntimeKind kind)
     {
         using var fixture = new SwapFixture(kind);
@@ -417,7 +425,11 @@ public class SwapEngineTests
     [InlineData(RuntimeKind.DlssG)]
     [InlineData(RuntimeKind.DlssR)]
     [InlineData(RuntimeKind.Fsr)]
+    [InlineData(RuntimeKind.FsrVk)]
     [InlineData(RuntimeKind.Xess)]
+    [InlineData(RuntimeKind.XessFg)]
+    [InlineData(RuntimeKind.XessDx11)]
+    [InlineData(RuntimeKind.Xell)]
     public void UndoRestoresEveryDllOfTheKind(RuntimeKind kind)
     {
         using var fixture = new SwapFixture(kind);

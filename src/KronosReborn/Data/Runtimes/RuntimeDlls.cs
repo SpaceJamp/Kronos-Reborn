@@ -19,8 +19,20 @@ public enum RuntimeKind
     /// <summary>AMD FidelityFX Super Resolution 2/3.</summary>
     Fsr,
 
+    /// <summary>AMD FidelityFX Super Resolution (Vulkan).</summary>
+    FsrVk,
+
     /// <summary>Intel XeSS.</summary>
     Xess,
+
+    /// <summary>Intel XeSS Frame Generation.</summary>
+    XessFg,
+
+    /// <summary>Intel XeSS (DirectX 11).</summary>
+    XessDx11,
+
+    /// <summary>Intel XeLL (Low Latency).</summary>
+    Xell,
 }
 
 /// <summary>
@@ -40,7 +52,11 @@ public static class RuntimeDlls
             { RuntimeKind.DlssG, ["nvngx_dlssg.dll"] },
             { RuntimeKind.DlssR, ["nvngx_dlssd.dll"] },
             { RuntimeKind.Fsr,   ["amd_fidelityfx_dx12.dll", "ffx_fsr2_api_dx12.dll"] },
+            { RuntimeKind.FsrVk, ["amd_fidelityfx_vk.dll"] },
             { RuntimeKind.Xess,  ["libxess.dll"] },
+            { RuntimeKind.XessFg, ["libxess_fg.dll"] },
+            { RuntimeKind.XessDx11, ["libxess_dx11.dll"] },
+            { RuntimeKind.Xell,  ["libxell.dll"] },
         }.AsReadOnly();
 
     /// <summary>Reverse lookup: file name to kind.</summary>
