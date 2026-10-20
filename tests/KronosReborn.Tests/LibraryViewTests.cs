@@ -153,15 +153,6 @@ public class LibraryViewTests
         Assert.False(string.IsNullOrWhiteSpace(row.Initial));
     }
 
-    [Fact]
-    public void TheTwoViewsAreExclusiveSoOnlyOneIsEverShown()
-    {
-        // Both views exist at once and one is hidden, rather than one being rebuilt on each toggle:
-        // rebuilding a GridView throws away column widths the user has dragged.
-        Assert.NotEqual(ViewMode.List, ViewMode.PosterGrid);
-        Assert.Equal(2, Enum.GetValues<ViewMode>().Length);
-    }
-
     // ------------------------------------------------------------- Helpers
 
     private static CatalogEntry Entry(

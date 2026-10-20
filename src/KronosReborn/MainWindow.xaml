@@ -96,20 +96,7 @@
                         ToolTip="Toggle grouping by library" />
 
                 <!--
-                List or poster grid.
-
-                The grid is the poster view: one card per game with the versions it runs across the
-                bottom. It is the faster way to see a library at a glance — which games are behind and
-                which are current — where the list is better for comparing versions between games.
-                -->
-                <Button Content="{Binding ViewModeText}"
-                        Style="{StaticResource ToolbarButtonStyle}"
-                        Command="{Binding ToggleViewCommand}"
-                        ToolTip="Switch between the list and the poster grid"
-                        Margin="4,0,0,0" />
-
-                <!--
-                Search. Filters the list or grid as it is typed, so a library of a few hundred games
+                Search. Filters the list as it is typed, so a library of a few hundred games
                 can be narrowed without scrolling.
 
                 The icon is a Grid overlay rather than a sibling with a negative margin: in a
@@ -249,10 +236,6 @@
 
                 <CheckBox Content="Group by library"
                           IsChecked="{Binding GroupByLibrary, Mode=TwoWay}"
-                          Margin="0,0,0,8" />
-
-                <CheckBox Content="Poster grid view"
-                          IsChecked="{Binding PosterGrid, Mode=TwoWay}"
                           Margin="0,0,0,8" />
 
                 <Button Content="Close"
@@ -534,157 +517,7 @@
                 </ListView.ItemContainerStyle>
             </ListView>
 
-            <!--
-            Poster grid: the view for seeing a whole library at a glance.
-
-            Each card is the game's own artwork with a bar across the bottom carrying the versions it
-            runs, which is the thing you cannot get from a list of names. A game with no cached
-            artwork shows its initial on a muted panel rather than a blank, because a grid of empty
-            cards looks like a failure to load.
-
-            A game missing from disk is dimmed rather than hidden, the same as in the list: a game that
-            has been uninstalled is still a game the user has, and it should still be findable.
-            -->
-                        <ListBox x:Name="GamePosterView"
-                     ItemsSource="{Binding Games, Mode=OneWay}"
-                     SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
-                     Visibility="{Binding IsGridView, Converter={StaticResource BoolToVisibility}}"
-                     HorizontalContentAlignment="Stretch"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto">
-                <ListBox.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <WrapPanel />
-                    </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="Width" Value="240" />
-                        <Setter Property="Margin" Value="10" />
-                        <Setter Property="Padding" Value="0" />
-                        <Setter Property="Background" Value="Transparent" />
-                        <Setter Property="BorderBrush" Value="Transparent" />
-                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                                <Setter Property="Opacity" Value="0.6" />
-                            </DataTrigger>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderThickness" Value="2" />
-                                <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
-                                <Setter Property="Margin" Value="6" />
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-                                <Setter Property="BorderThickness" Value="1" />
-                                <Setter Property="Margin" Value="6" />
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </ListBox.ItemContainerStyle>
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Border Background="{DynamicResource SurfaceBrush}"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Margin="0">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="160" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-
-                                <!-- Poster / placeholder -->
-                                <Border Grid.Row="0"
-                                        Background="{DynamicResource SurfaceAltBrush}"
-                                        CornerRadius="5,5,0,0"
-                                        ClipToBounds="True">
-                                    <Grid>
-                                        <Image Source="{Binding PosterPath}"
-                                               Stretch="UniformToFill"
-                                               Visibility="{Binding HasPoster, Converter={StaticResource BoolToVisibility}}"
-                                               SnapsToDevicePixels="True" />
-
-                                        <Border Background="{DynamicResource SurfaceAltBrush}"
-                                                Visibility="{Binding HasPoster, Converter={StaticResource InverseBool}}">
-                                            <TextBlock Text="{Binding Initial}"
-                                                       FontSize="64"
-                                                       Foreground="{DynamicResource TextMutedBrush}"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center"
-                                                       FontWeight="SemiBold" />
-                                        </Border>
-
-                                        <!-- Missing indicator overlay -->
-                                        <Border Background="{DynamicResource OverlayBrush}"
-                                                Visibility="{Binding IsMissing, Converter={StaticResource BoolToVisibility}}"
-                                                CornerRadius="5,5,0,0" />
-                                    </Grid>
-                                </Border>
-
-                                <!-- Game title -->
-                                <TextBlock Grid.Row="1"
-                                           Text="{Binding GameName}"
-                                           FontWeight="SemiBold"
-                                           FontSize="{StaticResource FontSizeSmall}"
-                                           Foreground="{DynamicResource TextPrimaryBrush}"
-                                           TextTrimming="CharacterEllipsis"
-                                           TextWrapping="NoWrap"
-                                           Margin="10,6,10,0"
-                                           MaxHeight="30" />
-
-                                <!-- Runtime versions bar -->
-                                <StackPanel Grid.Row="1"
-                                            Margin="10,6,10,8"
-                                            Orientation="Vertical">
-                                    <ItemsControl ItemsSource="{Binding Choices}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal"
-                                                            Visibility="{Binding IsAvailable, Converter={StaticResource BoolToVisibility}}"
-                                                            Margin="0,1,0,0">
-                                                    <Ellipse Width="8" Height="8"
-                                                             VerticalAlignment="Center"
-                                                             Margin="0,0,4,0">
-                                                        <Ellipse.Style>
-                                                            <Style TargetType="Ellipse">
-                                                                <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding HasChange}" Value="True">
-                                                                        <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Ellipse.Style>
-                                                    </Ellipse>
-                                                    <TextBlock Text="{Binding Label}"
-                                                               FontSize="{StaticResource FontSizeSmall}"
-                                                               Foreground="{DynamicResource TextSecondaryBrush}"
-                                                               Margin="0,0,4,0" />
-                                                    <TextBlock Text="{Binding CurrentText}"
-                                                               FontSize="{StaticResource FontSizeSmall}"
-                                                               FontFamily="Consolas"
-                                                               Foreground="{DynamicResource TextPrimaryBrush}"
-                                                               Margin="0,0,0,0" />
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <StackPanel Orientation="Vertical" />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-            </Grid>
+</Grid>
         </Border>
 
         <!--

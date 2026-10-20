@@ -467,16 +467,6 @@ public sealed record PreviewLine(string GameName, string Summary, bool HasWarnin
 /// <param name="Choice">The chosen version, and which runtime it is for.</param>
 public sealed record PendingChange(GameRow Game, RuntimeChoice Choice);
 
-/// <summary>How the games are laid out.</summary>
-public enum ViewMode
-{
-    /// <summary>One row per game, with the versions side by side.</summary>
-    List,
-
-    /// <summary>One poster card per game, with the versions it runs across the bottom.</summary>
-    PosterGrid,
-}
-
 /// <summary>
 /// One version in the collection, as the library shows it.
 /// </summary>

@@ -66,11 +66,7 @@ public partial class MainWindow : Window
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         ApplyGrouping(_viewModel.GroupMode);
 
-        // The search filters both the list and the poster grid through their collection views, rather
-        // than by rebuilding the games collection — rebuilding would throw away the versions the user
-        // has chosen and not yet applied.
         _viewModel.AttachViews(
-            System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.Games),
             System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.Games));
     }
 

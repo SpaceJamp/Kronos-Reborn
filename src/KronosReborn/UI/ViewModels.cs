@@ -70,8 +70,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
         ToggleGroupCommand = new RelayCommand(_ => GroupMode = GroupMode == GroupMode.Flat ? GroupMode.ByLibrary : GroupMode.Flat);
 
-        ToggleViewCommand = new RelayCommand(_ => ViewMode = ViewMode == ViewMode.List ? ViewMode.PosterGrid : ViewMode.List);
-
         ToggleAreaCommand = new RelayCommand(_ => Area = Area == MainArea.Games ? MainArea.Library : MainArea.Games);
         ToggleThemeCommand = new RelayCommand(_ => _themeManager.ToggleTheme());
         OpenSettingsCommand = new RelayCommand(_ => IsSettingsOpen = !IsSettingsOpen);
@@ -223,42 +221,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public string GroupModeText => GroupMode == GroupMode.Flat ? "Flat list" : "Group by library";
-
-    /// <summary>How the games are laid out: as a list, or as poster cards.</summary>
-    /// <remarks>
-    /// R12 applies here as it does to grouping: the choice is stored, because a preference that resets
-    /// every launch is a preference the user has to set every launch.
-    /// </remarks>
-    public ViewMode ViewMode
-    {
-        get => _settings.PosterGrid ? ViewMode.PosterGrid : ViewMode.List;
-        set
-        {
-            // The setting is the single source of truth, so a stored preference and the current view
-            // cannot disagree — which they would if this held a copy of the choice of its own.
-            if (ViewMode == value)
-            {
-                return;
-            }
-
-            _settings = _settings.With(posterGrid: value == ViewMode.PosterGrid);
-            _persistence.SaveSettings(_settings);
-
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(ViewModeText));
-            OnPropertyChanged(nameof(IsListView));
-            OnPropertyChanged(nameof(IsGridView));
-        }
-    }
-
-    /// <summary>What the view toggle says it will switch to.</summary>
-    public string ViewModeText => ViewMode == ViewMode.List ? "▦ Grid" : "☰ List";
-
-    /// <summary>Whether the list is the one showing.</summary>
-    public bool IsListView => ViewMode == ViewMode.List;
-
-    /// <summary>Whether the poster grid is the one showing.</summary>
-    public bool IsGridView => ViewMode == ViewMode.PosterGrid;
 
     /// <summary>
     /// Text typed into the search box, filtering the games as it changes.
@@ -421,30 +383,24 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         if (filtered is null)
         {
-            foreach (var view in new[] { ListView, PosterView })
+            if (ListView is not null)
             {
-                if (view is not null)
-                {
-                    view.Filter = null;
-                }
+                ListView.Filter = null;
             }
         }
         else
         {
             var keep = filtered.ToHashSet();
 
-            foreach (var view in new[] { ListView, PosterView })
+            if (ListView is not null)
             {
-                if (view is not null)
-                {
-                    view.Filter = o => o is GameRow row && keep.Contains(row);
-                }
+                ListView.Filter = o => o is GameRow row && keep.Contains(row);
             }
         }
 
-        foreach (var view in new[] { ListView, PosterView })
+        if (ListView is not null)
         {
-            view?.Refresh();
+            ListView.Refresh();
         }
 
         OnPropertyChanged(nameof(IsSearchMissingEverything));
@@ -452,22 +408,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private System.ComponentModel.ICollectionView? ListView { get; set; }
 
-    private System.ComponentModel.ICollectionView? PosterView { get; set; }
-
     /// <summary>
-    /// Hands the view model the collection views it filters.
+    /// Hands the view model the collection view it filters.
     /// </summary>
     /// <remarks>
     /// Supplied by the window because a collection view belongs to a view. Filtering is done on the
-    /// views rather than by rebuilding <see cref="Games"/>, so that searching does not discard the
+    /// view rather than by rebuilding <see cref="Games"/>, so that searching does not discard the
     /// versions the user has chosen but not yet applied.
     /// </remarks>
-    public void AttachViews(
-        System.ComponentModel.ICollectionView list,
-        System.ComponentModel.ICollectionView poster)
+    public void AttachViews(System.ComponentModel.ICollectionView list)
     {
         ListView = list;
-        PosterView = poster;
         ApplyFilter();
     }
 
@@ -569,8 +520,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand RefreshCommand { get; }
     public ICommand ToggleGroupCommand { get; }
 
-    /// <summary>Switches between the list and the poster grid.</summary>
-    public ICommand ToggleViewCommand { get; }
     public ICommand ToggleThemeCommand { get; }
     public ICommand OpenSettingsCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
@@ -1195,19 +1144,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _persistence.SaveSettings(_settings);
             GroupMode = value ? GroupMode.ByLibrary : GroupMode.Flat;
             OnPropertyChanged(nameof(GroupByLibrary));
-        }
-    }
-
-    public bool PosterGrid
-    {
-        get => _settings.PosterGrid;
-        set
-        {
-            if (_settings.PosterGrid == value) return;
-            _settings = _settings.With(posterGrid: value);
-            _persistence.SaveSettings(_settings);
-            ViewMode = value ? ViewMode.PosterGrid : ViewMode.List;
-            OnPropertyChanged(nameof(PosterGrid));
         }
     }
 
