@@ -545,12 +545,13 @@
             A game missing from disk is dimmed rather than hidden, the same as in the list: a game that
             has been uninstalled is still a game the user has, and it should still be findable.
             -->
-            <ListBox x:Name="GamePosterView"
+                        <ListBox x:Name="GamePosterView"
                      ItemsSource="{Binding Games, Mode=OneWay}"
                      SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
                      Visibility="{Binding IsGridView, Converter={StaticResource BoolToVisibility}}"
                      HorizontalContentAlignment="Stretch"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
                         <WrapPanel />
@@ -558,99 +559,128 @@
                 </ListBox.ItemsPanel>
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
-                        <Setter Property="Width" Value="168" />
+                        <Setter Property="Width" Value="200" />
                         <Setter Property="Margin" Value="8" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderBrush" Value="Transparent" />
                         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                                <Setter Property="Opacity" Value="0.5" />
+                                <Setter Property="Opacity" Value="0.6" />
                             </DataTrigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderThickness" Value="2" />
+                                <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+                                <Setter Property="Margin" Value="6" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                                <Setter Property="BorderThickness" Value="1" />
+                                <Setter Property="Margin" Value="6" />
+                            </Trigger>
                         </Style.Triggers>
                     </Style>
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
+                        <Border Background="{DynamicResource SurfaceBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Margin="0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="140" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
 
-                            <Grid Grid.Row="0" Height="150">
-                                <Image Source="{Binding PosterPath}"
-                                       Stretch="UniformToFill"
-                                       Visibility="{Binding HasPoster, Converter={StaticResource BoolToVisibility}}" />
+                                <!-- Poster / placeholder -->
+                                <Border Grid.Row="0"
+                                        Background="{DynamicResource SurfaceAltBrush}"
+                                        CornerRadius="5,5,0,0"
+                                        ClipToBounds="True">
+                                    <Grid>
+                                        <Image Source="{Binding PosterPath}"
+                                               Stretch="UniformToFill"
+                                               Visibility="{Binding HasPoster, Converter={StaticResource BoolToVisibility}}"
+                                               SnapsToDevicePixels="True" />
 
-                                <Border Background="{DynamicResource SurfaceBrush}"
-                                        Visibility="{Binding HasPoster, Converter={StaticResource InverseBool}}">
-                                    <TextBlock Text="{Binding Initial}"
-                                               FontSize="36"
-                                               Foreground="{DynamicResource TextSecondaryBrush}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center" />
+                                        <Border Background="{DynamicResource SurfaceAltBrush}"
+                                                Visibility="{Binding HasPoster, Converter={StaticResource InverseBool}}">
+                                            <TextBlock Text="{Binding Initial}"
+                                                       FontSize="48"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       FontWeight="SemiBold" />
+                                        </Border>
+
+                                        <!-- Missing indicator overlay -->
+                                        <Border Background="{DynamicResource OverlayBrush}"
+                                                Visibility="{Binding IsMissing, Converter={StaticResource BoolToVisibility}}"
+                                                CornerRadius="5,5,0,0" />
+                                    </Grid>
                                 </Border>
-                            </Grid>
 
-                            <!--
-                            What the game runs. Shown without the runtime's name where there is only
-                            one, and with it where there is more than one, because "310.9.1" alone on a
-                            card does not say whether it is Super Resolution or Frame Generation.
-                            -->
-                            <!--
-        Nothing found for the search.
-
-        The empty-state panel above says "no games found", which is a different and wrong thing to say
-        when a library of seven games is on disk and the search simply matched none of them. Both are
-        an empty list, and only one of them means the library is gone.
-        -->
-        <Border Grid.Row="1"
-                Background="{DynamicResource SurfaceBrush}"
-                Margin="8"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1"
-                CornerRadius="4"
-                Visibility="{Binding IsSearchMissingEverything, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
-                <TextBlock Text="🔍" FontSize="40" HorizontalAlignment="Center" />
-                <TextBlock Text="No games match"
-                           Style="{StaticResource TitleStyle}"
-                           HorizontalAlignment="Center"
-                           Margin="0,12,0,6" />
-                <TextBlock Text="{Binding SearchText, StringFormat='Nothing matches “{0}”. Clear the search to see your library again.'}"
-                           Style="{StaticResource SubtitleStyle}"
-                           HorizontalAlignment="Center"
-                           TextWrapping="Wrap"
-                           MaxWidth="420" />
-            </StackPanel>
-        </Border>
-
-        <StackPanel Grid.Row="1"
-                                        Margin="8,6,8,8"
-                                        Background="{DynamicResource SurfaceBrush}">
-                                <TextBlock Text="{Binding GameName}"
+                                <!-- Game title -->
+                                <TextBlock Grid.Row="1"
+                                           Text="{Binding GameName}"
                                            FontWeight="SemiBold"
-                                           TextWrapping="Wrap"
-                                           MaxHeight="34" />
+                                           FontSize="{StaticResource FontSizeSmall}"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           TextWrapping="NoWrap"
+                                           Margin="8,4,8,0"
+                                           MaxHeight="24" />
 
-                                <ItemsControl ItemsSource="{Binding Choices}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal"
-                                                        Visibility="{Binding IsAvailable, Converter={StaticResource BoolToVisibility}}">
-                                                <TextBlock Text="{Binding Label}"
-                                                           FontSize="{StaticResource FontSizeSmall}"
-                                                           Foreground="{DynamicResource TextSecondaryBrush}"
-                                                           Margin="0,3,4,0" />
-                                                <TextBlock Text="{Binding CurrentText}"
-                                                           FontSize="{StaticResource FontSizeSmall}"
-                                                           FontFamily="Consolas"
-                                                           Margin="0,3,0,0" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Grid>
+                                <!-- Runtime versions bar -->
+                                <StackPanel Grid.Row="1"
+                                            Margin="8,4,8,8"
+                                            Orientation="Vertical">
+                                    <ItemsControl ItemsSource="{Binding Choices}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal"
+                                                            Visibility="{Binding IsAvailable, Converter={StaticResource BoolToVisibility}}"
+                                                            Margin="0,1,0,0">
+                                                    <Ellipse Width="8" Height="8"
+                                                             VerticalAlignment="Center"
+                                                             Margin="0,0,4,0">
+                                                        <Ellipse.Style>
+                                                            <Style TargetType="Ellipse">
+                                                                <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasChange}" Value="True">
+                                                                        <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Ellipse.Style>
+                                                    </Ellipse>
+                                                    <TextBlock Text="{Binding Label}"
+                                                               FontSize="{StaticResource FontSizeSmall}"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                                               Margin="0,0,4,0" />
+                                                    <TextBlock Text="{Binding CurrentText}"
+                                                               FontSize="{StaticResource FontSizeSmall}"
+                                                               FontFamily="Consolas"
+                                                               Foreground="{DynamicResource TextPrimaryBrush}"
+                                                               Margin="0,0,0,0" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Vertical" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
