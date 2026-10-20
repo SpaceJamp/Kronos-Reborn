@@ -22,7 +22,11 @@ public class RuntimeDetectionTests
         Assert.Equal(["nvngx_dlssg.dll"], RuntimeDlls.ByKind[RuntimeKind.DlssG]);
         Assert.Equal(["nvngx_dlssd.dll"], RuntimeDlls.ByKind[RuntimeKind.DlssR]);
         Assert.Equal(["amd_fidelityfx_dx12.dll", "ffx_fsr2_api_dx12.dll"], RuntimeDlls.ByKind[RuntimeKind.Fsr]);
+        Assert.Equal(["amd_fidelityfx_vk.dll"], RuntimeDlls.ByKind[RuntimeKind.FsrVk]);
         Assert.Equal(["libxess.dll"], RuntimeDlls.ByKind[RuntimeKind.Xess]);
+        Assert.Equal(["libxess_fg.dll"], RuntimeDlls.ByKind[RuntimeKind.XessFg]);
+        Assert.Equal(["libxess_dx11.dll"], RuntimeDlls.ByKind[RuntimeKind.XessDx11]);
+        Assert.Equal(["libxell.dll"], RuntimeDlls.ByKind[RuntimeKind.Xell]);
     }
 
     [Fact]
@@ -33,7 +37,11 @@ public class RuntimeDetectionTests
         Assert.Equal(RuntimeKind.DlssR, RuntimeDlls.ByFileName["nvngx_dlssd.dll"]);
         Assert.Equal(RuntimeKind.Fsr, RuntimeDlls.ByFileName["amd_fidelityfx_dx12.dll"]);
         Assert.Equal(RuntimeKind.Fsr, RuntimeDlls.ByFileName["ffx_fsr2_api_dx12.dll"]);
+        Assert.Equal(RuntimeKind.FsrVk, RuntimeDlls.ByFileName["amd_fidelityfx_vk.dll"]);
         Assert.Equal(RuntimeKind.Xess, RuntimeDlls.ByFileName["libxess.dll"]);
+        Assert.Equal(RuntimeKind.XessFg, RuntimeDlls.ByFileName["libxess_fg.dll"]);
+        Assert.Equal(RuntimeKind.XessDx11, RuntimeDlls.ByFileName["libxess_dx11.dll"]);
+        Assert.Equal(RuntimeKind.Xell, RuntimeDlls.ByFileName["libxell.dll"]);
     }
 
     [Fact]
@@ -47,13 +55,17 @@ public class RuntimeDetectionTests
     public void RuntimeDllsAllFileNamesIsFlatList()
     {
         var all = RuntimeDlls.AllFileNames;
-        Assert.Equal(6, all.Count);
+        Assert.Equal(10, all.Count);
         Assert.Contains("nvngx_dlss.dll", all);
         Assert.Contains("nvngx_dlssg.dll", all);
         Assert.Contains("nvngx_dlssd.dll", all);
         Assert.Contains("amd_fidelityfx_dx12.dll", all);
         Assert.Contains("ffx_fsr2_api_dx12.dll", all);
+        Assert.Contains("amd_fidelityfx_vk.dll", all);
         Assert.Contains("libxess.dll", all);
+        Assert.Contains("libxess_fg.dll", all);
+        Assert.Contains("libxess_dx11.dll", all);
+        Assert.Contains("libxell.dll", all);
     }
 
     [Fact]
@@ -115,7 +127,7 @@ public class RuntimeDetectionTests
 
         Assert.Equal("123", snap.GameId);
         Assert.Equal("Test Game", snap.GameName);
-        Assert.Equal(6, snap.Runtimes.Count); // all known DLLs checked
+        Assert.Equal(10, snap.Runtimes.Count); // all known DLLs checked
 
         var dlss = snap.Runtimes.First(r => r.Kind == RuntimeKind.Dlss);
         Assert.True(dlss.Exists);

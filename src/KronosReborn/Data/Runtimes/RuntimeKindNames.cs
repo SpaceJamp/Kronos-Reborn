@@ -17,7 +17,11 @@ public static class RuntimeKindNames
         RuntimeKind.DlssG => "DLSS Frame Gen",
         RuntimeKind.DlssR => "DLSS Ray Recon",
         RuntimeKind.Fsr => "FSR",
+        RuntimeKind.FsrVk => "FSR (Vulkan)",
         RuntimeKind.Xess => "XeSS",
+        RuntimeKind.XessFg => "XeSS Frame Gen",
+        RuntimeKind.XessDx11 => "XeSS (DX11)",
+        RuntimeKind.Xell => "XeLL",
         _ => kind.ToString(),
     };
 }

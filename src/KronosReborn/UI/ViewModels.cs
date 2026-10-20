@@ -62,8 +62,20 @@ public sealed class GameRow : INotifyPropertyChanged
     /// <summary>The choice shown in this game's FSR column.</summary>
     public RuntimeChoice FsrChoice => ChoiceFor(RuntimeKind.Fsr);
 
+    /// <summary>The choice shown in this game's FSR (Vulkan) column.</summary>
+    public RuntimeChoice FsrVkChoice => ChoiceFor(RuntimeKind.FsrVk);
+
     /// <summary>The choice shown in this game's XeSS column.</summary>
     public RuntimeChoice XessChoice => ChoiceFor(RuntimeKind.Xess);
+
+    /// <summary>The choice shown in this game's XeSS Frame Generation column.</summary>
+    public RuntimeChoice XessFgChoice => ChoiceFor(RuntimeKind.XessFg);
+
+    /// <summary>The choice shown in this game's XeSS (DX11) column.</summary>
+    public RuntimeChoice XessDx11Choice => ChoiceFor(RuntimeKind.XessDx11);
+
+    /// <summary>The choice shown in this game's XeLL column.</summary>
+    public RuntimeChoice XellChoice => ChoiceFor(RuntimeKind.Xell);
 
     /// <summary>Whether any runtime in this row has a version chosen that is not the one installed.</summary>
     public bool HasAnyChange => Choices.Any(c => c.HasChange);
@@ -96,7 +108,11 @@ public sealed class GameRow : INotifyPropertyChanged
         OnPropertyChanged(nameof(DlssGChoice));
         OnPropertyChanged(nameof(DlssRChoice));
         OnPropertyChanged(nameof(FsrChoice));
+        OnPropertyChanged(nameof(FsrVkChoice));
         OnPropertyChanged(nameof(XessChoice));
+        OnPropertyChanged(nameof(XessFgChoice));
+        OnPropertyChanged(nameof(XessDx11Choice));
+        OnPropertyChanged(nameof(XellChoice));
         OnPropertyChanged(nameof(HasAnyChange));
     }
 
@@ -168,6 +184,10 @@ public sealed class GameRow : INotifyPropertyChanged
     public string? DlssRVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.DlssR)?.Version;
     public string? FsrVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.Fsr)?.Version;
     public string? XessVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.Xess)?.Version;
+    public string? FsrVkVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.FsrVk)?.Version;
+    public string? XessFgVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.XessFg)?.Version;
+    public string? XessDx11Version => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.XessDx11)?.Version;
+    public string? XellVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.Xell)?.Version;
 
     /// <summary>Whether this game has DLSS Frame Generation, so the row can label it.</summary>
     /// <remarks>
@@ -405,6 +425,7 @@ public sealed class RuntimeChoice : INotifyPropertyChanged
         return
         [
             .. Enum.GetValues<RuntimeKind>()
+                .OrderBy(RuntimeKindNames.Display)
                 .Select(kind =>
                 {
                     var detected = snapshot?.Runtimes.FirstOrDefault(r => r.Kind == kind);
