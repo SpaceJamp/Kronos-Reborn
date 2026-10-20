@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+#if WINDOWS
 using Microsoft.Win32;
+#endif
 
 namespace KronosReborn.Data.Libraries;
 
@@ -27,6 +29,7 @@ public interface ISteamRegistry
     string? GetMachineInstallPath();
 }
 
+#if WINDOWS
 /// <summary>
 /// Reads the real registry.
 /// </summary>
@@ -77,6 +80,7 @@ public sealed class WindowsSteamRegistry : ISteamRegistry
         }
     }
 }
+#endif
 
 /// <summary>
 /// The Steam installations this machine reports.

@@ -82,7 +82,11 @@ public static class SignatureVerifier
 
         try
         {
+#if WINDOWS
             var signature = Authenticode.Verify(filePath);
+#else
+            var signature = new AuthenticodeResult(false, false, 0, "not supported on this platform");
+#endif
 
             if (!signature.IsSigned)
             {

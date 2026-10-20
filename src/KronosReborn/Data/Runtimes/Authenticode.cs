@@ -41,6 +41,7 @@ internal sealed record AuthenticodeResult(
 /// second declaration.
 /// </para>
 /// </remarks>
+#if WINDOWS
 [SupportedOSPlatform("windows")]
 internal static class Authenticode
 {
@@ -183,3 +184,10 @@ internal static class Authenticode
         internal IntPtr pSignatureSettings;
     }
 }
+#else
+internal static class Authenticode
+{
+    public static AuthenticodeResult Verify(string filePath) =>
+        new AuthenticodeResult(IsSigned: false, IsValid: false, 0, "not supported on this platform");
+}
+#endif
