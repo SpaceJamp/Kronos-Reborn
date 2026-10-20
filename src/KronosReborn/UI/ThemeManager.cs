@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using KronosReborn.Data.Persistence;
@@ -32,7 +33,6 @@ public sealed class ThemeManager
     public void SetTheme(ThemeMode mode)
     {
         if (_currentMode == mode) return;
-
         _currentMode = mode;
         _settings = _settings.With(themeMode: mode);
         ApplyTheme(mode);
@@ -48,7 +48,6 @@ public sealed class ThemeManager
     {
         try
         {
-            // Check Windows 10+ dark mode registry
             using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
             var value = key?.GetValue("AppsUseLightTheme");
             _isSystemDark = value is int i && i == 0;
@@ -63,7 +62,6 @@ public sealed class ThemeManager
     {
         var appResources = Application.Current.Resources;
 
-        // Get the theme dictionary from resources
         var themeKey = mode == ThemeMode.Dark ? "DarkTheme" : "LightTheme";
         if (!appResources.Contains(themeKey))
         {
@@ -72,19 +70,24 @@ public sealed class ThemeManager
 
         var themeDict = (ResourceDictionary)appResources[themeKey];
 
-        // Update all theme resource keys directly in Application.Resources
         foreach (var key in themeDict.Keys)
         {
             appResources[key] = themeDict[key];
         }
 
-        // Also update the window background immediately
         foreach (Window window in Application.Current.Windows)
         {
-            if (themeDict.Contains("BackgroundBrush"))
+            window.Background = (System.Windows.Media.Brush)themeDict["BackgroundBrush"];
+            window.Foreground = (System.Windows.Media.Brush)themeDict["TextPrimaryBrush"];
+
+            if (window.Content is FrameworkElement root)
             {
-                window.Background = (System.Windows.Media.Brush)themeDict["BackgroundBrush"];
+                root.InvalidateVisual();
+                root.UpdateLayout();
             }
+
+            window.InvalidateVisual();
+            window.UpdateLayout();
         }
     }
 }

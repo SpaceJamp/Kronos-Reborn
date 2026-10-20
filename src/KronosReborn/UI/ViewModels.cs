@@ -21,10 +21,11 @@ namespace KronosReborn.UI;
 public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly SteamLibraryScanner _scanner = new();
+    private readonly GOGLibraryScanner _gogScanner = new();
     private readonly GameRuntimeScanner _runtimeScanner = new();
     private readonly RuntimeCatalog _catalog;
     private readonly PersistenceService _persistence;
-    private readonly Settings _settings;
+    private Settings _settings;
     private readonly ThemeManager _themeManager;
     private readonly DataPaths _paths;
     private readonly IFilePicker? _filePicker;
@@ -73,7 +74,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         ToggleAreaCommand = new RelayCommand(_ => Area = Area == MainArea.Games ? MainArea.Library : MainArea.Games);
         ToggleThemeCommand = new RelayCommand(_ => _themeManager.ToggleTheme());
-        OpenSettingsCommand = new RelayCommand(_ => OpenSettings());
+        OpenSettingsCommand = new RelayCommand(_ => IsSettingsOpen = !IsSettingsOpen);
+        ToggleSettingsCommand = new RelayCommand(_ => IsSettingsOpen = !IsSettingsOpen);
         PreviewSwapCommand = new RelayCommand(_ => PreviewSwap(), _ => CanSwap);
         ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsWorking);
         UndoCommand = new RelayCommand(_ => UndoSelected(), _ => SelectedGame is not null && !IsWorking);
@@ -570,6 +572,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand ToggleViewCommand { get; }
     public ICommand ToggleThemeCommand { get; }
     public ICommand OpenSettingsCommand { get; }
+    public ICommand ToggleSettingsCommand { get; }
     public ICommand PreviewSwapCommand { get; }
     public ICommand ApplySwapCommand { get; }
     public ICommand UndoCommand { get; }
@@ -829,13 +832,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private RefreshOutcome DiscoverAndScan(CancellationToken token)
     {
         var games = new List<GameRecord>();
-        var locator = new SteamInstallLocator(new WindowsSteamRegistry());
-        var discovery = locator.Discover();
+
+#if WINDOWS
+        // --- Steam -------------------------------------------------------
+        var steamLocator = new SteamInstallLocator(new WindowsSteamRegistry());
+        var steamDiscovery = steamLocator.Discover();
 
         var results = new List<ScanResult>();
-        var problems = new List<ScanProblem>(discovery.Problems);
+        var problems = new List<ScanProblem>(steamDiscovery.Problems);
 
-        foreach (var root in discovery.InstallRoots)
+        foreach (var root in steamDiscovery.InstallRoots)
         {
             token.ThrowIfCancellationRequested();
 
@@ -844,13 +850,35 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             results.Add(result);
         }
 
-        // Combine folds the per-library scans together and deduplicates the games. Doing this by
-        // hand — concatenating the lists — let the same install found by two different routes appear
-        // once per route, which on a default Steam installation meant every game listed three times.
-        var combined = ScanResult.Combine(results);
+        var combinedSteam = ScanResult.Combine(results);
+        games.AddRange(combinedSteam.Games);
+        problems.AddRange(combinedSteam.Problems);
 
-        games.AddRange(combined.Games);
-        problems.AddRange(combined.Problems);
+        // --- GOG Galaxy ------------------------------------------------------
+        var gogLocator = new GOGInstallLocator(new WindowsGOGRegistry());
+        var gogDiscovery = gogLocator.Discover();
+
+        foreach (var root in gogDiscovery.InstallRoots)
+        {
+            token.ThrowIfCancellationRequested();
+
+            var gogResult = _gogScanner.Scan(root, token);
+            games.AddRange(gogResult.Games);
+            problems.AddRange(gogResult.Problems);
+        }
+#else
+        // On non-Windows platforms, library discovery is not available.
+        // Registry access and Windows-specific paths don't exist.
+        var problems = new List<ScanProblem>
+        {
+            new ScanProblem(
+                "Libraries",
+                null,
+                "Library discovery is not available on this platform.",
+                "Steam and GOG Galaxy discovery require Windows registry access.",
+                "Run on Windows to discover installed games, or add games manually.")
+        };
+#endif
 
         var snapshots = _runtimeScanner.ScanMany(games, token).ToList();
 
@@ -1121,10 +1149,65 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             .Select(g => new SwapGameInfo(g.GameId, g.GameName, g.InstallPath, g.ExistsOnDisk, g.Snapshot));
     }
 
-    private void OpenSettings()
+    private bool _isSettingsOpen;
+    public bool IsSettingsOpen
     {
-        // TODO: Open settings window
-        StatusText = "Settings not implemented yet";
+        get => _isSettingsOpen;
+        set
+        {
+            _isSettingsOpen = value;
+            OnPropertyChanged(nameof(IsSettingsOpen));
+        }
+    }
+
+    public bool AllowUntrustedRuntimes
+    {
+        get => _settings.AllowUntrustedRuntimes;
+        set
+        {
+            if (_settings.AllowUntrustedRuntimes == value) return;
+            _settings = _settings.With(allowUntrustedRuntimes: value);
+            _persistence.SaveSettings(_settings);
+            OnPropertyChanged(nameof(AllowUntrustedRuntimes));
+        }
+    }
+
+    public int MaxHistoryPerGame
+    {
+        get => _settings.MaxHistoryPerGame;
+        set
+        {
+            if (_settings.MaxHistoryPerGame == value) return;
+            _settings = _settings.With(maxHistoryPerGame: value);
+            _persistence.SaveSettings(_settings);
+            OnPropertyChanged(nameof(MaxHistoryPerGame));
+        }
+    }
+
+    public bool GroupByLibrary
+    {
+        get => _settings.GroupByLibrary;
+        set
+        {
+            if (_settings.GroupByLibrary == value) return;
+            _settings = _settings.With(groupByLibrary: value);
+            _persistence.SaveSettings(_settings);
+            GroupMode = value ? GroupMode.ByLibrary : GroupMode.Flat;
+            OnPropertyChanged(nameof(GroupByLibrary));
+        }
+    }
+
+    public bool PosterGrid
+    {
+        get => _settings.PosterGrid;
+        set
+        {
+            if (_settings.PosterGrid == value) return;
+            _settings = _settings.With(posterGrid: value);
+            _persistence.SaveSettings(_settings);
+            ViewMode = value ? ViewMode.PosterGrid : ViewMode.List;
+            OnPropertyChanged(nameof(PosterGrid));
+        }
     }
 
     /// <summary>Stops subscribing to events owned elsewhere.</summary>

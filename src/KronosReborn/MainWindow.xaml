@@ -221,6 +221,48 @@
             </StackPanel>
         </Border>
 
+        <!-- Settings panel -->
+        <Border Grid.Row="1"
+                Width="400"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Margin="0,16,16,16"
+                Padding="16"
+                Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Settings" Style="{StaticResource TitleStyle}" Margin="0,0,0,12" />
+
+                <CheckBox Content="Allow untrusted runtimes"
+                          IsChecked="{Binding AllowUntrustedRuntimes, Mode=TwoWay}"
+                          Margin="0,0,0,8"
+                          ToolTip="Accept runtime DLLs without valid signatures" />
+
+                <TextBlock Text="Max history per game" Margin="0,4,0,2" />
+                <TextBox Text="{Binding MaxHistoryPerGame, Mode=TwoWay}"
+                         Width="80"
+                         HorizontalAlignment="Left"
+                         Margin="0,0,0,8" />
+
+                <CheckBox Content="Group by library"
+                          IsChecked="{Binding GroupByLibrary, Mode=TwoWay}"
+                          Margin="0,0,0,8" />
+
+                <CheckBox Content="Poster grid view"
+                          IsChecked="{Binding PosterGrid, Mode=TwoWay}"
+                          Margin="0,0,0,8" />
+
+                <Button Content="Close"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding ToggleSettingsCommand}"
+                        Margin="0,12,0,0"
+                        HorizontalAlignment="Right" />
+            </StackPanel>
+        </Border>
+
         <!-- Games / version library -->
                 <Button Content="{Binding AreaText}"
                         Style="{StaticResource ToolbarButtonStyle}"
@@ -323,7 +365,7 @@
                                                        VerticalAlignment="Center"
                                                        ToolTip="{Binding InstallPath}" />
                                             <TextBlock Text=" (missing)"
-                                                       Foreground="{StaticResource ErrorBrush}"
+                                                       Foreground="{DynamicResource ErrorBrush}"
                                                        FontStyle="Italic"
                                                        FontSize="{StaticResource FontSizeSmall}"
                                                        VerticalAlignment="Center"
@@ -449,7 +491,7 @@
                                 <TextBlock Text="{Binding Name}"
                                            FontWeight="SemiBold"
                                            FontSize="{StaticResource FontSizeNormal}"
-                                           Foreground="{StaticResource PrimaryBrush}"
+                                           Foreground="{DynamicResource PrimaryBrush}"
                                            Padding="4,4" />
                             </DataTemplate>
                         </GroupStyle.HeaderTemplate>
@@ -467,7 +509,7 @@
                                                     <TextBlock Text="{Binding Name}"
                                                                FontWeight="SemiBold"
                                                                FontSize="{StaticResource FontSizeNormal}"
-                                                               Foreground="{StaticResource PrimaryBrush}"
+                                                               Foreground="{DynamicResource PrimaryBrush}"
                                                                Padding="4,4" />
                                                 </Expander.Header>
                                                 <ItemsPresenter />
