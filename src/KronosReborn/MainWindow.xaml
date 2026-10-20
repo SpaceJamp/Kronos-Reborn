@@ -559,8 +559,8 @@
                 </ListBox.ItemsPanel>
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
-                        <Setter Property="Width" Value="200" />
-                        <Setter Property="Margin" Value="8" />
+                        <Setter Property="Width" Value="240" />
+                        <Setter Property="Margin" Value="10" />
                         <Setter Property="Padding" Value="0" />
                         <Setter Property="Background" Value="Transparent" />
                         <Setter Property="BorderBrush" Value="Transparent" />
@@ -593,7 +593,7 @@
                                 Margin="0">
                             <Grid>
                                 <Grid.RowDefinitions>
-                                    <RowDefinition Height="140" />
+                                    <RowDefinition Height="160" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
@@ -611,7 +611,7 @@
                                         <Border Background="{DynamicResource SurfaceAltBrush}"
                                                 Visibility="{Binding HasPoster, Converter={StaticResource InverseBool}}">
                                             <TextBlock Text="{Binding Initial}"
-                                                       FontSize="48"
+                                                       FontSize="64"
                                                        Foreground="{DynamicResource TextMutedBrush}"
                                                        HorizontalAlignment="Center"
                                                        VerticalAlignment="Center"
@@ -633,12 +633,12 @@
                                            Foreground="{DynamicResource TextPrimaryBrush}"
                                            TextTrimming="CharacterEllipsis"
                                            TextWrapping="NoWrap"
-                                           Margin="8,4,8,0"
-                                           MaxHeight="24" />
+                                           Margin="10,6,10,0"
+                                           MaxHeight="30" />
 
                                 <!-- Runtime versions bar -->
                                 <StackPanel Grid.Row="1"
-                                            Margin="8,4,8,8"
+                                            Margin="10,6,10,8"
                                             Orientation="Vertical">
                                     <ItemsControl ItemsSource="{Binding Choices}">
                                         <ItemsControl.ItemTemplate>
@@ -792,7 +792,7 @@
                 CornerRadius="4"
                 Visibility="{Binding HasGames, Converter={StaticResource InverseBool}}">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
-                <TextBlock Text="📂" FontSize="48" HorizontalAlignment="Center" />
+                <TextBlock Text="📂" FontSize="64" HorizontalAlignment="Center" />
                 <TextBlock Text="No games found"
                            Style="{StaticResource TitleStyle}"
                            HorizontalAlignment="Center"
