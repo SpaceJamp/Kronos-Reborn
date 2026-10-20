@@ -1,3 +1,4 @@
+#if WINDOWS
 using System;
 using System.Linq;
 using System.Windows;
@@ -178,3 +179,4 @@ public class GameRowTests
                 r.Kind, $"{r.Kind}.dll", $"{r.Kind}.dll", $@"C:\Game\{r.Kind}.dll",
                 r.Version, null, true)).ToArray());
 }
+#endif
