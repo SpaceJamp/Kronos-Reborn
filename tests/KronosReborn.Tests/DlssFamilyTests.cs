@@ -37,7 +37,7 @@ public class DlssFamilyTests
         // selectable in the first place.
         Assert.Equal("nvngx_dlss.dll", RuntimeDlls.ByKind[RuntimeKind.Dlss][0]);
         Assert.Equal("nvngx_dlssg.dll", RuntimeDlls.ByKind[RuntimeKind.DlssG][0]);
-        Assert.Equal("nvngx_dlssnr.dll", RuntimeDlls.ByKind[RuntimeKind.DlssR][0]);
+        Assert.Equal("nvngx_dlssd.dll", RuntimeDlls.ByKind[RuntimeKind.DlssR][0]);
 
         // And each has a name of its own in the interface. If these were ever collapsed into one
         // label, the picker would show three identical entries with no way to tell them apart.
