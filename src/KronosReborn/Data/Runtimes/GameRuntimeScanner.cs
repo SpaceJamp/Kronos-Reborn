@@ -38,20 +38,31 @@ public sealed class GameRuntimeScanner
         var runtimes = new List<DetectedRuntime>();
 
         // Where each of this game's runtime DLLs actually is. Shared with the swap planner so that
-        // detection and installation cannot disagree about a path.
-        var located = RuntimeDllLocator.Find(game.InstallPath, cancellation: cancellation);
+        // detection and installation cannot disagree about a path. FindAll (rather than Find) is used
+        // here so that a game carrying the same runtime in two folders is reported as such instead of
+        // silently resolving to the shallowest copy.
+        var located = RuntimeDllLocator.FindAll(game.InstallPath, cancellation: cancellation);
 
         foreach (var fileName in RuntimeDlls.AllFileNames)
         {
             cancellation.ThrowIfCancellationRequested();
 
-            var fullPath = located.GetValueOrDefault(fileName)
-                           ?? Path.Combine(game.InstallPath, fileName);
+            var paths = located.TryGetValue(fileName, out var allPaths) ? allPaths : [];
+            var fullPath = paths.Count > 0
+                ? paths[0]
+                : Path.Combine(game.InstallPath, fileName);
 
             var relativePath = Path.GetRelativePath(game.InstallPath, fullPath);
 
+            // Every copy beyond the first is an alternative location the game may load from. Recorded
+            // here so the UI can flag it (R34-style: a runtime in two folders is a situation the user
+            // should know about) rather than silently picking one.
+            var alternativePaths = paths.Count > 1
+                ? (IReadOnlyList<string>)paths.Skip(1).ToList()
+                : null;
+
             var kind = RuntimeDlls.KindFor(fileName) ?? throw new InvalidOperationException($"File name {fileName} not in RuntimeDlls");
-            runtimes.Add(ReadOne(kind, fileName, relativePath, fullPath));
+            runtimes.Add(ReadOne(kind, fileName, relativePath, fullPath, alternativePaths));
         }
 
         return new GameRuntimeSnapshot(game.Id, game.DisplayName, game.InstallPath, runtimes);
@@ -92,11 +103,12 @@ public sealed class GameRuntimeScanner
         RuntimeKind kind,
         string fileName,
         string relativePath,
-        string fullPath)
+        string fullPath,
+        IReadOnlyList<string>? alternativePaths = null)
     {
         if (!File.Exists(fullPath))
         {
-            return new DetectedRuntime(kind, fileName, relativePath, fullPath, null, null, false);
+            return new DetectedRuntime(kind, fileName, relativePath, fullPath, null, null, false, null, alternativePaths);
         }
 
         try
@@ -126,11 +138,13 @@ public sealed class GameRuntimeScanner
                 fullPath,
                 VersionNumber.Normalize(fileVersion),
                 VersionNumber.Normalize(productVersion),
-                true);
+                true,
+                null,
+                alternativePaths);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
-            return new DetectedRuntime(kind, fileName, relativePath, fullPath, null, null, true, ex.Message);
+            return new DetectedRuntime(kind, fileName, relativePath, fullPath, null, null, true, ex.Message, alternativePaths);
         }
     }
 }
