@@ -1468,22 +1468,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         // separately; installing one never installs another. That NVIDIA supports them only at
         // matching versions is then said in the preview rather than acted on, because it is the
         // user's library and there are reasons to pair them differently that this program cannot know.
-        var plans = pending
-            .Select(p => new SwapGameInfo(
-                p.Game.GameId, p.Game.GameName, p.Game.InstallPath, p.Game.ExistsOnDisk, p.Game.Snapshot))
-            .ToArray();
-
         _pendingPlans = pending
             .SelectMany(p => SwapPlanner.Plan(
-                plans,
+                [new SwapGameInfo(
+                    p.Game.GameId, p.Game.GameName, p.Game.InstallPath, p.Game.ExistsOnDisk, p.Game.Snapshot)],
                 _catalog,
                 p.Choice.Kind,
                 p.Choice.Selected!.EntryId,
                 _settings))
-            .Distinct()
             .ToArray();
 
-        _pendingPlans = SwapPlanner.NotePartsLeftBehind(_pendingPlans, plans);
+        _pendingPlans = SwapPlanner.NotePartsLeftBehind(_pendingPlans, pending.Select(p => new SwapGameInfo(
+            p.Game.GameId, p.Game.GameName, p.Game.InstallPath, p.Game.ExistsOnDisk, p.Game.Snapshot)));
 
         _preview.Clear();
         foreach (var plan in _pendingPlans)
