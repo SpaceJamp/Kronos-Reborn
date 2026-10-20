@@ -282,7 +282,7 @@
             <!-- GridViewColumnHeader -->
             <Style TargetType="GridViewColumnHeader">
                 <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
-                <Setter Property="Foreground" Value="White" />
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
                 <Setter Property="Padding" Value="8,6" />
