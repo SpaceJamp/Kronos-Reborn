@@ -18,6 +18,11 @@ namespace KronosReborn.Data.Runtimes;
 /// <param name="ProductVersion">The product version, which sometimes differs from the file version.</param>
 /// <param name="Exists">Whether the file was present when scanned.</param>
 /// <param name="ReadError">Why it could not be read, if Exists is true but Version is null.</param>
+/// <param name="AlternativePaths">
+/// Other locations where a DLL with the same file name was found, in addition to <see cref="FullPath"/>.
+/// Empty when only one copy exists. A game carrying the same runtime in two folders is a situation
+/// the user should know about rather than one the program silently resolves.
+/// </param>
 public sealed record DetectedRuntime(
     RuntimeKind Kind,
     string FileName,
@@ -26,10 +31,17 @@ public sealed record DetectedRuntime(
     string? Version,
     string? ProductVersion,
     bool Exists,
-    string? ReadError = null)
+    string? ReadError = null,
+    IReadOnlyList<string>? AlternativePaths = null)
 {
     /// <summary>Whether the version could be determined.</summary>
     public bool IsVersionKnown => Version is not null;
+
+    /// <summary>
+    /// Whether more than one copy of this DLL was found in the game folder. When true, the game
+    /// may load from any of them and a swap that replaces only one leaves the others in place.
+    /// </summary>
+    public bool MultipleFound => AlternativePaths is { Count: > 0 };
 
     /// <summary>A one-line description for display.</summary>
     public string Describe()
@@ -54,7 +66,9 @@ public sealed record DetectedRuntime(
             return $"{kindName}: present (version unknown{(!string.IsNullOrWhiteSpace(ReadError) ? $", {ReadError}" : "")})";
         }
 
-        return $"{kindName}: {Version}";
+        return MultipleFound
+            ? $"{kindName}: {Version} (multiple copies found)"
+            : $"{kindName}: {Version}";
     }
 }
 
@@ -81,4 +95,10 @@ public sealed record GameRuntimeSnapshot(
 
     /// <summary>Whether any runtime DLL is present at all.</summary>
     public bool HasAnyRuntime => Runtimes.Any(r => r.Exists);
+
+    /// <summary>
+    /// Whether any runtime DLL in this game was found in more than one location. When true, at least
+    /// one runtime has copies in multiple folders and the user should be told which before a swap.
+    /// </summary>
+    public bool HasMultipleCopies => Runtimes.Any(r => r.MultipleFound);
 }

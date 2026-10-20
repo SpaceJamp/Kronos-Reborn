@@ -183,6 +183,61 @@ public class RuntimeDllLocatorTests
             Assert.Single(plan.ReplacedFiles));
     }
 
+    [Fact]
+    public void FindAllReturnsEveryCopyOfADll()
+    {
+        using var temp = new TemporaryDirectory();
+        var game = Path.Combine(temp.Root, "Game");
+
+        // Two copies, as happens when a patch leaves an old one behind.
+        Directory.CreateDirectory(Path.Combine(game, "bin"));
+        Directory.CreateDirectory(Path.Combine(game, "bin", "backup"));
+        File.WriteAllText(Path.Combine(game, "nvngx_dlss.dll"), "root");
+        File.WriteAllText(Path.Combine(game, "bin", "nvngx_dlss.dll"), "preferred");
+        File.WriteAllText(Path.Combine(game, "bin", "backup", "nvngx_dlss.dll"), "buried");
+
+        var found = RuntimeDllLocator.FindAll(game, cancellation: TestContext.Current.CancellationToken);
+
+        Assert.True(found.ContainsKey("nvngx_dlss.dll"));
+        Assert.Equal(3, found["nvngx_dlss.dll"].Count);
+        // Shallowest first.
+        Assert.Equal(Path.Combine(game, "nvngx_dlss.dll"), found["nvngx_dlss.dll"][0]);
+    }
+
+    [Fact]
+    public void FindAllReportsNothingForAMissingFolder()
+    {
+        using var temp = new TemporaryDirectory();
+
+        var found = RuntimeDllLocator.FindAll(
+            Path.Combine(temp.Root, "NotThere"),
+            cancellation: TestContext.Current.CancellationToken);
+
+        Assert.Empty(found);
+    }
+
+    [Fact]
+    public void DetectedRuntimeReportsMultipleFoundWhenAlternativesExist()
+    {
+        var runtime = new DetectedRuntime(
+            RuntimeKind.Dlss, "nvngx_dlss.dll", "nvngx_dlss.dll",
+            @"C:\game\nvngx_dlss.dll", "310.9.1", null, true,
+            AlternativePaths: [@"C:\game\bin\nvngx_dlss.dll"]);
+
+        Assert.True(runtime.MultipleFound);
+        Assert.Single(runtime.AlternativePaths!);
+    }
+
+    [Fact]
+    public void DetectedRuntimeReportsNotMultipleWhenNoAlternatives()
+    {
+        var runtime = new DetectedRuntime(
+            RuntimeKind.Dlss, "nvngx_dlss.dll", "nvngx_dlss.dll",
+            @"C:\game\nvngx_dlss.dll", "310.9.1", null, true);
+
+        Assert.False(runtime.MultipleFound);
+        Assert.Null(runtime.AlternativePaths);
+    }
     private static string ExpectedLocation(string game, string layout, string fileName) =>
         layout.Length == 0
             ? Path.Combine(game, fileName)

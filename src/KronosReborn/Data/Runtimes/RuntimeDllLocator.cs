@@ -46,16 +46,51 @@ public static class RuntimeDllLocator
     /// <param name="cancellation">Allows interrupting a scan of many games.</param>
     /// <returns>
     /// Absolute path by file name. A name absent means the game does not have that file, not that
-    /// there was an error.
+    /// there was an error. Only the shallowest (first found) path is returned per name.
     /// </returns>
     public static Dictionary<string, string> Find(
         string gamePath,
         int maxDepth = DefaultDepth,
         CancellationToken cancellation = default)
     {
+        var all = FindAll(gamePath, maxDepth, cancellation);
+        var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (name, paths) in all)
+        {
+            if (paths.Count > 0)
+            {
+                found[name] = paths[0];
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Locates every copy of every known runtime DLL inside a game folder.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="Find"/>, which keeps only the shallowest copy, this returns every location
+    /// where a DLL with a known name appears. That is what lets the scanner report that a game carries
+    /// the same runtime in two folders, which is the situation DLSS Swapper flags as
+    /// MultipleDLSSFound rather than silently resolving to one of them.
+    /// </remarks>
+    /// <param name="gamePath">The game's installation folder.</param>
+    /// <param name="maxDepth">How many levels below <paramref name="gamePath"/> to search.</param>
+    /// <param name="cancellation">Allows interrupting a scan of many games.</param>
+    /// <returns>
+    /// A list of absolute paths per file name, in breadth-first (shallowest first) order. A name
+    /// absent means the game does not have that file.
+    /// </returns>
+    public static Dictionary<string, List<string>> FindAll(
+        string gamePath,
+        int maxDepth = DefaultDepth,
+        CancellationToken cancellation = default)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(gamePath);
 
-        var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var found = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
         if (!Directory.Exists(gamePath))
         {
@@ -73,15 +108,15 @@ public static class RuntimeDllLocator
 
             foreach (var fileName in RuntimeDlls.AllFileNames)
             {
-                if (found.ContainsKey(fileName))
-                {
-                    continue;
-                }
-
                 var candidate = Path.Combine(directory, fileName);
                 if (File.Exists(candidate))
                 {
-                    found[fileName] = candidate;
+                    if (!found.TryGetValue(fileName, out var list))
+                    {
+                        list = [];
+                        found[fileName] = list;
+                    }
+                    list.Add(candidate);
                 }
             }
 
