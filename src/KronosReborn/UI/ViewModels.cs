@@ -241,7 +241,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 return;
             }
 
-            _persistence.SaveSettings(_settings.With(posterGrid: value == ViewMode.PosterGrid));
+            _settings = _settings.With(posterGrid: value == ViewMode.PosterGrid);
+            _persistence.SaveSettings(_settings);
 
             OnPropertyChanged();
             OnPropertyChanged(nameof(ViewModeText));
