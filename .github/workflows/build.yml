@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The SDK version comes from global.json rather than from a loose "10.0.x" here.
       #
@@ -23,7 +23,7 @@ jobs:
       # files and fail this build even though nothing in the commit changed. Reading the pinned
       # version keeps local runs and CI on the same tool.
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -102,7 +102,7 @@ jobs:
         working-directory: .\package
         run: cmd /c package.cmd
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: Kronos-artifacts
           path: |
