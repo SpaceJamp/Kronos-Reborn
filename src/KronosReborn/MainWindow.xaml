@@ -7,8 +7,8 @@
         xmlns:ui="clr-namespace:KronosReborn.UI"
         mc:Ignorable="d"
         Title="Kronos Reborn"
-        Height="760" Width="1240"
-        MinHeight="500" MinWidth="1120"
+        Height="760" Width="1600"
+        MinHeight="500" MinWidth="1600"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource BackgroundBrush}"
         Foreground="{DynamicResource TextPrimaryBrush}"
@@ -387,10 +387,50 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
+                        <GridViewColumn Header="FSR VK" Width="104">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding FsrVkChoice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
                         <GridViewColumn Header="XeSS" Width="104">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding XessChoice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="XeSS FG" Width="104">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding XessFgChoice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="XeSS DX11" Width="104">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding XessDx11Choice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="XeLL" Width="104">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding XellChoice.CurrentText, TargetNullValue='—'}"
                                                FontFamily="Consolas"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
