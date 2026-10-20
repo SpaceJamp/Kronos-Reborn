@@ -38,7 +38,7 @@ public static class RuntimeDlls
         {
             { RuntimeKind.Dlss,  ["nvngx_dlss.dll"] },
             { RuntimeKind.DlssG, ["nvngx_dlssg.dll"] },
-            { RuntimeKind.DlssR, ["nvngx_dlssnr.dll"] },
+            { RuntimeKind.DlssR, ["nvngx_dlssd.dll"] },
             { RuntimeKind.Fsr,   ["amd_fidelityfx_dx12.dll", "ffx_fsr2_api_dx12.dll"] },
             { RuntimeKind.Xess,  ["libxess.dll"] },
         }.AsReadOnly();

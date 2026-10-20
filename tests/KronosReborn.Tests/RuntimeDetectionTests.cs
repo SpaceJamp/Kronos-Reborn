@@ -20,7 +20,7 @@ public class RuntimeDetectionTests
     {
         Assert.Equal(["nvngx_dlss.dll"], RuntimeDlls.ByKind[RuntimeKind.Dlss]);
         Assert.Equal(["nvngx_dlssg.dll"], RuntimeDlls.ByKind[RuntimeKind.DlssG]);
-        Assert.Equal(["nvngx_dlssnr.dll"], RuntimeDlls.ByKind[RuntimeKind.DlssR]);
+        Assert.Equal(["nvngx_dlssd.dll"], RuntimeDlls.ByKind[RuntimeKind.DlssR]);
         Assert.Equal(["amd_fidelityfx_dx12.dll", "ffx_fsr2_api_dx12.dll"], RuntimeDlls.ByKind[RuntimeKind.Fsr]);
         Assert.Equal(["libxess.dll"], RuntimeDlls.ByKind[RuntimeKind.Xess]);
     }
@@ -30,7 +30,7 @@ public class RuntimeDetectionTests
     {
         Assert.Equal(RuntimeKind.Dlss, RuntimeDlls.ByFileName["nvngx_dlss.dll"]);
         Assert.Equal(RuntimeKind.DlssG, RuntimeDlls.ByFileName["nvngx_dlssg.dll"]);
-        Assert.Equal(RuntimeKind.DlssR, RuntimeDlls.ByFileName["nvngx_dlssnr.dll"]);
+        Assert.Equal(RuntimeKind.DlssR, RuntimeDlls.ByFileName["nvngx_dlssd.dll"]);
         Assert.Equal(RuntimeKind.Fsr, RuntimeDlls.ByFileName["amd_fidelityfx_dx12.dll"]);
         Assert.Equal(RuntimeKind.Fsr, RuntimeDlls.ByFileName["ffx_fsr2_api_dx12.dll"]);
         Assert.Equal(RuntimeKind.Xess, RuntimeDlls.ByFileName["libxess.dll"]);
@@ -50,7 +50,7 @@ public class RuntimeDetectionTests
         Assert.Equal(6, all.Count);
         Assert.Contains("nvngx_dlss.dll", all);
         Assert.Contains("nvngx_dlssg.dll", all);
-        Assert.Contains("nvngx_dlssnr.dll", all);
+        Assert.Contains("nvngx_dlssd.dll", all);
         Assert.Contains("amd_fidelityfx_dx12.dll", all);
         Assert.Contains("ffx_fsr2_api_dx12.dll", all);
         Assert.Contains("libxess.dll", all);

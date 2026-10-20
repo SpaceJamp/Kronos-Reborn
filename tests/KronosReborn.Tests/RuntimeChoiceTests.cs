@@ -229,7 +229,7 @@ public class RuntimeChoiceTests
     {
         var groups = Groups(DlssR: true);
 
-        // The file names are near-identical (nvngx_dlss.dll, nvngx_dlssg.dll, nvngx_dlssr.dll) and
+        // The file names are near-identical (nvngx_dlss.dll, nvngx_dlssg.dll, nvngx_dlssd.dll) and
         // would be useless as labels; the user needs "DLSS" and "DLSS Frame Gen".
         var labels = groups.Select(g => g.Label).ToList();
 
