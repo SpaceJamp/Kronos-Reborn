@@ -257,6 +257,74 @@
                 <Button Content="⚙ Settings"
                         Style="{StaticResource ToolbarButtonStyle}"
                         Command="{Binding OpenSettingsCommand}" />
+
+                <!-- Download DLSS -->
+                <Button Content="⬇ DLSS"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding ToggleDownloadCommand}"
+                        ToolTip="Download DLSS runtimes from NVIDIA CDN" />
+            </StackPanel>
+        </Border>
+
+        <!-- Download DLSS panel -->
+        <Border Grid.Row="1"
+                Width="420"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Margin="0,16,16,16"
+                Padding="16"
+                Visibility="{Binding IsDownloadOpen, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Download DLSS" Style="{StaticResource TitleStyle}" Margin="0,0,0,12" />
+
+                <Button Content="Scan NVIDIA CDN"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding DownloadViewModel.ScanCommand}"
+                        Margin="0,0,0,8" />
+
+                <ItemsControl ItemsSource="{Binding DownloadViewModel.Versions}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="{Binding AssetType}"
+                                           FontWeight="SemiBold"
+                                           FontSize="{StaticResource FontSizeSmall}"
+                                           Width="40" />
+                                <TextBlock Text="{Binding VersionPacked}"
+                                           FontFamily="Consolas"
+                                           FontSize="{StaticResource FontSizeSmall}"
+                                           Width="60" />
+                                <Button Content="Download"
+                                        Style="{StaticResource ToolbarButtonStyle}"
+                                        Command="{Binding DataContext.DownloadViewModel.DownloadCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding}"
+                                        Margin="8,0,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="{Binding DownloadViewModel.StatusText}"
+                           Style="{StaticResource SubtitleStyle}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,8,0,0"
+                           TextWrapping="Wrap" />
+
+                <ProgressBar Value="{Binding DownloadViewModel.Progress}"
+                             Maximum="100"
+                             Height="6"
+                             Margin="0,4,0,0"
+                             Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibility}}" />
+
+                <Button Content="Close"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding ToggleDownloadCommand}"
+                        Margin="0,12,0,0"
+                        HorizontalAlignment="Right" />
             </StackPanel>
         </Border>
 

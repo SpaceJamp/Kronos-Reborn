@@ -1,4 +1,7 @@
+using System.IO;
 using System.Windows;
+using KronosReborn.Data.Downloads;
+using KronosReborn.Data.Logging;
 using KronosReborn.Data.Persistence;
 using KronosReborn.Data.Runtimes;
 using KronosReborn.UI;
@@ -31,6 +34,16 @@ public partial class MainWindow : Window
 
         var paths = DataPaths.ForCurrentUser();
         paths.EnsureCreated();
+
+        // Initialize logging: file sink for persistent logs, memory sink for UI diagnostics.
+        var logFilePath = Path.Combine(paths.Root, "logs", "kronosreborn.log");
+        Directory.CreateDirectory(Path.GetDirectoryName(logFilePath)!);
+        Log.Instance.AddSink(new FileLogSink(logFilePath));
+        Log.Instance.AddSink(new MemoryLogSink(5000));
+
+        Log.Instance.Information("Kronos Reborn starting", category: "App.Startup");
+        Log.Instance.Information($"Data directory: {paths.Root}", category: "App.Startup");
+        Log.Instance.Information($"Build: {BuildInfo.InformationalVersion}", category: "App.Startup");
 
         _persistence = new PersistenceService(paths);
         var loadResult = _persistence.Load();

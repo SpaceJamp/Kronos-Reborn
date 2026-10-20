@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using KronosReborn.Data.Libraries;
+using KronosReborn.Data.Logging;
 using KronosReborn.Data.Persistence;
 using KronosReborn.Data.Runtimes;
 
@@ -706,17 +707,42 @@ public sealed class SwapExecutor
                 plan.IsDowngrade,
                 plan.IsUntrusted);
 
+            Log.Instance.Information(
+                $"Swapped {plan.RuntimeKind} to {plan.TargetVersion} for {plan.GameName}",
+                category: "Swap",
+                ("GameId", plan.GameId),
+                ("GameName", plan.GameName),
+                ("RuntimeKind", plan.RuntimeKind.ToString()),
+                ("TargetVersion", plan.TargetVersion),
+                ("IsDowngrade", plan.IsDowngrade),
+                ("IsUntrusted", plan.IsUntrusted));
+
             return SwapResult.Success(
                 plan.GameId, plan.GameName, backups, historyEntry.CreatedFiles, historyEntry);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
             RollBack(written, backups);
+            Log.Instance.Error(
+                $"Swap failed for {plan.GameName} ({plan.RuntimeKind}): {Describe(ex)}",
+                category: "Swap",
+                ("GameId", plan.GameId),
+                ("GameName", plan.GameName),
+                ("RuntimeKind", plan.RuntimeKind.ToString()),
+                ("TargetVersion", plan.TargetVersion),
+                ("Error", ex.Message));
             return SwapResult.Failed(plan.GameId, plan.GameName, Describe(ex));
         }
         catch (Exception ex)
         {
             RollBack(written, backups);
+            Log.Instance.Error(
+                $"Swap failed unexpectedly for {plan.GameName} ({plan.RuntimeKind}): {Describe(ex)}",
+                category: "Swap",
+                ("GameId", plan.GameId),
+                ("GameName", plan.GameName),
+                ("RuntimeKind", plan.RuntimeKind.ToString()),
+                ("Error", ex.Message));
             return SwapResult.Failed(plan.GameId, plan.GameName, $"Unexpected error: {Describe(ex)}");
         }
     }
@@ -974,6 +1000,15 @@ public sealed class UndoEngine
         // R26: record the reverse so this undo can itself be undone.
         var undoEntry = entry.AsReverted(redoState, removedFiles);
         _persistence.AddHistoryEntry(gameId, undoEntry);
+
+        Log.Instance.Information(
+            $"Undid {entry.RuntimeKind} swap for {entry.GameName} (was {entry.NewVersion}, now {entry.PreviousVersion})",
+            category: "Undo",
+            ("GameId", entry.GameId),
+            ("GameName", entry.GameName),
+            ("RuntimeKind", entry.RuntimeKind.ToString()),
+            ("PreviousVersion", entry.PreviousVersion),
+            ("NewVersion", entry.NewVersion));
 
         return SwapResult.Success(gameId, entry.GameName, redoState, removedFiles, undoEntry);
     }
