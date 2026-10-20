@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using KronosReborn.Data.Logging;
 using KronosReborn.Data.Persistence;
 
 namespace KronosReborn.Data.Runtimes;
@@ -239,11 +240,25 @@ public sealed class RuntimeImporter
                     $"{RuntimeKindNames.Display(kind)} {version} could not be added to the collection.");
             }
 
+            Log.Instance.Information(
+                $"Imported {RuntimeKindNames.Display(kind)} {version} from {Path.GetFileName(filePath)}",
+                category: "Import",
+                ("FilePath", filePath),
+                ("Kind", kind.ToString()),
+                ("Version", version),
+                ("Trust", trust.ToString()));
+
             return new RuntimeImportResult(true, entry, null);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // R57: say what was being attempted and why it failed, not just that it failed.
+            Log.Instance.Error(
+                $"Failed to import {preview.FileName}: {ex.Message}",
+                category: "Import",
+                ("FilePath", filePath),
+                ("Kind", kind.ToString()),
+                ("Version", version),
+                ("Error", ex.Message));
             return RuntimeImportResult.Failed(
                 $"{RuntimeKindNames.Display(kind)} {version} could not be added: " +
                 $"{ex.GetType().Name}: {ex.Message}. " +

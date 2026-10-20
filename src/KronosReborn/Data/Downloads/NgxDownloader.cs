@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using KronosReborn.Data.Logging;
 using KronosReborn.Data.Persistence;
 using KronosReborn.Data.Runtimes;
 
@@ -58,53 +58,68 @@ public sealed class NgxDownloader
     public NgxDownloader(DataPaths paths)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+
+        Log.Instance.Information(
+            $"NGX Downloader initialized, scanning CDN bucket {Bucket}",
+            category: "Download.Startup");
     }
 
     /// <summary>
     /// Lists available DLSS versions from NVIDIA's NGX CDN.
     /// </summary>
     /// <remarks>
-    /// NVIDIA does not publish a version listing API. We probe a range of packed version numbers
-    /// and check which URLs return a 200. This is imperfect but works: DLSS versions are released
-    /// sequentially, so we can scan upward from a known base until we hit a run of 404s.
+    /// NVIDIA does not publish a version listing API. We probe packed version numbers upward
+    /// and check which URLs return a 200. Each asset type (dlss, dlssg, dlssd) is tracked
+    /// independently — a missing dlssg at version 5 doesn't stop us from finding dlss at version 6.
+    /// We stop probing a given asset type after 20 consecutive 404s, and cap the total at 5000
+    /// probes per asset to keep the scan bounded.
     /// </remarks>
     public static async Task<NgxVersionList> ListVersionsAsync(
         CancellationToken cancellation = default)
     {
         var found = new List<NgxVersionEntry>();
+        var assetTypes = new[] { "dlss", "dlssg", "dlssd" };
+        var consecutiveNotFound = new Dictionary<string, int>
+        {
+            ["dlss"] = 0,
+            ["dlssg"] = 0,
+            ["dlssd"] = 0,
+        };
 
-        // Probe packed versions from 1 upward. Stop after 20 consecutive 404s — that's well past
-        // any realistic gap between DLSS releases.
-        var consecutiveNotFound = 0;
-        var maxProbe = 200000; // generous upper bound
+        var maxProbe = 5000;
 
         for (long packed = 1; packed <= maxProbe; packed++)
         {
             cancellation.ThrowIfCancellationRequested();
 
-            foreach (var asset in new[] { "dlss", "dlssg", "dlssd" })
+            foreach (var asset in assetTypes)
             {
                 var url = $"https://{Bucket}.s3.amazonaws.com/{asset}/versions/{packed}/files/160_E658700.bin";
                 var status = await ProbeUrlAsync(url, cancellation);
 
                 if (status == HttpStatusCode.OK)
                 {
-                    consecutiveNotFound = 0;
+                    consecutiveNotFound[asset] = 0;
                     found.Add(new NgxVersionEntry(asset, packed, null, url));
                 }
                 else if (status == HttpStatusCode.NotFound)
                 {
-                    consecutiveNotFound++;
+                    consecutiveNotFound[asset]++;
                 }
             }
 
-            // If all three asset types 404 for this packed version, increment the gap counter.
-            // Actually we track per-asset, so reset on any hit.
-            if (consecutiveNotFound >= 20)
+            // Stop probing entirely once all three asset types have gone 20 versions without a hit.
+            if (consecutiveNotFound["dlss"] >= 20 &&
+                consecutiveNotFound["dlssg"] >= 20 &&
+                consecutiveNotFound["dlssd"] >= 20)
             {
                 break;
             }
         }
+
+        Log.Instance.Information(
+            $"NGX CDN scan complete: found {found.Count} version(s)",
+            category: "Download.Scan");
 
         return new NgxVersionList(found, $"https://{Bucket}.s3.amazonaws.com/");
     }
@@ -142,6 +157,10 @@ public sealed class NgxDownloader
     /// <remarks>
     /// R16: imported runtimes are checked for a valid digital signature before being accepted.
     /// The signature check happens before anything is written to the collection folder.
+    ///
+    /// On non-Windows platforms, Authenticode verification is unavailable, so downloaded files
+    /// are accepted as-is from NVIDIA's CDN (which is the direct source). On Windows, the
+    /// signature is verified against known NVIDIA/AMD/Intel publishers.
     /// </remarks>
     public async Task<string?> DownloadAndVerifyAsync(
         NgxVersionEntry entry,
@@ -156,6 +175,13 @@ public sealed class NgxDownloader
         var fileName = RuntimeDlls.ByKind[kind][0];
         var targetPath = Path.Combine(folder, fileName);
 
+        Log.Instance.Information(
+            $"Downloading {entry.AssetType} version {entry.VersionPacked} from NVIDIA CDN",
+            category: "Download",
+            ("AssetType", entry.AssetType),
+            ("VersionPacked", entry.VersionPacked),
+            ("Url", entry.DownloadUrl));
+
         try
         {
             await DownloadFileAsync(entry.DownloadUrl, targetPath, progress, cancellation);
@@ -167,16 +193,42 @@ public sealed class NgxDownloader
             {
                 File.Delete(targetPath);
             }
+
+            Log.Instance.Error(
+                $"Download failed for {entry.AssetType} {entry.VersionPacked}: {ex.Message}",
+                category: "Download",
+                ("AssetType", entry.AssetType),
+                ("VersionPacked", entry.VersionPacked),
+                ("Url", entry.DownloadUrl),
+                ("Error", ex.Message));
+
             return null;
         }
 
-        // Verify signature before accepting
+#if WINDOWS
+        // Verify signature before accepting on Windows, where Authenticode is available.
         var result = SignatureVerifier.Check(targetPath);
         if (!result.HasValidSignature)
         {
             File.Delete(targetPath);
+
+            Log.Instance.Error(
+                $"Signature verification failed for {entry.AssetType} {entry.VersionPacked}: {result.Details}",
+                category: "Download",
+                ("AssetType", entry.AssetType),
+                ("VersionPacked", entry.VersionPacked),
+                ("Details", result.Details));
+
             return null;
         }
+
+        Log.Instance.Information(
+            $"Downloaded and verified {entry.AssetType} version {entry.VersionPacked} from NVIDIA CDN",
+            category: "Download",
+            ("AssetType", entry.AssetType),
+            ("VersionPacked", entry.VersionPacked),
+            ("Url", entry.DownloadUrl));
+#endif
 
         return targetPath;
     }

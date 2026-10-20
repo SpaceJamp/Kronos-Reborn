@@ -12,6 +12,7 @@ using KronosReborn;
 using KronosReborn.Data;
 using KronosReborn.Data.Actions;
 using KronosReborn.Data.Libraries;
+using KronosReborn.Data.Downloads;
 using KronosReborn.Data.Persistence;
 using KronosReborn.Data.Runtimes;
 using KronosReborn.UI;
@@ -43,8 +44,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private GameRow? _selectedGame;
     private bool _isScanning;
     private bool _isWorking;
+    private bool _isDownloadOpen;
     private string _statusText = "Ready";
     private int _selectedCount;
+
+    private readonly NgxDownloader _ngxDownloader;
+    private readonly NgxDownloadViewModel _downloadViewModel;
 
     public MainViewModel(
         RuntimeCatalog catalog,
@@ -63,12 +68,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         _executor = new SwapExecutor(persistence, catalog, paths);
         _undo = new UndoEngine(persistence, paths);
+        _ngxDownloader = new NgxDownloader(paths);
+        _downloadViewModel = new NgxDownloadViewModel(_ngxDownloader, catalog);
+        _downloadViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(NgxDownloadViewModel.IsDownloading))
+                OnPropertyChanged(nameof(IsDownloading));
+        };
 
         // Initialize group mode from settings
         _groupMode = settings.GroupByLibrary ? GroupMode.ByLibrary : GroupMode.Flat;
 
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
         ToggleGroupCommand = new RelayCommand(_ => GroupMode = GroupMode == GroupMode.Flat ? GroupMode.ByLibrary : GroupMode.Flat);
+        ToggleDownloadCommand = new RelayCommand(_ => IsDownloadOpen = !IsDownloadOpen);
 
         ToggleAreaCommand = new RelayCommand(_ => Area = Area == MainArea.Games ? MainArea.Library : MainArea.Games);
         ToggleThemeCommand = new RelayCommand(_ => _themeManager.ToggleTheme());
@@ -189,6 +202,27 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// not.
     /// </remarks>
     public bool HasDetailPanel => SelectedGame is not null;
+
+    /// <summary>Whether the download panel is open.</summary>
+    public bool IsDownloadOpen
+    {
+        get => _isDownloadOpen;
+        set
+        {
+            if (_isDownloadOpen == value) return;
+            _isDownloadOpen = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Whether a download is in progress.</summary>
+    public bool IsDownloading
+    {
+        get => _downloadViewModel.IsDownloading;
+    }
+
+    /// <summary>The view model for the DLSS download panel.</summary>
+    public NgxDownloadViewModel DownloadViewModel => _downloadViewModel;
 
     /// <summary>
     /// Whether the detail panel is actually on screen.
@@ -519,6 +553,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public ICommand RefreshCommand { get; }
     public ICommand ToggleGroupCommand { get; }
+    public ICommand ToggleDownloadCommand { get; }
 
     public ICommand ToggleThemeCommand { get; }
     public ICommand OpenSettingsCommand { get; }
@@ -1153,6 +1188,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _themeManager.ThemeChanged -= OnThemeChanged;
         _games.CollectionChanged -= OnGamesCollectionChanged;
         _operationCancellation.Dispose();
+        _downloadViewModel.Dispose();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
