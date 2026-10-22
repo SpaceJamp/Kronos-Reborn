@@ -42,7 +42,7 @@
     to resolve to something other than what was asked for is exactly how a build stops being
     reproducible.
     -->
-    <PackageReference Include="xunit.v3" Version="4.0.1" />
+    <PackageReference Include="xunit.v3" Version="4.0.2" />
   </ItemGroup>
 
   <ItemGroup>
