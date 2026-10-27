@@ -891,6 +891,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _catalog.AddFromSnapshot(snapshots[i], games[i].LibraryName);
         }
 
+        // Only after a scan that ran to the end: what it found decides what is stale.
+        _catalog.PruneDiscovered();
+
         var rows = new List<GameRow>(games.Count);
         for (var i = 0; i < games.Count; i++)
         {
