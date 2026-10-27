@@ -17,4 +17,11 @@ public interface IFilePicker
     /// </summary>
     /// <returns>The chosen path, or null if the user cancelled.</returns>
     string? AskForRuntimeFile();
+
+    /// <summary>
+    /// Shows a save dialog for a diagnostics bundle.
+    /// </summary>
+    /// <param name="suggestedName">The file name offered by default.</param>
+    /// <returns>The chosen path, or null if the user cancelled.</returns>
+    string? AskWhereToSaveDiagnostics(string suggestedName);
 }

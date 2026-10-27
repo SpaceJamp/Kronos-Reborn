@@ -7,22 +7,22 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows.Input;
-using Microsoft.Win32;
 using KronosReborn;
 using KronosReborn.Data;
 using KronosReborn.Data.Actions;
-using KronosReborn.Data.Libraries;
 using KronosReborn.Data.Downloads;
+using KronosReborn.Data.Libraries;
+using KronosReborn.Data.Logging;
 using KronosReborn.Data.Persistence;
 using KronosReborn.Data.Runtimes;
 using KronosReborn.UI;
+using Microsoft.Win32;
 
 namespace KronosReborn.UI;
 
 public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly SteamLibraryScanner _scanner = new();
-    private readonly GOGLibraryScanner _gogScanner = new();
     private readonly GameRuntimeScanner _runtimeScanner = new();
     private readonly RuntimeCatalog _catalog;
     private readonly PersistenceService _persistence;
@@ -50,6 +50,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private readonly NgxDownloader _ngxDownloader;
     private readonly NgxDownloadViewModel _downloadViewModel;
+    private readonly DiagnosticsViewModel _diagnostics;
+    private bool _isDiagnosticsOpen;
 
     public MainViewModel(
         RuntimeCatalog catalog,
@@ -57,7 +59,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Settings settings,
         ThemeManager themeManager,
         DataPaths paths,
-        IFilePicker? filePicker = null)
+        IFilePicker? filePicker = null,
+        MemoryLogSink? recentLog = null,
+        IReadOnlyList<ScanProblem>? startupProblems = null)
     {
         _catalog = catalog;
         _persistence = persistence;
@@ -70,6 +74,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _undo = new UndoEngine(persistence, paths);
         _ngxDownloader = new NgxDownloader(paths);
         _downloadViewModel = new NgxDownloadViewModel(_ngxDownloader, catalog);
+
+        // Problems from loading settings and history were reported by Load() and then dropped; the
+        // diagnostics panel is where they are shown, alongside the latest scan's.
+        var loadProblems = startupProblems ?? [];
+        _diagnostics = new DiagnosticsViewModel(
+            paths, catalog, persistence, () => [.. loadProblems, .. Problems], recentLog, filePicker);
         _downloadViewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(NgxDownloadViewModel.IsDownloading))
@@ -82,6 +92,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
         ToggleGroupCommand = new RelayCommand(_ => GroupMode = GroupMode == GroupMode.Flat ? GroupMode.ByLibrary : GroupMode.Flat);
         ToggleDownloadCommand = new RelayCommand(_ => IsDownloadOpen = !IsDownloadOpen);
+        ToggleDiagnosticsCommand = new RelayCommand(_ => IsDiagnosticsOpen = !IsDiagnosticsOpen);
 
         ToggleAreaCommand = new RelayCommand(_ => Area = Area == MainArea.Games ? MainArea.Library : MainArea.Games);
         ToggleThemeCommand = new RelayCommand(_ => _themeManager.ToggleTheme());
@@ -89,9 +100,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ToggleSettingsCommand = new RelayCommand(_ => IsSettingsOpen = !IsSettingsOpen);
         PreviewSwapCommand = new RelayCommand(_ => PreviewSwap(), _ => CanSwap);
         ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsWorking);
-        UndoCommand = new RelayCommand(_ => UndoSelected(), _ => SelectedGame is not null && !IsWorking);
+        UndoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: false), _ => SelectedGame is not null && !IsWorking);
+        RedoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: true), _ => SelectedGame is not null && !IsWorking);
         CancelCommand = new RelayCommand(
             _ => _operationCancellation.Cancel(), _ => IsBusy);
+        CancelDownloadCommand = new RelayCommand(_ => _downloadViewModel.Cancel());
 
         // Choosing a file needs the window, which the view model does not have. The picker is supplied to
         // it, so the command can stay a command and every command the model exposes is one the window
@@ -223,6 +236,26 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>The view model for the DLSS download panel.</summary>
     public NgxDownloadViewModel DownloadViewModel => _downloadViewModel;
+
+    /// <summary>The view model for the diagnostics panel.</summary>
+    public DiagnosticsViewModel Diagnostics => _diagnostics;
+
+    /// <summary>Whether the diagnostics panel is open. Opening it runs the checks.</summary>
+    public bool IsDiagnosticsOpen
+    {
+        get => _isDiagnosticsOpen;
+        set
+        {
+            if (_isDiagnosticsOpen == value) return;
+            _isDiagnosticsOpen = value;
+            OnPropertyChanged();
+
+            if (value)
+            {
+                _ = _diagnostics.RunAsync();
+            }
+        }
+    }
 
     /// <summary>
     /// Whether the detail panel is actually on screen.
@@ -389,8 +422,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// </remarks>
     private static IComparer<string> NewestFirst =>
         Comparer<string>.Create((a, b) =>
-            KronosReborn.Data.Actions.VersionComparer.IsOlder(a, b) ? -1
-            : KronosReborn.Data.Actions.VersionComparer.IsOlder(b, a) ? 1
+            VersionNumber.IsOlder(a, b) ? -1
+            : VersionNumber.IsOlder(b, a) ? 1
             : 0);
 
     /// <summary>Names of the games that already run a given catalog entry.</summary>
@@ -497,6 +530,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ((RelayCommand)PreviewSwapCommand).RaiseCanExecuteChanged();
         ((RelayCommand)ApplySwapCommand).RaiseCanExecuteChanged();
         ((RelayCommand)UndoCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)RedoCommand).RaiseCanExecuteChanged();
         ((RelayCommand)BeginImportCommand).RaiseCanExecuteChanged();
         ((RelayCommand)ConfirmImportCommand).RaiseCanExecuteChanged();
         ((RelayCommand)DiscardImportCommand).RaiseCanExecuteChanged();
@@ -561,7 +595,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand PreviewSwapCommand { get; }
     public ICommand ApplySwapCommand { get; }
     public ICommand UndoCommand { get; }
+    public ICommand RedoCommand { get; }
     public ICommand CancelCommand { get; }
+    public ICommand CancelDownloadCommand { get; }
+    public ICommand ToggleDiagnosticsCommand { get; }
     public ICommand BeginImportCommand { get; }
     public ICommand ConfirmImportCommand { get; }
     public ICommand DiscardImportCommand { get; }
@@ -754,12 +791,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             Games = new ObservableCollection<GameRow>(outcome.Rows);
             Problems = outcome.Problems;
 
-            // R48: versions found inside games are added to the collection without being asked for.
-            foreach (var snapshot in outcome.Snapshots)
-            {
-                _catalog.AddFromSnapshot(snapshot, "Steam");
-            }
-
             RebuildAllChoices();
 
             var missing = outcome.Rows.Count(r => r.IsMissing);
@@ -839,18 +870,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         games.AddRange(combinedSteam.Games);
         problems.AddRange(combinedSteam.Problems);
 
-        // --- GOG Galaxy ------------------------------------------------------
-        var gogLocator = new GOGInstallLocator(new WindowsGOGRegistry());
-        var gogDiscovery = gogLocator.Discover();
+        // --- GOG -------------------------------------------------------------
+        token.ThrowIfCancellationRequested();
+        var gogResult = GOGLibraryScanner.Scan(new WindowsGOGRegistry());
+        games.AddRange(gogResult.Games);
+        problems.AddRange(gogResult.Problems);
 
-        foreach (var root in gogDiscovery.InstallRoots)
-        {
-            token.ThrowIfCancellationRequested();
-
-            var gogResult = _gogScanner.Scan(root, token);
-            games.AddRange(gogResult.Games);
-            problems.AddRange(gogResult.Problems);
-        }
+        // A game both stores point at is one game folder, so it is listed once.
+        games = [.. GameRecord.Deduplicate(games)];
 #else
         // On non-Windows platforms, library discovery is not available.
         // Registry access and Windows-specific paths don't exist.
@@ -866,6 +893,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 #endif
 
         var snapshots = _runtimeScanner.ScanMany(games, token).ToList();
+
+        // R48: versions found inside games are added to the collection without being asked for. Done
+        // here rather than on the UI thread, since each new version has its signature checked.
+        for (var i = 0; i < games.Count; i++)
+        {
+            token.ThrowIfCancellationRequested();
+            _catalog.AddFromSnapshot(snapshots[i], games[i].LibraryName);
+        }
 
         var rows = new List<GameRow>(games.Count);
         for (var i = 0; i < games.Count; i++)
@@ -1007,7 +1042,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
-            var batch = _executor.Execute(_pendingPlans, cancellation.Token);
+            // Off the UI thread: copying and hashing every DLL froze the window, and Cancel could not
+            // be clicked while it ran.
+            var plans = _pendingPlans;
+            var batch = await System.Threading.Tasks.Task.Run(
+                () => _executor.Execute(plans, cancellation.Token));
 
             StatusText = Describe(batch);
 
@@ -1017,6 +1056,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             // Re-read what the games now run, so the list reflects what was just done.
             IsWorking = false;
             await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            // Called fire-and-forget from the command, so anything not caught here would vanish.
+            StatusText = $"Apply failed: {ex.Message}";
+            Log.Instance.Error(ex, "Apply failed", category: "Swap");
         }
         finally
         {
@@ -1062,40 +1107,64 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             : summary;
     }
 
-    /// <summary>Undoes the most recent swap on the selected game.</summary>
-    private void UndoSelected()
+    /// <summary>Undoes the most recent swap on the selected game, or redoes the most recent undo.</summary>
+    private async System.Threading.Tasks.Task RevertSelectedAsync(bool redo)
     {
-        if (SelectedGame is null)
+        if (SelectedGame is not { } game)
         {
             return;
         }
 
         IsWorking = true;
+        var succeeded = false;
 
         try
         {
-            var history = _persistence.GetHistory(SelectedGame.GameId);
+            var history = _persistence.GetHistory(game.GameId);
 
-            // Which kinds this game has actually changed, most recent first.
-            foreach (var kind in history.Entries.Select(e => e.RuntimeKind).Distinct())
+            // The kind whose next step is the most recent one, across every kind this game changed.
+            var next = history.Entries
+                .Select(e => e.RuntimeKind)
+                .Distinct()
+                .Select(kind => (Kind: kind, Entry: redo ? history.NextToRedo(kind) : history.NextToUndo(kind)))
+                .Where(step => step.Entry is not null)
+                .OrderBy(step => history.Entries.IndexOf(step.Entry!))
+                .FirstOrDefault();
+
+            if (next.Entry is null)
             {
-                var result = _undo.Undo(SelectedGame.GameId, kind);
-                if (result.Succeeded)
-                {
-                    StatusText = $"Undid {RuntimeKindNames.Display(kind)} in {SelectedGame.GameName}.";
-                    break;
-                }
-
-                StatusText = result.ErrorMessage ?? "Undo did not report a reason.";
-                break;
+                StatusText = redo ? "Nothing to redo." : "Nothing to undo.";
+                return;
             }
+
+            var result = await System.Threading.Tasks.Task.Run(() => redo
+                ? _undo.Redo(game.GameId, next.Kind)
+                : _undo.Undo(game.GameId, next.Kind));
+
+            succeeded = result.Succeeded;
+            StatusText = result.Succeeded
+                ? $"{(redo ? "Redid" : "Undid")} {RuntimeKindNames.Display(next.Kind)} in {game.GameName}."
+                : result.ErrorMessage ?? $"{(redo ? "Redo" : "Undo")} did not report a reason.";
 
             ClearPreview();
             RebuildAllChoices();
         }
+        catch (Exception ex)
+        {
+            StatusText = $"{(redo ? "Redo" : "Undo")} failed: {ex.Message}";
+            Log.Instance.Error(ex, "Undo or redo failed", category: "Undo");
+        }
         finally
         {
             IsWorking = false;
+        }
+
+        if (succeeded)
+        {
+            // The rows still show what the game ran before; plans made from them would be wrong.
+            var status = StatusText;
+            await RefreshAsync();
+            StatusText = status;
         }
     }
 
@@ -1162,7 +1231,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         get => _settings.MaxHistoryPerGame;
         set
         {
-            if (_settings.MaxHistoryPerGame == value) return;
+            // Below one, nothing could be recorded and no swap could be undone.
+            value = Math.Max(1, value);
+            if (_settings.MaxHistoryPerGame == value)
+            {
+                OnPropertyChanged(nameof(MaxHistoryPerGame));
+                return;
+            }
             _settings = _settings.With(maxHistoryPerGame: value);
             _persistence.SaveSettings(_settings);
             OnPropertyChanged(nameof(MaxHistoryPerGame));

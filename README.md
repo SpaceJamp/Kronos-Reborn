@@ -9,7 +9,7 @@
 >
 > Steam discovery, runtime version detection, the runtime collection, persistence, swapping and
 > undoing all work and are covered by tests. Settings has no interface, only launch and undo use it
-> so far, and only Steam is supported. Builds are unsigned and no binaries are published yet.
+> so far, and only Steam and GOG are supported. Builds are unsigned and no binaries are published yet.
 
 ## What this is
 
@@ -45,7 +45,7 @@ Windows on ARM, while FSR and XeSS would.
 | Version | `0.1.0` |
 | Framework | .NET 10, WPF |
 | Architectures | x64 |
-| Libraries | Steam only |
+| Libraries | Steam, GOG |
 | Tests | 177, including architecture guards that fail on whole classes of mistake |
 
 ### What works
@@ -66,7 +66,8 @@ Windows on ARM, while FSR and XeSS would.
 | Undoing a swap, repeatably | Working |
 | Settings interface | Not built — values load and persist, but nothing edits them |
 | Undo through the interface | Launches and undo the newest change for the selected game |
-| GOG, Epic, Battle.net and the other libraries | Not started |
+| GOG | Working, read from the install records GOG writes for every game |
+| Epic, Battle.net and the other libraries | Not started |
 | Batch preview and apply from the interface | Working — set versions in any number of rows, then preview and apply |
 
 ### Where runtime versions come from
@@ -83,8 +84,8 @@ user-accepted rather than trusted.
 
 Two details worth knowing:
 
-- **A runtime is imported whole.** FSR is two DLLs that only work as a pair, so choosing one takes
-  every file of that kind beside it, and refuses the import with their names if any are missing.
+- **A runtime is imported whole.** Choosing a file takes every file of that kind beside it, refuses
+  the import with their names if any are missing, and checks the signature of each one.
 - **What is imported is copied, not referenced.** The collection keeps its own copy under the data
   directory, so deleting or moving the folder you downloaded to does not empty it.
 
@@ -224,9 +225,8 @@ arbitrary until you know why:
   artwork it shows for every app it knows about, so the poster is on the machine. Nothing is fetched,
   so there is no cache to maintain, no request that can fail, and nothing that breaks offline.
   Artwork was deferred in the specification until this was established.
-- **A runtime is imported whole, and owned by the collection.** FSR is two DLLs that only work as a
-  pair, so choosing one takes every file of that kind beside it and refuses the import, naming what is
-  missing, if any are absent. What is taken is copied into the collection's own folder under the data
+- **A runtime is imported whole, and owned by the collection.** Choosing a file takes every file of
+  that kind beside it and refuses the import, naming what is missing, if any are absent. What is taken is copied into the collection's own folder under the data
   directory, so deleting or moving the folder it was downloaded to does not empty the collection.
 - **Three ways to look at things.** The games as a list with versions side by side; the games as a
   poster grid, each card carrying the versions it runs, for seeing a whole library at a glance; and
@@ -248,9 +248,12 @@ arbitrary until you know why:
 - **Two spellings of one folder are one folder.** A default Steam install is recorded in the registry
   as `c:/program files (x86)/steam` and guessed as `C:\Program Files (x86)\Steam`. Comparing those as
   different made the library be scanned three times and every game appear three times over.
-- **A runtime kind is a unit that a swap handles whole.** DLSS is one DLL; FSR is two that only work
-  as a matched pair. Writing one of them leaves the game with a runtime that never existed in that
-  shape, so a swap of any kind is all of its files or none.
+- **A runtime kind is a unit that a swap handles whole.** Each kind is one DLL today: FSR 3.1 is
+  `amd_fidelityfx_dx12.dll`, and the FidelityFX SDK 2 upscaler and frame generation are their own
+  kinds. A swap replaces every copy the game carries, so it runs the chosen version whichever copy it
+  loads, and a swap of any kind is all of its files or none.
+- **DLLs are found wherever the game keeps them.** The search goes ten folders deep, because Unreal
+  Engine's DLSS plugin sits eight levels down, and follows linked folders once each.
 - **A history entry records the state the program left behind, not just where the original went.**
   Undoing has to know whether the game still holds what was written into it, which means storing a
   hash of the file after the swap. Comparing the live file against the backup instead cannot work:

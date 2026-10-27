@@ -44,7 +44,8 @@ public sealed record SwapPlan(
     IReadOnlyList<string> SourceFiles,
     IReadOnlyList<string> TargetFiles,
     IReadOnlyList<RuntimeKind>? UnmatchedParts = null,
-    GameRuntimeSnapshot? Snapshot = null)
+    GameRuntimeSnapshot? Snapshot = null,
+    string? TargetEntryId = null)
 {
     /// <summary>
     /// Parts of the same runtime this game carries that would be left on a different version.
@@ -252,7 +253,7 @@ public static class SwapPlanner
             var isDowngrade = false;
             if (currentVersion != null && targetEntry.Version != null)
             {
-                isDowngrade = VersionComparer.IsOlder(targetEntry.Version, currentVersion);
+                isDowngrade = VersionNumber.IsOlder(targetEntry.Version, currentVersion);
             }
 
             // R33: warn before swapping in a runtime from an untrusted source. This covers a file the user
@@ -281,17 +282,13 @@ public static class SwapPlanner
             {
                 SourceFiles = targets.Where(File.Exists).ToArray(),
                 Snapshot = snapshot,
+                TargetEntryId = targetEntry.Id,
             });
         }
 
         return plans;
     }
 
-    /// <summary>
-    /// The catalog files to copy, one per DLL the runtime kind consists of.
-    /// </summary>
-    /// <returns>Null when the catalog does not hold every file the kind needs.</returns>
-    /// <summary>
     /// <summary>
     /// Notes on a plan which parts of the same runtime would be left on a different version.
     /// </summary>
@@ -320,7 +317,6 @@ public static class SwapPlanner
         ArgumentNullException.ThrowIfNull(plans);
         ArgumentNullException.ThrowIfNull(games);
 
-        var byId = games.ToDictionary(g => g.GameId, StringComparer.OrdinalIgnoreCase);
         var annotated = new List<SwapPlan>();
 
         foreach (var plan in plans)
@@ -349,19 +345,28 @@ public static class SwapPlanner
     }
 
     /// <summary>
-    /// The parts of the same runtime this game carries, keyed by game, for looking a snapshot up.
-    /// </summary>
-    internal static IReadOnlyDictionary<string, SwapGameInfo> IndexByGame(
-        IEnumerable<SwapGameInfo> games) =>
-        games.ToDictionary(g => g.GameId, StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
     /// The catalog files to copy, one per DLL the runtime kind consists of.
     /// </summary>
-    private static IReadOnlyList<string>? ResolveSourceFiles(CatalogEntry entry, RuntimeKind kind)
+    /// <returns>
+    /// Null when the catalog does not hold every file the kind needs, or when the file no longer
+    /// holds the version the entry names.
+    /// </returns>
+    /// <remarks>
+    /// A version found in a game points at that game's own DLL. Once the game is swapped, that file
+    /// is a different version, and copying it would install something other than what was chosen
+    /// while history recorded the choice. So the file is read again before it is used.
+    /// </remarks>
+    internal static IReadOnlyList<string>? ResolveSourceFiles(CatalogEntry entry, RuntimeKind kind)
     {
         var directory = Path.GetDirectoryName(entry.FilePath);
         if (directory is null)
+        {
+            return null;
+        }
+
+        if (!File.Exists(entry.FilePath)
+            || !VersionNumber.TryRead(entry.FilePath, out var onDisk, out _, out _)
+            || (onDisk is not null && !VersionNumber.AreEquivalent(onDisk, entry.Version)))
         {
             return null;
         }
@@ -388,48 +393,17 @@ public static class SwapPlanner
     /// where the game already loads the original from. Derived separately the two disagreed: the
     /// scanner found a DLL in <c>bin\x64_dx12</c> while the planner wrote the replacement to the game
     /// root, leaving the game still running the old runtime and a stray DLL beside it.
+    /// <para>
+    /// Every copy is a target: a game that carries the DLL in two folders would otherwise keep running
+    /// the old version from whichever copy it actually loads.
+    /// </para>
     /// </remarks>
     private static IReadOnlyList<string> ResolveTargetFiles(string gamePath, RuntimeKind kind)
     {
-        var located = RuntimeDllLocator.Find(gamePath);
+        var located = RuntimeDllLocator.FindAll(gamePath);
 
         return RuntimeDlls.ByKind[kind]
-            .Select(fileName => RuntimeDllLocator.TargetPathFor(gamePath, fileName, located))
-            .ToArray();
-    }
-}
-
-/// <summary>
-/// Version comparison for downgrade detection.
-/// </summary>
-internal static class VersionComparer
-{
-    /// <summary>
-    /// Returns true if versionA is older than versionB (semantic version comparison).
-    /// </summary>
-    public static bool IsOlder(string versionA, string versionB)
-    {
-        var a = Parse(versionA);
-        var b = Parse(versionB);
-
-        for (int i = 0; i < Math.Max(a.Length, b.Length); i++)
-        {
-            var av = i < a.Length ? a[i] : 0;
-            var bv = i < b.Length ? b[i] : 0;
-            if (av != bv) return av < bv;
-        }
-        return false; // equal
-    }
-
-    private static int[] Parse(string version)
-    {
-        // Split on dots and commas. Versions are normalised when they are read, so this should only
-        // ever see dots, but a comma-separated value that slipped through would otherwise arrive here
-        // as one unparseable token and become zero — which is what made every DLSS version compare
-        // equal to every other, and silenced the downgrade warning R30 requires. Splitting on both
-        // separators means a value that has not been normalised still compares correctly.
-        return version.Split('.', ',', '-', '+')
-            .Select(s => int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 0)
+            .SelectMany(fileName => RuntimeDllLocator.TargetPathsFor(gamePath, fileName, located))
             .ToArray();
     }
 }
@@ -625,12 +599,42 @@ public sealed class SwapExecutor
             applied.Add(result);
         }
 
-        // Every part applied, so the game can now be recorded as changed.
-        foreach (var result in applied)
+        // Every part applied, so the game can now be recorded as changed. A swap with no history
+        // cannot be undone, which is the one outcome R23 forbids, so if the record cannot be written
+        // the files are put back and the swap is reported as failed.
+        var gameId = group[0].GameId;
+        var before = _persistence.GetHistory(gameId);
+
+        try
         {
-            if (result.HistoryEntry is { } entry)
+            foreach (var result in applied)
             {
-                _persistence.AddHistoryEntry(group[0].GameId, entry);
+                if (result.HistoryEntry is { } entry)
+                {
+                    _persistence.AddHistoryEntry(gameId, entry);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            foreach (var done in applied)
+            {
+                RollBack(done.CreatedFiles, done.Backups);
+            }
+
+            TryQuietly(() => _persistence.SaveHistory(before));
+
+            Log.Instance.Error(ex, $"Could not record the swap for {group[0].GameName}", category: "Swap");
+
+            foreach (var done in applied)
+            {
+                results[results.IndexOf(done)] = done with
+                {
+                    Succeeded = false,
+                    HistoryEntry = null,
+                    ErrorMessage =
+                        $"Put back, because the change could not be recorded for undo ({Describe(ex)}).",
+                };
             }
         }
 
@@ -698,7 +702,7 @@ public sealed class SwapExecutor
                 plan.TargetVersion,
                 // The trust of what was there before is not recorded anywhere; trusting it is the
                 // conservative choice because the game shipped it.
-                plan.HasCurrentVersion ? RuntimeTrust.Trusted : RuntimeTrust.Trusted,
+                RuntimeTrust.Trusted,
                 plan.TargetTrust,
                 backups
                     .Select(b => b with { PostSwapSha256 = FileFingerprint.Compute(b.OriginalPath) })
@@ -748,48 +752,40 @@ public sealed class SwapExecutor
     }
 
     /// <summary>
-    /// The catalog file to copy onto each target, paired by position.
+    /// The catalog file to copy onto each target, matched by file name.
     /// </summary>
     /// <remarks>
-    /// <see cref="SwapPlan.TargetFiles"/> is built in the order of
-    /// <see cref="RuntimeDlls.ByKind"/> for the kind, so the two can be zipped. Pairing by index,
-    /// rather than re-deriving the destination from the source file name, is what guarantees a kind
-    /// made of several DLLs gets all of them written instead of one of them written twice.
+    /// The entry is the one the plan was made from, found by its id. Matching on version alone could
+    /// pick a different copy of the same version, with a different trust than the preview showed.
     /// </remarks>
     private IReadOnlyList<(string Source, string Target)>? ResolveSourceFilesFor(SwapPlan plan)
     {
-        var entry = _catalog.Entries.FirstOrDefault(e =>
-            e.Kind == plan.RuntimeKind
-            && string.Equals(e.Version, plan.TargetVersion, StringComparison.OrdinalIgnoreCase));
-
-        if (entry is null)
+        if (plan.TargetEntryId is null
+            || !_catalog.TryGet(plan.TargetEntryId, out var entry)
+            || entry is null
+            || entry.Kind != plan.RuntimeKind)
         {
             return null;
         }
 
-        var directory = Path.GetDirectoryName(entry.FilePath);
-        if (directory is null)
+        var sources = SwapPlanner.ResolveSourceFiles(entry, plan.RuntimeKind);
+        if (sources is null)
         {
             return null;
         }
 
-        var names = RuntimeDlls.ByKind[plan.RuntimeKind];
-        if (plan.TargetFiles.Count != names.Length)
+        // A target is any copy of one of the kind's DLLs, so each takes the source of the same name.
+        var pairs = new List<(string Source, string Target)>();
+        foreach (var target in plan.TargetFiles)
         {
-            return null;
-        }
-
-        var pairs = new (string Source, string Target)[names.Length];
-
-        for (var i = 0; i < names.Length; i++)
-        {
-            var source = Path.Combine(directory, names[i]);
-            if (!File.Exists(source))
+            var source = sources.FirstOrDefault(s =>
+                Path.GetFileName(s).Equals(Path.GetFileName(target), SwapPlan.PathComparison));
+            if (source is null)
             {
                 return null;
             }
 
-            pairs[i] = (source, plan.TargetFiles[i]);
+            pairs.Add((source, target));
         }
 
         return pairs;
@@ -858,7 +854,7 @@ public sealed class SwapExecutor
 }
 
 /// <summary>
-/// Undoes swaps.
+/// Undoes and redoes swaps.
 /// </summary>
 public sealed class UndoEngine
 {
@@ -872,36 +868,52 @@ public sealed class UndoEngine
     }
 
     /// <summary>
-    /// Undoes the most recent undoable swap for a specific game and runtime kind.
+    /// Undoes the most recent swap or redo for a specific game and runtime kind that is not undone yet.
     /// </summary>
     /// <remarks>
     /// R25: every swap can be undone, restoring exactly what was there before it.
-    /// R26: undoing can be repeated as many times as swaps have been made, and each step stays
-    /// reversible because the pre-swap state is carried into the entry written for the undo.
+    /// R26: undoing can be repeated as many times as swaps have been made, walking back one swap at
+    /// a time, and each step stays reversible through <see cref="Redo"/>.
     /// R27: backups written by an earlier run are adopted, since they are found on disk rather than
     /// in memory.
     /// R28: if the game's files no longer match what the swap left behind, the undo is refused —
     /// because no entry then describes a state the game can return to.
     /// R29: missing originals are reported as unrecoverable rather than offered as restorable.
-    /// <para>
-    /// The whole thing is checked before any of it happens. Restoring file by file and giving up at
-    /// the first missing backup leaves the game half-undone and the user unsure of its state, so
-    /// every condition is verified up front and the game is only touched once the undo is certain to
-    /// complete.
-    /// </para>
     /// </remarks>
     public SwapResult Undo(string gameId, RuntimeKind runtimeKind)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gameId);
 
-        var history = _persistence.GetHistory(gameId);
-        var entry = history.GetLatestUndoableFor(runtimeKind);
+        var entry = _persistence.GetHistory(gameId).NextToUndo(runtimeKind);
 
-        if (entry is null)
-        {
-            return SwapResult.Failed(gameId, "", "Nothing to undo.");
-        }
+        return entry is null
+            ? SwapResult.Failed(gameId, "", "Nothing to undo.")
+            : Revert(gameId, entry, HistoryAction.Undo, "undo");
+    }
 
+    /// <summary>Reverses the most recent undo for a specific game and runtime kind.</summary>
+    public SwapResult Redo(string gameId, RuntimeKind runtimeKind)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gameId);
+
+        var entry = _persistence.GetHistory(gameId).NextToRedo(runtimeKind);
+
+        return entry is null
+            ? SwapResult.Failed(gameId, "", "Nothing to redo.")
+            : Revert(gameId, entry, HistoryAction.Redo, "redo");
+    }
+
+    /// <summary>
+    /// Puts a game back into the state it was in before <paramref name="entry"/> was applied.
+    /// </summary>
+    /// <remarks>
+    /// The whole thing is checked before any of it happens, and everything about to be overwritten or
+    /// deleted is saved first. That copy serves twice: it is what a later revert of this one restores,
+    /// and it is what puts the game back if this revert fails part way, so a failure never leaves the
+    /// game half reverted.
+    /// </remarks>
+    private SwapResult Revert(string gameId, HistoryEntry entry, HistoryAction action, string verb)
+    {
         // --- Verification pass: nothing below this point modifies the game. ---
 
         foreach (var backup in entry.Backups)
@@ -911,98 +923,114 @@ public sealed class UndoEngine
                 // R29
                 return SwapResult.Failed(
                     gameId, entry.GameName,
-                    $"Cannot undo: the saved copy of {Path.GetFileName(backup.OriginalPath)} is missing. " +
+                    $"Cannot {verb}: the saved copy of {Path.GetFileName(backup.OriginalPath)} is missing. " +
                     $"It was at {backup.BackupPath}. Nothing has been changed.");
             }
 
-            // R28: only safe if the game still holds what we put there.
-            if (!FileFingerprint.Matches(backup.OriginalPath, backup.PostSwapSha256))
+            bool matches;
+            try
+            {
+                matches = FileFingerprint.Matches(backup.OriginalPath, backup.PostSwapSha256);
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
             {
                 return SwapResult.Failed(
                     gameId, entry.GameName,
-                    $"Cannot undo: {Path.GetFileName(backup.OriginalPath)} was changed by something " +
+                    $"Cannot {verb}: {Path.GetFileName(backup.OriginalPath)} could not be read ({ex.Message}). " +
+                    "Nothing has been changed.");
+            }
+
+            // R28: only safe if the game still holds what we put there.
+            if (!matches)
+            {
+                return SwapResult.Failed(
+                    gameId, entry.GameName,
+                    $"Cannot {verb}: {Path.GetFileName(backup.OriginalPath)} was changed by something " +
                     "other than this program since the swap, so restoring would discard that change. " +
                     "Nothing has been changed.");
             }
         }
 
+        // --- Save what is on disk now, before overwriting or deleting any of it. ---
+
+        var saved = new List<BackupRecord>();
+        var willCreate = new List<string>();
+        var toDelete = entry.CreatedFiles.Where(File.Exists).ToArray();
+
+        try
+        {
+            foreach (var path in entry.Backups.Select(b => b.OriginalPath).Concat(toDelete))
+            {
+                if (File.Exists(path))
+                {
+                    saved.Add(BackupStore.Save(_paths, gameId, path));
+                }
+                else
+                {
+                    willCreate.Add(path);
+                }
+            }
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            DiscardCopies(saved);
+            return SwapResult.Failed(
+                gameId, entry.GameName,
+                $"Cannot {verb}: could not save the current state of the game's files ({ex.Message}). " +
+                "Nothing has been changed.");
+        }
+
         // --- Application pass. ---
 
-        var redoState = new List<BackupRecord>();
-        var removedFiles = new List<string>();
+        var touched = new List<string>();
 
-        // Save what is on disk now before overwriting it. That copy is what makes this undo itself
-        // reversible (R26): redoing means putting the swapped-in content back, and once it has been
-        // overwritten the only copy of it would be gone.
-        foreach (var backup in entry.Backups)
+        try
         {
-            try
+            foreach (var backup in entry.Backups)
             {
-                var saved = BackupStore.Save(_paths, gameId, backup.OriginalPath);
-                redoState.Add(saved with { PostSwapSha256 = FileFingerprint.Compute(backup.OriginalPath) });
-            }
-            catch (Exception ex) when (IsFileFailure(ex))
-            {
-                return SwapResult.Failed(
-                    gameId, entry.GameName,
-                    $"Cannot undo: could not save the current state of " +
-                    $"{Path.GetFileName(backup.OriginalPath)} ({ex.Message}). Nothing has been changed.");
-            }
-        }
-
-        // Restoring by copy rather than by move leaves the backup in place, so an undo interrupted
-        // half way can simply be run again to finish the job.
-        foreach (var backup in entry.Backups)
-        {
-            try
-            {
+                touched.Add(backup.OriginalPath);
                 File.Copy(backup.BackupPath, backup.OriginalPath, overwrite: true);
             }
-            catch (Exception ex) when (IsFileFailure(ex))
-            {
-                return SwapResult.Failed(
-                    gameId, entry.GameName,
-                    $"Undo failed while restoring {Path.GetFileName(backup.OriginalPath)}: {ex.Message} " +
-                    "Run undo again to finish.");
-            }
-        }
 
-        // The game is now in its pre-swap state; record that as what a redo would restore.
-        for (var i = 0; i < redoState.Count; i++)
-        {
-            redoState[i] = redoState[i] with
+            foreach (var created in toDelete)
             {
-                PostSwapSha256 = FileFingerprint.Compute(entry.Backups[i].OriginalPath),
-            };
-        }
-
-        foreach (var created in entry.CreatedFiles)
-        {
-            if (!File.Exists(created))
-            {
-                continue;
-            }
-
-            try
-            {
+                touched.Add(created);
                 File.Delete(created);
-                removedFiles.Add(created);
-            }
-            catch (Exception ex) when (IsFileFailure(ex))
-            {
-                return SwapResult.Failed(
-                    gameId, entry.GameName,
-                    $"Undo failed while removing {Path.GetFileName(created)}: {ex.Message} " +
-                    "Run undo again to finish.");
             }
         }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            var restored = PutBack(touched, saved);
 
-        // R26: record the reverse so this undo can itself be undone.
-        var undoEntry = entry.AsReverted(redoState, removedFiles);
-        _persistence.AddHistoryEntry(gameId, undoEntry);
+            // The copies are the only record of what was there, so they stay if anything is still out.
+            if (restored)
+            {
+                DiscardCopies(saved);
+            }
+
+            return SwapResult.Failed(
+                gameId, entry.GameName,
+                $"Could not {verb} {Path.GetFileName(touched[^1])}: {ex.Message} " +
+                (restored
+                    ? "The game was put back as it was."
+                    : $"Some files could not be put back; copies of them are in {_paths.BackupDirectory}."));
+        }
+
+        // What a revert of this revert must find: a restored file as it is now, a deleted one absent.
+        var reverseState = saved
+            .Select(s => s with
+            {
+                PostSwapSha256 = File.Exists(s.OriginalPath) ? FileFingerprint.Compute(s.OriginalPath) : "",
+            })
+            .ToArray();
+
+        // R26: record the reverse so this step can itself be reversed.
+        var reverse = entry.AsReverted(reverseState, willCreate, action);
+        _persistence.AddHistoryEntry(gameId, reverse);
 
         Log.Instance.Information(
-            $"Undid {entry.RuntimeKind} swap for {entry.GameName} (was {entry.NewVersion}, now {entry.PreviousVersion})",
+            $"{(action == HistoryAction.Undo ? "Undid" : "Redid")} {entry.RuntimeKind} swap for " +
+            $"{entry.GameName} (was {entry.NewVersion}, now {reverse.NewVersion})",
             category: "Undo",
             ("GameId", entry.GameId),
             ("GameName", entry.GameName),
@@ -1010,7 +1038,52 @@ public sealed class UndoEngine
             ("PreviousVersion", entry.PreviousVersion),
             ("NewVersion", entry.NewVersion));
 
-        return SwapResult.Success(gameId, entry.GameName, redoState, removedFiles, undoEntry);
+        return SwapResult.Success(gameId, entry.GameName, reverseState, willCreate, reverse);
+    }
+
+    /// <summary>Returns every touched path to the content saved for it, or removes it if it had none.</summary>
+    /// <returns>Whether every path was put back.</returns>
+    private static bool PutBack(IReadOnlyList<string> touched, IReadOnlyList<BackupRecord> saved)
+    {
+        var allRestored = true;
+
+        foreach (var path in touched)
+        {
+            var copy = saved.FirstOrDefault(s => s.OriginalPath.Equals(path, SwapPlan.PathComparison));
+
+            try
+            {
+                if (copy is not null
+                    && File.Exists(path)
+                    && FileFingerprint.Compute(path) == FileFingerprint.Compute(copy.BackupPath))
+                {
+                    continue; // never got changed, which is the usual case for the file that failed
+                }
+
+                if (copy is not null)
+                {
+                    File.Copy(copy.BackupPath, path, overwrite: true);
+                }
+                else if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                allRestored = false;
+            }
+        }
+
+        return allRestored;
+    }
+
+    private static void DiscardCopies(IEnumerable<BackupRecord> saved)
+    {
+        foreach (var copy in saved)
+        {
+            SwapExecutor.TryQuietly(() => File.Delete(copy.BackupPath));
+        }
     }
 
     private static bool IsFileFailure(Exception ex) =>

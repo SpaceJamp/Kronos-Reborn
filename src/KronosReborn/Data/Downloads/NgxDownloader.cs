@@ -102,8 +102,10 @@ public sealed class NgxDownloader
                     consecutiveNotFound[asset] = 0;
                     found.Add(new NgxVersionEntry(asset, packed, null, url));
                 }
-                else if (status == HttpStatusCode.NotFound)
+                else
                 {
+                    // S3 answers a missing key with 403 rather than 404 when the bucket is not
+                    // listable, so any status other than 200 counts as a miss.
                     consecutiveNotFound[asset]++;
                 }
             }
@@ -136,17 +138,11 @@ public sealed class NgxDownloader
         {
             return HttpStatusCode.NotFound;
         }
-        catch (TaskCanceledException)
+        catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
         {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch
-        {
-            return HttpStatusCode.NotFound;
+            // HttpClient reports its own timeout as a cancellation. One slow probe is a miss, not a
+            // reason to abandon the whole scan.
+            return HttpStatusCode.RequestTimeout;
         }
     }
 
@@ -185,6 +181,16 @@ public sealed class NgxDownloader
         try
         {
             await DownloadFileAsync(entry.DownloadUrl, targetPath, progress, cancellation);
+        }
+        catch (OperationCanceledException)
+        {
+            // A cancelled download is a partial file, and it must not stay in the collection folder.
+            if (File.Exists(targetPath))
+            {
+                File.Delete(targetPath);
+            }
+
+            throw;
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException)
         {

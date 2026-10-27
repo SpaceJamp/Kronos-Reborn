@@ -16,11 +16,11 @@ namespace KronosReborn.UI;
 /// <summary>
 /// View model for downloading DLSS runtimes from NVIDIA's NGX CDN.
 /// </summary>
-public sealed class NgxDownloadViewModel : IDisposable
+public sealed class NgxDownloadViewModel : System.ComponentModel.INotifyPropertyChanged, IDisposable
 {
     private readonly NgxDownloader _downloader;
     private readonly RuntimeCatalog _catalog;
-    private readonly CancellationTokenSource _cts = new();
+    private CancellationTokenSource _cts = new();
 
     public NgxDownloadViewModel(NgxDownloader downloader, RuntimeCatalog catalog)
     {
@@ -155,6 +155,10 @@ public sealed class NgxDownloadViewModel : IDisposable
                 var kind = RuntimeKindFromAsset(entry.AssetType);
                 var trust = RuntimeTrust.Trusted; // Authenticode was already verified in DownloadAndVerifyAsync
 
+                var alreadyHeld = _catalog.TryGet(
+                    CatalogId.For(kind, version, RuntimeSource.Imported), out var existing)
+                    && existing?.Trust == RuntimeTrust.Trusted;
+
                 var entryAdded = _catalog.AddImport(
                     kind,
                     version,
@@ -162,14 +166,11 @@ public sealed class NgxDownloadViewModel : IDisposable
                     $"NVIDIA CDN ({entry.DownloadUrl})",
                     trust);
 
-                if (entryAdded is not null)
-                {
-                    StatusText = $"Installed {RuntimeKindNames.Display(kind)} {version} into the collection.";
-                }
-                else
-                {
-                    StatusText = $"{RuntimeKindNames.Display(kind)} {version} is already in the collection.";
-                }
+                StatusText = entryAdded is null
+                    ? $"{RuntimeKindNames.Display(kind)} {version} could not be added to the collection."
+                    : alreadyHeld
+                        ? $"{RuntimeKindNames.Display(kind)} {version} is already in the collection."
+                        : $"Installed {RuntimeKindNames.Display(kind)} {version} into the collection.";
             }
             else
             {
@@ -201,8 +202,12 @@ public sealed class NgxDownloadViewModel : IDisposable
     /// <summary>Cancels any in-progress scan or download.</summary>
     public void Cancel()
     {
-        _cts.Cancel();
-        _cts.Dispose();
+        // A fresh source for the next operation: reusing the cancelled one would cancel every scan
+        // and download after the first stop, and disposing it without replacing it made them throw.
+        var cancelled = _cts;
+        _cts = new CancellationTokenSource();
+        cancelled.Cancel();
+        cancelled.Dispose();
     }
 
     public void Dispose()

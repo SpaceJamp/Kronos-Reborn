@@ -160,12 +160,25 @@ public sealed class RuntimeImporter
         var present = wanted.Where(name => File.Exists(Path.Combine(folder, name))).ToArray();
         var missing = wanted.Where(name => !present.Contains(name, StringComparer.OrdinalIgnoreCase)).ToArray();
 
+        var files = present.Select(name => Path.Combine(folder, name)).ToArray();
+
+        // Every file is taken, so every file is judged: a signed file must not vouch for an unsigned
+        // one beside it, and a pair whose halves are different versions is not one runtime.
+        foreach (var sibling in files)
+        {
+            if (VersionNumber.TryRead(sibling, out var siblingVersion, out _, out _)
+                && !VersionNumber.AreEquivalent(siblingVersion, version))
+            {
+                return Refuse(
+                    $"{Path.GetFileName(sibling)} is version {siblingVersion ?? "unknown"} but {fileName} is " +
+                    $"{version}. The files of {RuntimeKindNames.Display(kind.Value)} only work as a matched set.");
+            }
+        }
+
         var signature = SignatureVerifier.Check(filePath);
-        var trust = signature.HasValidSignature
+        var trust = files.All(file => SignatureVerifier.Check(file).HasValidSignature)
             ? RuntimeTrust.Trusted
             : RuntimeTrust.Untrusted;
-
-        var files = present.Select(name => Path.Combine(folder, name)).ToArray();
 
         return new RuntimeImportPreview(
             CanImport: missing.Length == 0,
@@ -214,6 +227,19 @@ public sealed class RuntimeImporter
         var kind = preview.Kind!.Value;
         var version = preview.Version!;
         var trust = acceptUntrusted ? RuntimeTrust.UserAccepted : RuntimeTrust.Trusted;
+
+        // The collection folder is shared by every import of a version, so copying first would put this
+        // file under whatever trust the existing entry has. Only a trusted copy may replace another.
+        if (_catalog.TryGet(CatalogId.For(kind, version, RuntimeSource.Imported), out var existing)
+            && existing is not null
+            && (existing.Trust == RuntimeTrust.Trusted || trust != RuntimeTrust.Trusted))
+        {
+            return existing.Trust == RuntimeTrust.Trusted && trust != RuntimeTrust.Trusted
+                ? RuntimeImportResult.Failed(
+                    $"{RuntimeKindNames.Display(kind)} {version} is already in the collection, signed by " +
+                    "its vendor. This unsigned copy was not added, so it cannot replace it.")
+                : new RuntimeImportResult(true, existing, null);
+        }
 
         try
         {

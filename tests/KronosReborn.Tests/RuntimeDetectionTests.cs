@@ -21,7 +21,9 @@ public class RuntimeDetectionTests
         Assert.Equal(["nvngx_dlss.dll"], RuntimeDlls.ByKind[RuntimeKind.Dlss]);
         Assert.Equal(["nvngx_dlssg.dll"], RuntimeDlls.ByKind[RuntimeKind.DlssG]);
         Assert.Equal(["nvngx_dlssd.dll"], RuntimeDlls.ByKind[RuntimeKind.DlssR]);
-        Assert.Equal(["amd_fidelityfx_dx12.dll", "ffx_fsr2_api_dx12.dll"], RuntimeDlls.ByKind[RuntimeKind.Fsr]);
+        Assert.Equal(["amd_fidelityfx_dx12.dll"], RuntimeDlls.ByKind[RuntimeKind.Fsr]);
+        Assert.Equal(["amd_fidelityfx_upscaler_dx12.dll"], RuntimeDlls.ByKind[RuntimeKind.FsrUpscaler]);
+        Assert.Equal(["amd_fidelityfx_framegeneration_dx12.dll"], RuntimeDlls.ByKind[RuntimeKind.FsrFg]);
         Assert.Equal(["amd_fidelityfx_vk.dll"], RuntimeDlls.ByKind[RuntimeKind.FsrVk]);
         Assert.Equal(["libxess.dll"], RuntimeDlls.ByKind[RuntimeKind.Xess]);
         Assert.Equal(["libxess_fg.dll"], RuntimeDlls.ByKind[RuntimeKind.XessFg]);
@@ -36,7 +38,9 @@ public class RuntimeDetectionTests
         Assert.Equal(RuntimeKind.DlssG, RuntimeDlls.ByFileName["nvngx_dlssg.dll"]);
         Assert.Equal(RuntimeKind.DlssR, RuntimeDlls.ByFileName["nvngx_dlssd.dll"]);
         Assert.Equal(RuntimeKind.Fsr, RuntimeDlls.ByFileName["amd_fidelityfx_dx12.dll"]);
-        Assert.Equal(RuntimeKind.Fsr, RuntimeDlls.ByFileName["ffx_fsr2_api_dx12.dll"]);
+        Assert.Equal(RuntimeKind.FsrUpscaler, RuntimeDlls.ByFileName["amd_fidelityfx_upscaler_dx12.dll"]);
+        Assert.Equal(RuntimeKind.FsrFg, RuntimeDlls.ByFileName["amd_fidelityfx_framegeneration_dx12.dll"]);
+        Assert.False(RuntimeDlls.IsKnown("ffx_fsr2_api_dx12.dll")); // never a real file name
         Assert.Equal(RuntimeKind.FsrVk, RuntimeDlls.ByFileName["amd_fidelityfx_vk.dll"]);
         Assert.Equal(RuntimeKind.Xess, RuntimeDlls.ByFileName["libxess.dll"]);
         Assert.Equal(RuntimeKind.XessFg, RuntimeDlls.ByFileName["libxess_fg.dll"]);
@@ -55,12 +59,13 @@ public class RuntimeDetectionTests
     public void RuntimeDllsAllFileNamesIsFlatList()
     {
         var all = RuntimeDlls.AllFileNames;
-        Assert.Equal(10, all.Count);
+        Assert.Equal(11, all.Count);
         Assert.Contains("nvngx_dlss.dll", all);
         Assert.Contains("nvngx_dlssg.dll", all);
         Assert.Contains("nvngx_dlssd.dll", all);
         Assert.Contains("amd_fidelityfx_dx12.dll", all);
-        Assert.Contains("ffx_fsr2_api_dx12.dll", all);
+        Assert.Contains("amd_fidelityfx_upscaler_dx12.dll", all);
+        Assert.Contains("amd_fidelityfx_framegeneration_dx12.dll", all);
         Assert.Contains("amd_fidelityfx_vk.dll", all);
         Assert.Contains("libxess.dll", all);
         Assert.Contains("libxess_fg.dll", all);
@@ -127,7 +132,7 @@ public class RuntimeDetectionTests
 
         Assert.Equal("123", snap.GameId);
         Assert.Equal("Test Game", snap.GameName);
-        Assert.Equal(10, snap.Runtimes.Count); // all known DLLs checked
+        Assert.Equal(RuntimeDlls.AllFileNames.Count, snap.Runtimes.Count); // all known DLLs checked
 
         var dlss = snap.Runtimes.First(r => r.Kind == RuntimeKind.Dlss);
         Assert.True(dlss.Exists);

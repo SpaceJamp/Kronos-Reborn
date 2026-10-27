@@ -76,6 +76,12 @@ public sealed class GameRow : INotifyPropertyChanged
     /// <summary>The choice shown in this game's XeLL column.</summary>
     public RuntimeChoice XellChoice => ChoiceFor(RuntimeKind.Xell);
 
+    /// <summary>The choice shown in this game's FSR Upscaler (SDK 2) column.</summary>
+    public RuntimeChoice FsrUpscalerChoice => ChoiceFor(RuntimeKind.FsrUpscaler);
+
+    /// <summary>The choice shown in this game's FSR Frame Generation (SDK 2) column.</summary>
+    public RuntimeChoice FsrFgChoice => ChoiceFor(RuntimeKind.FsrFg);
+
     /// <summary>Whether any runtime in this row has a version chosen that is not the one installed.</summary>
     public bool HasAnyChange => Choices.Any(c => c.HasChange);
 
@@ -112,6 +118,8 @@ public sealed class GameRow : INotifyPropertyChanged
         OnPropertyChanged(nameof(XessFgChoice));
         OnPropertyChanged(nameof(XessDx11Choice));
         OnPropertyChanged(nameof(XellChoice));
+        OnPropertyChanged(nameof(FsrUpscalerChoice));
+        OnPropertyChanged(nameof(FsrFgChoice));
         OnPropertyChanged(nameof(HasAnyChange));
     }
 

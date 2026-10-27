@@ -31,6 +31,19 @@ public sealed record BackupRecord(
     string BackupPath,
     string PostSwapSha256);
 
+/// <summary>What produced a history entry.</summary>
+public enum HistoryAction
+{
+    /// <summary>A swap the user applied.</summary>
+    Swap,
+
+    /// <summary>An undo of an earlier swap or redo.</summary>
+    Undo,
+
+    /// <summary>A redo of an earlier undo.</summary>
+    Redo,
+}
+
 /// <summary>
 /// A single history entry recording a swap operation on a game.
 /// </summary>
@@ -53,6 +66,7 @@ public sealed record BackupRecord(
 /// <param name="CreatedFiles">Files that did not exist before and were created by this swap.</param>
 /// <param name="WasDowngrade">Whether this was a version downgrade (R30).</param>
 /// <param name="WasUntrusted">Whether the new version was untrusted (R33).</param>
+/// <param name="Action">What produced the entry. Entries written before this existed read as swaps.</param>
 public sealed record HistoryEntry(
     DateTimeOffset Timestamp,
     string GameId,
@@ -66,7 +80,8 @@ public sealed record HistoryEntry(
     IReadOnlyList<BackupRecord> Backups,
     IReadOnlyList<string> CreatedFiles,
     bool WasDowngrade,
-    bool WasUntrusted)
+    bool WasUntrusted,
+    HistoryAction Action = HistoryAction.Swap)
 {
     /// <summary>A short description for display.</summary>
     public string Describe()
@@ -94,21 +109,26 @@ public sealed record HistoryEntry(
     public IEnumerable<string> AffectedPaths =>
         Backups.Select(b => b.OriginalPath).Concat(CreatedFiles);
 
-    /// <summary>An entry describing the reverse of this one, written when an undo succeeds.</summary>
+    /// <summary>An entry describing the reverse of this one, written when an undo or redo succeeds.</summary>
     /// <remarks>
-    /// The swap that was just undone put <paramref name="preSwapSha256"/> on disk, so undoing *this*
-    /// entry means restoring that state — which is redoing the original swap. Passing the hashes
-    /// forward is what makes undo/redo nest properly instead of dead-ending after one step.
+    /// Reverting this entry again means putting back what <paramref name="savedState"/> holds and
+    /// deleting <paramref name="createdFiles"/>, which is the state this entry left behind.
     /// </remarks>
+    /// <param name="savedState">Copies of the files the revert overwrote or deleted.</param>
+    /// <param name="createdFiles">Files the revert put where nothing was.</param>
+    /// <param name="action">Whether this revert is an undo or a redo.</param>
     public HistoryEntry AsReverted(
-        IReadOnlyList<BackupRecord> preSwapState,
-        IReadOnlyList<string> removedFiles)
+        IReadOnlyList<BackupRecord> savedState,
+        IReadOnlyList<string> createdFiles,
+        HistoryAction action = HistoryAction.Undo)
     {
-        ArgumentNullException.ThrowIfNull(preSwapState);
-        ArgumentNullException.ThrowIfNull(removedFiles);
+        ArgumentNullException.ThrowIfNull(savedState);
+        ArgumentNullException.ThrowIfNull(createdFiles);
+
+        var previousKnown = PreviousVersion is not null && PreviousVersion != "none";
 
         return new HistoryEntry(
-            Timestamp,
+            DateTimeOffset.UtcNow,
             GameId,
             GameName,
             GamePath,
@@ -117,10 +137,12 @@ public sealed record HistoryEntry(
             PreviousVersion ?? "none",
             NewTrust,
             PreviousTrust,
-            preSwapState,
-            removedFiles,
-            WasDowngrade,
-            WasUntrusted);
+            savedState,
+            createdFiles,
+            // Going back over an upgrade is a downgrade, and going back over a downgrade is not.
+            !WasDowngrade && previousKnown && VersionNumber.IsOlder(PreviousVersion, NewVersion),
+            PreviousTrust != RuntimeTrust.Trusted,
+            action);
     }
 }
 
@@ -152,18 +174,59 @@ public sealed record GameHistory(
         return this with { Entries = newEntries };
     }
 
-    /// <summary>Gets the most recent entry for a specific runtime kind.</summary>
-    public HistoryEntry? GetLatestFor(RuntimeKind kind)
-        => Entries.FirstOrDefault(e => e.RuntimeKind == kind);
-
-    /// <summary>Gets the most recent entry that could actually be undone.</summary>
+    /// <summary>The entry the next undo of this kind reverts, or null when there is none.</summary>
     /// <remarks>
-    /// R29: a game whose original files are missing is reported as unrecoverable rather than being
-    /// presented as restorable, so entries with nothing to restore are skipped rather than offered
-    /// and then failing.
+    /// R26: each undo pairs with the newest swap or redo not already undone, so repeated undos walk
+    /// back through history instead of toggling between the last two states.
     /// </remarks>
-    public HistoryEntry? GetLatestUndoableFor(RuntimeKind kind)
-        => Entries.FirstOrDefault(e => e.RuntimeKind == kind && e.CanUndo);
+    public HistoryEntry? NextToUndo(RuntimeKind kind)
+    {
+        var undone = 0;
+
+        foreach (var entry in Entries.Where(e => e.RuntimeKind == kind))
+        {
+            if (entry.Action == HistoryAction.Undo)
+            {
+                undone++;
+            }
+            else if (undone > 0)
+            {
+                undone--;
+            }
+            else if (entry.CanUndo)
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The undo entry the next redo of this kind reverts, or null when there is none.</summary>
+    /// <remarks>A new swap after an undo ends what can be redone, as in any undo stack.</remarks>
+    public HistoryEntry? NextToRedo(RuntimeKind kind)
+    {
+        var redone = 0;
+
+        foreach (var entry in Entries.Where(e => e.RuntimeKind == kind))
+        {
+            switch (entry.Action)
+            {
+                case HistoryAction.Redo:
+                    redone++;
+                    break;
+                case HistoryAction.Undo when redone > 0:
+                    redone--;
+                    break;
+                case HistoryAction.Undo:
+                    return entry.CanUndo ? entry : null;
+                default:
+                    return null;
+            }
+        }
+
+        return null;
+    }
 }
 
 /// <summary>

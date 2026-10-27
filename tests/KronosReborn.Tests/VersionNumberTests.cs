@@ -75,25 +75,25 @@ public class VersionNumberTests
     {
         // The comparison splits on both separators, so a raw value that has not been normalised still
         // orders correctly. Without this a comma version becomes zero and compares equal to anything.
-        Assert.False(VersionComparer.IsOlder("310,9,1,0", "310,2,1,0"));
-        Assert.True(VersionComparer.IsOlder("310,2,1,0", "310,9,1,0"));
-        Assert.False(VersionComparer.IsOlder("310,9,1,0", "310,9,1,0"));
+        Assert.False(VersionNumber.IsOlder("310,9,1,0", "310,2,1,0"));
+        Assert.True(VersionNumber.IsOlder("310,2,1,0", "310,9,1,0"));
+        Assert.False(VersionNumber.IsOlder("310,9,1,0", "310,9,1,0"));
     }
 
     [Fact]
     public void MixedFormsOfTheSameVersionCompareEqual()
     {
-        Assert.False(VersionComparer.IsOlder("310.9.1", "310,9,1,0"));
-        Assert.False(VersionComparer.IsOlder("310,9,1,0", "310.9.1"));
+        Assert.False(VersionNumber.IsOlder("310.9.1", "310,9,1,0"));
+        Assert.False(VersionNumber.IsOlder("310,9,1,0", "310.9.1"));
     }
 
     [Fact]
     public void ADowngradeIsRecognisedAcrossVendors()
     {
         // What the fix is for: with commas unhandled, none of these were ever true.
-        Assert.True(VersionComparer.IsOlder("3.8.0", "310.9.1"));
-        Assert.False(VersionComparer.IsOlder("310.9.1", "3.8.0"));
-        Assert.True(VersionComparer.IsOlder("1.0.2.38022", "2.0.2.53"));
+        Assert.True(VersionNumber.IsOlder("3.8.0", "310.9.1"));
+        Assert.False(VersionNumber.IsOlder("310.9.1", "3.8.0"));
+        Assert.True(VersionNumber.IsOlder("1.0.2.38022", "2.0.2.53"));
     }
 }
 

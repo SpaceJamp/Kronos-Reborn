@@ -56,16 +56,66 @@ public class RuntimeDllLocatorTests
     }
 
     [Fact]
-    public void FindsEveryDllOfAMultiFileRuntime()
+    public void FindsEveryRuntimeAGameCarriesInOneFolder()
     {
         using var temp = new TemporaryDirectory();
-        var game = CreateGameWith(temp.Root, "bin/x64_dx12", "amd_fidelityfx_dx12.dll", "ffx_fsr2_api_dx12.dll");
+        var game = CreateGameWith(temp.Root, "bin/x64_dx12", "amd_fidelityfx_dx12.dll", "nvngx_dlss.dll");
 
         var found = RuntimeDllLocator.Find(game, cancellation: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, found.Count);
         Assert.Contains("amd_fidelityfx_dx12.dll", found.Keys);
-        Assert.Contains("ffx_fsr2_api_dx12.dll", found.Keys);
+        Assert.Contains("nvngx_dlss.dll", found.Keys);
+    }
+
+    [Fact]
+    public void FindsTheUnrealEngineDlssPluginEightLevelsDown()
+    {
+        // The case that used to report no DLSS at all: the old four-level limit stopped short of it.
+        using var temp = new TemporaryDirectory();
+        var game = CreateGameWith(
+            temp.Root, "Engine/Plugins/Runtime/Nvidia/DLSS/Binaries/ThirdParty/Win64", "nvngx_dlss.dll");
+
+        var found = RuntimeDllLocator.Find(game, cancellation: TestContext.Current.CancellationToken);
+
+        Assert.EndsWith(Path.Combine("Win64", "nvngx_dlss.dll"), found["nvngx_dlss.dll"]);
+    }
+
+    [Fact]
+    public void FindsEveryCopyAndMatchesNamesWhateverTheirCase()
+    {
+        using var temp = new TemporaryDirectory();
+        var game = CreateGameWith(temp.Root, "bin", "nvngx_dlss.dll");
+        var second = Path.Combine(game, "plugins", "NVNGX_DLSS.DLL");
+        Directory.CreateDirectory(Path.GetDirectoryName(second)!);
+        File.WriteAllText(second, "x");
+
+        var found = RuntimeDllLocator.FindAll(game, cancellation: TestContext.Current.CancellationToken);
+
+        // Keyed by the canonical name, with both copies listed.
+        Assert.Equal(2, found["nvngx_dlss.dll"].Count);
+    }
+
+    [Fact]
+    public void FollowsALinkedFolderOnce()
+    {
+        using var temp = new TemporaryDirectory();
+        var game = CreateGameWith(temp.Root, "real", "nvngx_dlss.dll");
+        var link = Path.Combine(game, "linked");
+
+        try
+        {
+            Directory.CreateSymbolicLink(link, Path.Combine(game, "real"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return; // creating links needs developer mode or elevation; nothing to check without one
+        }
+
+        var found = RuntimeDllLocator.FindAll(game, cancellation: TestContext.Current.CancellationToken);
+
+        // Found once, through whichever path reached the folder first, rather than twice or never.
+        Assert.Single(found["nvngx_dlss.dll"]);
     }
 
     [Fact]
@@ -93,15 +143,15 @@ public class RuntimeDllLocatorTests
     {
         using var temp = new TemporaryDirectory();
 
-        // Five levels down: beyond the bound, so deliberately not found.
-        var game = CreateGameWith(temp.Root, "a/b/c/d/e", "nvngx_dlss.dll");
+        // One level beyond the bound, so deliberately not found.
+        var game = CreateGameWith(temp.Root, "a/b/c/d/e/f/g/h/i/j/k", "nvngx_dlss.dll");
 
         Assert.Empty(RuntimeDllLocator.Find(game, cancellation: TestContext.Current.CancellationToken));
 
         // And the same file is found when the bound is raised, which shows the bound is the only
         // reason and not a failure to walk at all.
         Assert.Single(RuntimeDllLocator.Find(
-            game, maxDepth: 6, cancellation: TestContext.Current.CancellationToken));
+            game, maxDepth: 12, cancellation: TestContext.Current.CancellationToken));
     }
 
     [Fact]

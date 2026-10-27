@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 
 namespace KronosReborn.Data.Runtimes;
@@ -22,8 +23,8 @@ namespace KronosReborn.Data.Runtimes;
 /// program could not have swapped anything in three of the four games on a typical library.
 /// </para>
 /// <para>
-/// The search is bounded by depth and skips reparse points, so it cannot walk into a junction that
-/// leads back up the tree or spend unbounded time on a very deep install.
+/// The search is bounded by depth, and follows a junction or symbolic link only to a folder it has
+/// not already searched, so a link that leads back up the tree cannot make the walk unbounded.
 /// </para>
 /// </remarks>
 public static class RuntimeDllLocator
@@ -32,11 +33,12 @@ public static class RuntimeDllLocator
     /// How many levels below the game folder to look.
     /// </summary>
     /// <remarks>
-    /// Four reaches every layout seen so far with room to spare. Going deeper costs a full extra
-    /// level of directory enumeration per game across every game on the machine, to find layouts that
-    /// do not occur in practice.
+    /// Unreal Engine's DLSS plugin keeps its DLL eight levels down, in
+    /// <c>Engine\Plugins\Runtime\Nvidia\DLSS\Binaries\ThirdParty\Win64</c>. Four levels, the old
+    /// limit, missed it, so those games showed no DLSS at all. Ten leaves room for a game folder
+    /// nested one or two levels inside the install.
     /// </remarks>
-    public const int DefaultDepth = 4;
+    public const int DefaultDepth = 10;
 
     /// <summary>
     /// Locates every known runtime DLL inside a game folder.
@@ -98,6 +100,7 @@ public static class RuntimeDllLocator
         }
 
         var pending = new Queue<(string Directory, int Depth)>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(gamePath) };
         pending.Enqueue((gamePath, 0));
 
         while (pending.Count > 0)
@@ -106,18 +109,25 @@ public static class RuntimeDllLocator
 
             var (directory, depth) = pending.Dequeue();
 
-            foreach (var fileName in RuntimeDlls.AllFileNames)
+            // One listing per folder rather than one existence check per known name.
+            foreach (var candidate in EnumerateDlls(directory))
             {
-                var candidate = Path.Combine(directory, fileName);
-                if (File.Exists(candidate))
+                var fileName = Path.GetFileName(candidate);
+                if (RuntimeDlls.KindFor(fileName) is null)
                 {
-                    if (!found.TryGetValue(fileName, out var list))
-                    {
-                        list = [];
-                        found[fileName] = list;
-                    }
-                    list.Add(candidate);
+                    continue;
                 }
+
+                // Keyed by the canonical name, so callers indexing by RuntimeDlls names always match.
+                var canonical = RuntimeDlls.AllFileNames.First(
+                    name => name.Equals(fileName, StringComparison.OrdinalIgnoreCase));
+
+                if (!found.TryGetValue(canonical, out var list))
+                {
+                    list = [];
+                    found[canonical] = list;
+                }
+                list.Add(candidate);
             }
 
             if (depth >= maxDepth)
@@ -125,13 +135,32 @@ public static class RuntimeDllLocator
                 continue;
             }
 
-            foreach (var child in EnumerateChildDirectories(directory))
+            foreach (var child in EnumerateChildDirectories(directory, visited))
             {
                 pending.Enqueue((child, depth + 1));
             }
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Every place a DLL of a given name belongs in a game folder.
+    /// </summary>
+    /// <remarks>
+    /// Every copy the game carries, so a game that keeps the runtime in two folders runs the chosen
+    /// version whichever one it loads. A DLL the game does not have goes in the game root.
+    /// </remarks>
+    public static IReadOnlyList<string> TargetPathsFor(
+        string gamePath,
+        string fileName,
+        IReadOnlyDictionary<string, List<string>> located)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gamePath);
+
+        return located.TryGetValue(fileName, out var existing) && existing.Count > 0
+            ? existing
+            : [Path.Combine(gamePath, fileName)];
     }
 
     /// <summary>
@@ -159,10 +188,10 @@ public static class RuntimeDllLocator
     /// <remarks>
     /// An unreadable folder is skipped rather than reported: R4 says a source that cannot be read is
     /// reported, but this is one directory inside a game rather than a library, and failing the whole
-    /// game because of one locked folder would be worse than missing that folder. Reparse points are
-    /// skipped because a junction pointing back up the tree makes the walk unbounded.
+    /// game because of one locked folder would be worse than missing that folder. A junction or link is
+    /// followed to where it points, but only if that folder has not been searched already.
     /// </remarks>
-    private static IEnumerable<string> EnumerateChildDirectories(string directory)
+    private static IEnumerable<string> EnumerateChildDirectories(string directory, HashSet<string> visited)
     {
         string[] children;
 
@@ -177,19 +206,35 @@ public static class RuntimeDllLocator
 
         foreach (var child in children)
         {
+            string resolved;
             try
             {
-                if ((File.GetAttributes(child) & FileAttributes.ReparsePoint) != 0)
-                {
-                    continue;
-                }
+                var info = new DirectoryInfo(child);
+                resolved = (info.Attributes & FileAttributes.ReparsePoint) != 0
+                    ? info.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? info.FullName
+                    : info.FullName;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 continue;
             }
 
-            yield return child;
+            if (visited.Add(resolved))
+            {
+                yield return child;
+            }
+        }
+    }
+
+    private static string[] EnumerateDlls(string directory)
+    {
+        try
+        {
+            return Directory.GetFiles(directory, "*.dll");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
         }
     }
 }

@@ -194,8 +194,8 @@ public class LibraryViewTests
                 .ThenByDescending(
                     e => e.Version,
                     Comparer<string>.Create((a, b) =>
-                        KronosReborn.Data.Actions.VersionComparer.IsOlder(a, b) ? -1
-                        : KronosReborn.Data.Actions.VersionComparer.IsOlder(b, a) ? 1
+                        KronosReborn.Data.Runtimes.VersionNumber.IsOlder(a, b) ? -1
+                        : KronosReborn.Data.Runtimes.VersionNumber.IsOlder(b, a) ? 1
                         : 0))
                 .Select(e => new LibraryEntry(e, [])),
         ];
