@@ -97,6 +97,19 @@ public class SteamDiscoveryTests
 
         return steamRoot;
     }
+
+    [Fact]
+    public void SteamworksCommonRedistributablesIsNotListedAsAGame()
+    {
+        using var temp = new TemporaryDirectory();
+        var steam = CreateSteamLibrary(temp.Root, "228980", "Steamworks Common Redistributables", "Steamworks Shared");
+
+        var result = new SteamLibraryScanner().Scan(steam, TestContext.Current.CancellationToken);
+
+        Assert.Empty(result.Games);
+        Assert.Empty(result.Problems);
+    }
+
     [Fact]
     public void SteamLibraryFoldersExtractsOldLayout()
     {

@@ -133,42 +133,51 @@ public sealed class PersistenceService : IDisposable
         }
     }
 
-    /// <summary>The game folders the user added by hand.</summary>
-    /// <remarks>Read from disk each time; it is a handful of paths, read once per refresh.</remarks>
-    public IReadOnlyList<string> ManualGames
-    {
-        get
-        {
-            _lock.EnterReadLock();
-            try
-            {
-                if (!File.Exists(_paths.ManualGamesPath))
-                {
-                    return [];
-                }
-
-                return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(_paths.ManualGamesPath)) ?? [];
-            }
-            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
-            {
-                // Kept aside rather than overwritten by the next add, which would lose every folder.
-                DataPaths.SetAside(_paths.ManualGamesPath);
-                return [];
-            }
-            finally
-            {
-                _lock.ExitReadLock();
-            }
-        }
-    }
+    /// <summary>The game folders the user added by hand, one game each.</summary>
+    public IReadOnlyList<string> ManualGames => ReadPaths(_paths.ManualGamesPath);
 
     /// <summary>Adds a game folder to the hand-added list, or removes one.</summary>
     /// <returns>Whether the list changed.</returns>
-    public bool SetManualGame(string folder, bool add)
+    public bool SetManualGame(string folder, bool add) => SetPath(_paths.ManualGamesPath, folder, add);
+
+    /// <summary>Folders whose every subfolder is a game, such as a folder of repacks.</summary>
+    public IReadOnlyList<string> GameFolders => ReadPaths(_paths.GameFoldersPath);
+
+    /// <summary>Adds a folder of games, or removes one.</summary>
+    /// <returns>Whether the list changed.</returns>
+    public bool SetGameFolder(string folder, bool add) => SetPath(_paths.GameFoldersPath, folder, add);
+
+    /// <summary>A list of paths kept in a small JSON file.</summary>
+    /// <remarks>Read from disk each time; it is a handful of paths, read once per refresh.</remarks>
+    private IReadOnlyList<string> ReadPaths(string file)
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            if (!File.Exists(file))
+            {
+                return [];
+            }
+
+            return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(file)) ?? [];
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            // Kept aside rather than overwritten by the next add, which would lose every folder.
+            DataPaths.SetAside(file);
+            return [];
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
+    }
+
+    private bool SetPath(string file, string folder, bool add)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
 
-        var folders = ManualGames.ToList();
+        var folders = ReadPaths(file).ToList();
         var index = folders.FindIndex(f => string.Equals(
             Path.GetFullPath(f).TrimEnd('\\'), Path.GetFullPath(folder).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase));
 
@@ -189,7 +198,7 @@ public sealed class PersistenceService : IDisposable
         _lock.EnterWriteLock();
         try
         {
-            AtomicWrite(_paths.ManualGamesPath, JsonSerializer.Serialize(folders, JsonOptions.Default));
+            AtomicWrite(file, JsonSerializer.Serialize(folders, JsonOptions.Default));
         }
         finally
         {

@@ -112,11 +112,11 @@ public sealed partial class MainWindow : Window, IFilePicker
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
-    public async Task<string?> AskForGameFolderAsync()
+    public async Task<string?> AskForGameFolderAsync(string title)
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Choose the folder the game is installed in",
+            Title = title,
             AllowMultiple = false,
         });
 

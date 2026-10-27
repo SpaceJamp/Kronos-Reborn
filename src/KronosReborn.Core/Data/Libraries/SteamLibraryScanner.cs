@@ -202,7 +202,8 @@ public sealed class SteamLibraryScanner
 
         // Matched on the file name so a stray file matching the wildcard is skipped rather than
         // reaching the id check with nothing to work with.
-        if (SteamAppManifest.TryGetAppIdFromFileName(fileName) is null)
+        // 228980 is Steamworks Common Redistributables: installers Steam shares between games, not a game.
+        if (SteamAppManifest.TryGetAppIdFromFileName(fileName) is null or "228980")
         {
             return;
         }

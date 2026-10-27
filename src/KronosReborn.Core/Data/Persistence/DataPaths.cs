@@ -50,6 +50,9 @@ public sealed class DataPaths
     /// <summary>The list of game folders the user added by hand.</summary>
     public string ManualGamesPath => Path.Combine(Root, "manual-games.json");
 
+    /// <summary>The list of folders whose subfolders are each a game.</summary>
+    public string GameFoldersPath => Path.Combine(Root, "game-folders.json");
+
     /// <summary>Directory holding one JSON file per game's history.</summary>
     public string HistoryDirectory => Path.Combine(Root, "history");
 
