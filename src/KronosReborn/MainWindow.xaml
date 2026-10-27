@@ -258,12 +258,121 @@
                         Style="{StaticResource ToolbarButtonStyle}"
                         Command="{Binding OpenSettingsCommand}" />
 
+                <!-- Diagnostics -->
+                <Button Content="🩺 Diagnostics"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding ToggleDiagnosticsCommand}"
+                        ToolTip="Check the collection, undo history and data folder for problems" />
+
                 <!-- Download DLSS -->
                 <Button Content="⬇ DLSS"
                         Style="{StaticResource ToolbarButtonStyle}"
                         Command="{Binding ToggleDownloadCommand}"
                         ToolTip="Download DLSS runtimes from NVIDIA CDN" />
             </StackPanel>
+        </Border>
+
+        <!-- Diagnostics panel -->
+        <Border Grid.Row="1"
+                Width="520"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Margin="0,16,16,16"
+                Padding="16"
+                Panel.ZIndex="10"
+                Visibility="{Binding IsDiagnosticsOpen, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel DataContext="{Binding Diagnostics}" MaxHeight="640">
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="Diagnostics" Style="{StaticResource TitleStyle}" Margin="0,0,0,4" />
+                    <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" Margin="0,0,0,12" />
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                    <Button Content="Run again"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding RunCommand}" />
+                    <Button Content="Copy report"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding CopyCommand}"
+                            Margin="4,0,0,0" />
+                    <Button Content="Export…"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding ExportCommand}"
+                            Margin="4,0,0,0"
+                            ToolTip="Save the report, logs, settings, collection and history as a zip" />
+                    <Button Content="Close"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding DataContext.ToggleDiagnosticsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            Margin="4,0,0,0" />
+                </StackPanel>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Environment" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <ItemsControl ItemsSource="{Binding Environment}" Margin="0,0,0,12">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="140" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Value}"
+                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                   TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Checks" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <ItemsControl ItemsSource="{Binding Checks}" Margin="0,0,0,12">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,6" ToolTip="{Binding Detail}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="22" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Glyph}" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Area}"
+                                                       FontSize="{StaticResource FontSizeSmall}"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Recent errors" FontWeight="SemiBold" Margin="0,0,0,4"
+                                   Visibility="{Binding HasRecentErrors, Converter={StaticResource BoolToVisibility}}" />
+                        <ItemsControl ItemsSource="{Binding RecentErrors}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,6" ToolTip="{Binding ExceptionStackTrace}">
+                                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+                                        <TextBlock FontSize="{StaticResource FontSizeSmall}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}">
+                                            <Run Text="{Binding Timestamp, StringFormat='{}{0:g}', Mode=OneWay}" />
+                                            <Run Text=" · " />
+                                            <Run Text="{Binding Category, Mode=OneWay}" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
         </Border>
 
         <!-- Download DLSS panel -->
@@ -281,10 +390,15 @@
             <StackPanel>
                 <TextBlock Text="Download DLSS" Style="{StaticResource TitleStyle}" Margin="0,0,0,12" />
 
-                <Button Content="Scan NVIDIA CDN"
-                        Style="{StaticResource ToolbarButtonStyle}"
-                        Command="{Binding DownloadViewModel.ScanCommand}"
-                        Margin="0,0,0,8" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <Button Content="Scan NVIDIA CDN"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding DownloadViewModel.ScanCommand}" />
+                    <Button Content="Stop"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding CancelDownloadCommand}"
+                            Margin="4,0,0,0" />
+                </StackPanel>
 
                 <ItemsControl ItemsSource="{Binding DownloadViewModel.Versions}">
                     <ItemsControl.ItemTemplate>
@@ -314,7 +428,7 @@
                            Margin="0,8,0,0"
                            TextWrapping="Wrap" />
 
-                <ProgressBar Value="{Binding DownloadViewModel.Progress}"
+                <ProgressBar Value="{Binding DownloadViewModel.Progress, Mode=OneWay}"
                              Maximum="100"
                              Height="6"
                              Margin="0,4,0,0"
@@ -440,7 +554,7 @@
                         they agree. What the list shows is what each game runs, which is what you
                         compare rows by; what you can change is in the panel, on one named game.
                         -->
-                        <GridViewColumn Header="DLSS" Width="104">
+                        <GridViewColumn Header="DLSS" Width="92">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding DlssChoice.CurrentText, TargetNullValue='—'}"
@@ -450,7 +564,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <GridViewColumn Header="DLSS FG" Width="104">
+                        <GridViewColumn Header="DLSS FG" Width="92">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding DlssGChoice.CurrentText, TargetNullValue='—'}"
@@ -460,7 +574,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <GridViewColumn Header="DLSS RR" Width="104">
+                        <GridViewColumn Header="DLSS RR" Width="92">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding DlssRChoice.CurrentText, TargetNullValue='—'}"
@@ -470,7 +584,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <GridViewColumn Header="FSR" Width="104">
+                        <GridViewColumn Header="FSR" Width="92">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding FsrChoice.CurrentText, TargetNullValue='—'}"
@@ -480,7 +594,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <GridViewColumn Header="FSR VK" Width="104">
+                        <GridViewColumn Header="FSR VK" Width="92">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding FsrVkChoice.CurrentText, TargetNullValue='—'}"
@@ -490,7 +604,27 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <GridViewColumn Header="XeSS" Width="104">
+                        <GridViewColumn Header="FSR Upscaler" Width="92">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding FsrUpscalerChoice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="FSR FG" Width="92">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding FsrFgChoice.CurrentText, TargetNullValue='—'}"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="XeSS" Width="92">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding XessChoice.CurrentText, TargetNullValue='—'}"
@@ -500,7 +634,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <GridViewColumn Header="XeSS FG" Width="104">
+                        <GridViewColumn Header="XeSS FG" Width="92">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding XessFgChoice.CurrentText, TargetNullValue='—'}"
@@ -510,7 +644,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <GridViewColumn Header="XeSS DX11" Width="104">
+                        <GridViewColumn Header="XeSS DX11" Width="92">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding XessDx11Choice.CurrentText, TargetNullValue='—'}"
@@ -520,7 +654,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
 
-                        <GridViewColumn Header="XeLL" Width="104">
+                        <GridViewColumn Header="XeLL" Width="92">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding XellChoice.CurrentText, TargetNullValue='—'}"
@@ -765,6 +899,11 @@
                     <Button Content="Undo"
                             Style="{StaticResource ToolbarButtonStyle}"
                             Command="{Binding UndoCommand}"
+                            Margin="4,0,0,0" />
+
+                    <Button Content="Redo"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding RedoCommand}"
                             Margin="4,0,0,0" />
 
                     <Button x:Name="ImportButton" Content="Import…"

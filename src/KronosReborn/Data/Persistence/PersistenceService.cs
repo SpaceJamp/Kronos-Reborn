@@ -155,14 +155,20 @@ public sealed class PersistenceService : IDisposable
         _lock.EnterWriteLock();
         try
         {
-            var maxEntries = _settings.MaxHistoryPerGame;
+            // A limit below one would refuse every entry, leaving swaps that cannot be undone.
+            var maxEntries = Math.Max(1, _settings.MaxHistoryPerGame);
             var history = _histories.TryGetValue(gameId, out var existing)
                 ? existing.Add(entry, maxEntries)
                 : new GameHistory(gameId, ImmutableList.Create(entry));
 
-            _histories = _histories.SetItem(gameId, history);
             var path = HistoryPath(gameId);
             AtomicWrite(path, JsonSerializer.Serialize(GameHistoryData.FromHistory(history), JsonOptions.Default));
+            _histories = _histories.SetItem(gameId, history);
+
+            if (existing is not null)
+            {
+                DeleteDroppedBackups(existing, history);
+            }
         }
         finally
         {
@@ -234,19 +240,60 @@ public sealed class PersistenceService : IDisposable
                     histories[data.GameId] = data.ToHistory();
                 }
             }
-            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException
+                                          or NotSupportedException)
             {
+                // Kept aside, because the next swap of this game would otherwise write a new history
+                // over it and lose every undo step it held.
                 var gameId = Path.GetFileNameWithoutExtension(file);
+                var aside = DataPaths.SetAside(file);
                 problems.Add(new ScanProblem(
                     "History",
                     file,
-                    $"History for game {gameId} could not be read.",
+                    $"History for game {gameId} could not be read, so it cannot be undone from here.",
                     ex.Message,
-                    "The file will be ignored. Delete it to clear the error."));
+                    aside is null
+                        ? "The file could not be moved aside; fix or delete it before swapping this game."
+                        : $"The old file was kept as {aside}."));
             }
         }
 
         return histories;
+    }
+
+    /// <summary>
+    /// Deletes the saved copies that belonged only to entries the history limit just dropped.
+    /// </summary>
+    /// <remarks>
+    /// Without this every swap and undo left full copies of the DLLs behind forever. Only files inside
+    /// the backup folder are touched, and only ones no remaining entry still refers to.
+    /// </remarks>
+    private void DeleteDroppedBackups(GameHistory before, GameHistory after)
+    {
+        var kept = after.Entries
+            .SelectMany(e => e.Backups)
+            .Select(b => Path.GetFullPath(b.BackupPath))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var backupRoot = Path.GetFullPath(_paths.BackupDirectory) + Path.DirectorySeparatorChar;
+
+        foreach (var dropped in before.Entries.Except(after.Entries).SelectMany(e => e.Backups))
+        {
+            var path = Path.GetFullPath(dropped.BackupPath);
+            if (kept.Contains(path) || !path.StartsWith(backupRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Left for the diagnostics panel to report as unreferenced.
+            }
+        }
     }
 
     private string HistoryPath(string gameId)

@@ -75,6 +75,29 @@ public sealed class DataPaths
     public string RuntimeFolder(RuntimeKind kind, string version) =>
         Path.Combine(RuntimesDirectory, kind.ToString(), SafeName(version));
 
+    /// <summary>
+    /// Renames a data file that could not be read, so the next save does not overwrite it.
+    /// </summary>
+    /// <remarks>
+    /// Starting with empty data is right (R51), but saving that empty data over the unreadable file
+    /// threw away everything in it for good. Kept aside, it can still be repaired by hand.
+    /// </remarks>
+    /// <returns>Where the file now is, or null if it could not be moved.</returns>
+    public static string? SetAside(string path)
+    {
+        var aside = $"{path}.unreadable-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}";
+
+        try
+        {
+            File.Move(path, aside);
+            return aside;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Creates the data directory if it is not already there.</summary>
     public string EnsureCreated()
     {

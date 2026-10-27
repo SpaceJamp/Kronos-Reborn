@@ -43,6 +43,9 @@ public sealed class RuntimeCatalog : IDisposable
         Load();
     }
 
+    /// <summary>Why the catalog file could not be read at start, or null when it was fine.</summary>
+    public KronosReborn.Data.Libraries.ScanProblem? LoadProblem { get; private set; }
+
     /// <summary>All entries in the catalog.</summary>
     public IReadOnlyList<CatalogEntry> Entries
     {
@@ -57,20 +60,6 @@ public sealed class RuntimeCatalog : IDisposable
             {
                 _lock.ExitReadLock();
             }
-        }
-    }
-
-    /// <summary>Entries for a specific runtime kind.</summary>
-    public IReadOnlyList<CatalogEntry> GetByKind(RuntimeKind kind)
-    {
-        _lock.EnterReadLock();
-        try
-        {
-            return _entries.Values.Where(e => e.Kind == kind).ToList();
-        }
-        finally
-        {
-            _lock.ExitReadLock();
         }
     }
 
@@ -122,26 +111,21 @@ public sealed class RuntimeCatalog : IDisposable
         {
             if (_entries.TryGetValue(id, out var existing))
             {
-                // Already have this version from this source, nothing to do
-                return existing;
+                // The entry points at the game it was first found in. Once that game is uninstalled
+                // or swapped to another version, the file there is not this version any more, so this
+                // game's copy takes its place.
+                if (StillHolds(existing))
+                {
+                    return existing;
+                }
+
+                var moved = Discovered(id, detected, sourceDetail);
+                _entries = _entries.SetItem(id, moved);
+                Save();
+                return moved;
             }
 
-            // Check signature for discovered files too - a game might have a modified DLL
-            var sig = SignatureVerifier.Check(detected.FullPath);
-            var trust = sig.HasValidSignature ? RuntimeTrust.Trusted : RuntimeTrust.Untrusted;
-
-            var entry = new CatalogEntry(
-                id,
-                detected.Kind,
-                detected.Version,
-                detected.ProductVersion,
-                RuntimeSource.Discovered,
-                sourceDetail,
-                detected.FullPath,
-                trust,
-                DateTimeOffset.UtcNow,
-                sig.Details);
-
+            var entry = Discovered(id, detected, sourceDetail);
             _entries = _entries.Add(id, entry);
             Save();
             return entry;
@@ -150,6 +134,31 @@ public sealed class RuntimeCatalog : IDisposable
         {
             _lock.ExitWriteLock();
         }
+    }
+
+    /// <summary>Whether an entry's file still exists and still declares the entry's version.</summary>
+    private static bool StillHolds(CatalogEntry entry) =>
+        File.Exists(entry.FilePath)
+        && VersionNumber.TryRead(entry.FilePath, out var onDisk, out _, out _)
+        && (onDisk is null || VersionNumber.AreEquivalent(onDisk, entry.Version));
+
+    private static CatalogEntry Discovered(string id, DetectedRuntime detected, string sourceDetail)
+    {
+        // Check signature for discovered files too - a game might have a modified DLL
+        var sig = SignatureVerifier.Check(detected.FullPath);
+        var trust = sig.HasValidSignature ? RuntimeTrust.Trusted : RuntimeTrust.Untrusted;
+
+        return new CatalogEntry(
+            id,
+            detected.Kind,
+            detected.Version!,
+            detected.ProductVersion,
+            RuntimeSource.Discovered,
+            sourceDetail,
+            detected.FullPath,
+            trust,
+            DateTimeOffset.UtcNow,
+            sig.Details);
     }
 
     /// <summary>
@@ -171,7 +180,6 @@ public sealed class RuntimeCatalog : IDisposable
         return added;
     }
 
-    /// <summary>
     /// <summary>
     /// Records a runtime version the collection now owns a copy of.
     /// </summary>
@@ -227,7 +235,14 @@ public sealed class RuntimeCatalog : IDisposable
                 // earlier untrusted acceptance rather than sitting beside it.
                 if (trust == RuntimeTrust.Trusted && existing.Trust != RuntimeTrust.Trusted)
                 {
-                    var improved = existing with { Trust = trust, SignatureInfo = signature.Details };
+                    // The trusted file may live in another folder (a download), so point at it.
+                    var improved = existing with
+                    {
+                        Trust = trust,
+                        SignatureInfo = signature.Details,
+                        FilePath = primary,
+                        SourceDetail = sourceDetail,
+                    };
                     _entries = _entries.SetItem(id, improved);
                     Save();
                     return improved;
@@ -323,17 +338,32 @@ public sealed class RuntimeCatalog : IDisposable
 
             if (data?.Entries is not null)
             {
-                var dict = data.Entries.ToImmutableDictionary(e => e.Id, e => e);
-                _entries = dict;
+                // A repeated id keeps the later entry, rather than failing the whole load.
+                var dict = ImmutableDictionary.CreateBuilder<string, CatalogEntry>();
+                foreach (var entry in data.Entries)
+                {
+                    dict[entry.Id] = entry;
+                }
+
+                _entries = dict.ToImmutable();
             }
         }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException
+                                      or ArgumentException or NotSupportedException)
         {
-            // R51: corrupt or unreadable data file does not stop the program starting.
-            // It is reported (via empty catalog) and the rest of the data is used.
-            // The caller can check if the catalog loaded by checking if Entries is empty
-            // when a file was expected. We don't throw.
+            // R51: an unreadable catalog does not stop the program starting. It is kept aside, so the
+            // next save does not overwrite it, and reported.
             _entries = ImmutableDictionary<string, CatalogEntry>.Empty;
+
+            var aside = KronosReborn.Data.Persistence.DataPaths.SetAside(_catalogPath);
+            LoadProblem = new KronosReborn.Data.Libraries.ScanProblem(
+                "Collection",
+                _catalogPath,
+                "The list of versions you hold could not be read, so the collection starts empty.",
+                ex.Message,
+                aside is null
+                    ? "The file could not be moved aside either; fix or delete it before adding versions."
+                    : $"The old file was kept as {aside}. The version files themselves are untouched.");
         }
     }
 
@@ -342,8 +372,9 @@ public sealed class RuntimeCatalog : IDisposable
         var data = new CatalogData(_entries.Values.ToList());
         var json = JsonSerializer.Serialize(data, JsonOptions.Default);
 
-        // R52: atomic write - write to temp then move
-        var tempPath = _catalogPath + ".tmp";
+        // R52: atomic write - write to temp then move. A unique temp name, so a second copy of the
+        // program saving at the same moment cannot interleave into one file.
+        var tempPath = $"{_catalogPath}.{Guid.NewGuid():N}.tmp";
         File.WriteAllText(tempPath, json);
         File.Move(tempPath, _catalogPath, overwrite: true);
     }

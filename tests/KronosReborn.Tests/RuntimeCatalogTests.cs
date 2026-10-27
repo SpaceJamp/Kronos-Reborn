@@ -228,6 +228,42 @@ public class RuntimeCatalogTests
 
         // R51: corrupt file doesn't stop startup, returns empty
         Assert.Empty(catalog.Entries);
+
+        // And it is kept aside and reported, so the next save cannot overwrite what was in it.
+        Assert.NotNull(catalog.LoadProblem);
+        var aside = Assert.Single(Directory.GetFiles(temp.Root, "catalog.json.unreadable-*"));
+        Assert.Equal("not json at all {", File.ReadAllText(aside));
+    }
+
+    [Fact]
+    public void ACatalogWithARepeatedIdStillLoads()
+    {
+        using var temp = new TemporaryDirectory();
+        var catalogPath = Path.Combine(temp.Root, "catalog.json");
+        using (var first = new RuntimeCatalog(catalogPath))
+        {
+            Assert.NotNull(first.AddImport(RuntimeKind.Dlss, "1.0", WriteImportFolder(temp), "x", RuntimeTrust.Trusted));
+        }
+
+        // Duplicate the one entry by hand, as an edited or merged file might.
+        var json = File.ReadAllText(catalogPath);
+        var start = json.IndexOf('{', json.IndexOf('[', StringComparison.Ordinal));
+        var end = json.LastIndexOf('}', json.LastIndexOf(']'));
+        var item = json[start..(end + 1)];
+        File.WriteAllText(catalogPath, json.Replace(item, item + "," + item, StringComparison.Ordinal));
+
+        // This used to throw out of the constructor and stop the program starting.
+        using var catalog = new RuntimeCatalog(catalogPath);
+        Assert.Single(catalog.Entries);
+        Assert.Null(catalog.LoadProblem);
+    }
+
+    private static string WriteImportFolder(TemporaryDirectory temp)
+    {
+        var folder = Path.Combine(temp.Root, "import");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "nvngx_dlss.dll"), "x");
+        return folder;
     }
 
     [Fact]

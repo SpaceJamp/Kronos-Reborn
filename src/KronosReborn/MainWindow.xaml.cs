@@ -39,7 +39,8 @@ public partial class MainWindow : Window
         var logFilePath = Path.Combine(paths.Root, "logs", "kronosreborn.log");
         Directory.CreateDirectory(Path.GetDirectoryName(logFilePath)!);
         Log.Instance.AddSink(new FileLogSink(logFilePath));
-        Log.Instance.AddSink(new MemoryLogSink(5000));
+        var recentLog = new MemoryLogSink(5000);
+        Log.Instance.AddSink(recentLog);
 
         Log.Instance.Information("Kronos Reborn starting", category: "App.Startup");
         Log.Instance.Information($"Data directory: {paths.Root}", category: "App.Startup");
@@ -52,7 +53,9 @@ public partial class MainWindow : Window
         var catalog = new RuntimeCatalog(paths.CatalogPath);
         _themeManager = new ThemeManager(_settings);
 
-        _viewModel = new MainViewModel(catalog, _persistence, _settings, _themeManager, paths, new RuntimeFilePicker(this));
+        _viewModel = new MainViewModel(
+            catalog, _persistence, _settings, _themeManager, paths, new RuntimeFilePicker(this),
+            recentLog, catalog.LoadProblem is { } bad ? [.. loadResult.Problems, bad] : loadResult.Problems);
 
         DataContext = _viewModel;
 
@@ -101,6 +104,19 @@ public partial class MainWindow : Window
                 Title = "Choose a graphics runtime file to add to the collection",
                 Filter = "Runtime files (*.dll)|*.dll|All files (*.*)|*.*",
                 CheckFileExists = true,
+            };
+
+            return dialog.ShowDialog(owner) == true ? dialog.FileName : null;
+        }
+
+        public string? AskWhereToSaveDiagnostics(string suggestedName)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Save diagnostics",
+                Filter = "Zip archive (*.zip)|*.zip",
+                FileName = suggestedName,
+                OverwritePrompt = true,
             };
 
             return dialog.ShowDialog(owner) == true ? dialog.FileName : null;

@@ -46,19 +46,7 @@ public sealed record DetectedRuntime(
     /// <summary>A one-line description for display.</summary>
     public string Describe()
     {
-        var kindName = Kind switch
-        {
-            RuntimeKind.Dlss => "DLSS",
-            RuntimeKind.DlssG => "DLSS Frame Gen",
-            RuntimeKind.DlssR => "DLSS Ray Recon",
-            RuntimeKind.Fsr => "FSR",
-            RuntimeKind.FsrVk => "FSR (Vulkan)",
-            RuntimeKind.Xess => "XeSS",
-            RuntimeKind.XessFg => "XeSS Frame Gen",
-            RuntimeKind.XessDx11 => "XeSS (DX11)",
-            RuntimeKind.Xell => "XeLL",
-            _ => Kind.ToString()
-        };
+        var kindName = RuntimeKindNames.Display(Kind);
 
         if (!Exists)
         {

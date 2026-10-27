@@ -6,8 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace KronosReborn.Data.Logging;
 
@@ -39,51 +37,6 @@ public sealed record LogEntry(
     string? ExceptionType,
     string? ExceptionMessage,
     string? ExceptionStackTrace);
-
-/// <summary>
-/// Builder for constructing log entries with optional structured properties.
-/// </summary>
-public sealed class LogEntryBuilder
-{
-    private readonly LogLevel _level;
-    private readonly string _message;
-    private readonly string? _category;
-    private readonly string? _correlationId;
-    private readonly string? _source;
-    private readonly Dictionary<string, object?> _properties = new();
-
-    internal LogEntryBuilder(LogLevel level, string message, string? category, string? correlationId, string? source)
-    {
-        _level = level;
-        _message = message;
-        _category = category;
-        _correlationId = correlationId;
-        _source = source;
-    }
-
-    /// <summary>Adds a structured property to the log entry.</summary>
-    public LogEntryBuilder WithProperty(string name, object? value)
-    {
-        _properties[name] = value;
-        return this;
-    }
-
-    internal LogEntry Build(string? exceptionType, string? exceptionMessage, string? exceptionStackTrace)
-    {
-        return new LogEntry(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            _level,
-            _message,
-            _category,
-            _correlationId,
-            _source,
-            _properties,
-            exceptionType,
-            exceptionMessage,
-            exceptionStackTrace);
-    }
-}
 
 /// <summary>
 /// Destination for log entries. Implementations write entries to files, consoles,
@@ -226,48 +179,13 @@ public sealed class MemoryLogSink : ILogSink
 }
 
 /// <summary>
-/// Filters log entries by minimum level and optional category.
-/// </summary>
-public sealed class LogFilter : ILogSink
-{
-    private readonly ILogSink _inner;
-    private readonly LogLevel _minimumLevel;
-    private readonly string? _category;
-
-    public LogFilter(ILogSink inner, LogLevel minimumLevel = LogLevel.Trace, string? category = null)
-    {
-        _inner = inner;
-        _minimumLevel = minimumLevel;
-        _category = category;
-    }
-
-    public LogLevel MinimumLevel => _minimumLevel;
-
-    public void Write(LogEntry entry)
-    {
-        if (entry.Level < _minimumLevel) return;
-        if (_category is not null && !string.Equals(entry.Category, _category, StringComparison.OrdinalIgnoreCase)) return;
-        _inner.Write(entry);
-    }
-
-    public void Flush() => _inner.Flush();
-}
-
-/// <summary>
-/// Central logging service with multiple sinks, structured properties, and
-/// correlation-ID support for tracing operations across components.
+/// Central logging service with multiple sinks and structured properties.
 /// </summary>
 public sealed class Logger : IDisposable
 {
     private readonly List<ILogSink> _sinks = new();
     private readonly object _lock = new();
-    private readonly AsyncLocal<string?> _correlationId = new();
     private readonly Dictionary<string, object?> _globalProperties = new();
-    private int _totalEntries;
-    private int _entriesByLevel;
-
-    /// <summary>Number of entries written so far.</summary>
-    public int TotalEntries => _totalEntries;
 
     /// <summary>Adds a sink. All entries are written to every sink.</summary>
     public void AddSink(ILogSink sink)
@@ -293,45 +211,6 @@ public sealed class Logger : IDisposable
         lock (_lock)
         {
             _globalProperties[name] = value;
-        }
-    }
-
-    /// <summary>Removes a global property.</summary>
-    public bool RemoveGlobalProperty(string name)
-    {
-        lock (_lock)
-        {
-            return _globalProperties.Remove(name);
-        }
-    }
-
-    /// <summary>Gets or creates a correlation ID for the current async flow.</summary>
-    public string? CorrelationId
-    {
-        get => _correlationId.Value;
-        set => _correlationId.Value = value;
-    }
-
-    /// <summary>Creates a new correlation ID and sets it for the current async flow.</summary>
-    public string CreateCorrelationId()
-    {
-        var id = Guid.NewGuid().ToString("N")[..12];
-        _correlationId.Value = id;
-        return id;
-    }
-
-    /// <summary>Runs an operation with a new correlation ID.</summary>
-    public async Task<T> RunWithCorrelationId<T>(string correlationId, Func<Task<T>> action)
-    {
-        var previous = _correlationId.Value;
-        _correlationId.Value = correlationId;
-        try
-        {
-            return await action();
-        }
-        finally
-        {
-            _correlationId.Value = previous;
         }
     }
 
@@ -388,60 +267,75 @@ public sealed class Logger : IDisposable
     {
         lock (_lock)
         {
-            foreach (var sink in _sinks) sink.Flush();
-        }
-    }
-
-    private void Write(LogLevel level, string message, string? category, IEnumerable<(string Name, object? Value)> properties)
-    {
-        var entry = new LogEntry(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            level,
-            message,
-            category,
-            _correlationId.Value,
-            null,
-            _globalProperties.Select(kv => (Name: kv.Key, Value: kv.Value)).Concat(properties).GroupBy(kv => kv.Name).ToDictionary(g => g.Key, g => g.Last().Value),
-            null, null, null);
-
-        lock (_lock)
-        {
-            _totalEntries++;
-            _entriesByLevel++;
             foreach (var sink in _sinks)
             {
-                if (entry.Level >= sink.MinimumLevel)
+                try
                 {
-                    sink.Write(entry);
+                    sink.Flush();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException)
+                {
+                    // See Dispatch.
                 }
             }
         }
     }
 
+    private void Write(LogLevel level, string message, string? category, IEnumerable<(string Name, object? Value)> properties)
+    {
+        Dispatch(level, message, category, properties, exception: null);
+    }
+
     private void WriteException(LogLevel level, Exception exception, string? message, string? category)
     {
-        var entry = new LogEntry(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            level,
-            message ?? exception.Message,
-            category,
-            _correlationId.Value,
-            null,
-            _globalProperties,
-            exception.GetType().FullName,
-            exception.Message,
-            exception.StackTrace);
+        Dispatch(level, message ?? exception.Message, category, [], exception);
+    }
 
+    private void Dispatch(
+        LogLevel level,
+        string message,
+        string? category,
+        IEnumerable<(string Name, object? Value)> properties,
+        Exception? exception)
+    {
         lock (_lock)
         {
-            _totalEntries++;
+            // Built under the lock, because the global properties are a shared dictionary, and copied,
+            // so a later change to them cannot rewrite an entry already logged.
+            var merged = new Dictionary<string, object?>(_globalProperties);
+            foreach (var (name, value) in properties)
+            {
+                merged[name] = value;
+            }
+
+            var entry = new LogEntry(
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                level,
+                message,
+                category,
+                null,
+                null,
+                merged,
+                exception?.GetType().FullName,
+                exception?.Message,
+                exception?.StackTrace);
+
             foreach (var sink in _sinks)
             {
-                if (entry.Level >= sink.MinimumLevel)
+                if (entry.Level < sink.MinimumLevel)
+                {
+                    continue;
+                }
+
+                try
                 {
                     sink.Write(entry);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException)
+                {
+                    // A log that cannot be written must not fail the work being logged: a full disk
+                    // used to turn a finished swap into a rolled-back one, and crash an undo.
                 }
             }
         }

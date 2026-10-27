@@ -134,7 +134,7 @@ public sealed class SteamLibraryScanner
 
         // Cover art is looked up once per library rather than per game, so the artwork folder is
         // enumerated a single time instead of once for every manifest in it.
-        var posterPaths = ReadPosterPaths(libraryRoot, manifests);
+        var posterPaths = ReadPosterPaths(steamRoot, ordered);
 
         foreach (var file in ordered)
         {
@@ -152,20 +152,20 @@ public sealed class SteamLibraryScanner
     /// missing or unreadable artwork folder produces no game and no problem — it only means the list
     /// has no posters in it.
     /// </remarks>
-    private static IReadOnlyDictionary<string, string> ReadPosterPaths(string libraryRoot, string manifests)
+    private static IReadOnlyDictionary<string, string> ReadPosterPaths(string steamRoot, IEnumerable<string> manifests)
     {
         var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // manifests is <steam root>/steamapps, so the Steam root is one level up from it.
-        var steamRoot = Path.GetDirectoryName(manifests);
-        if (steamRoot is null || !Directory.Exists(steamRoot))
+        // Steam keeps artwork under its own installation, whichever library the game is in. Looking
+        // inside the library instead found nothing for every game outside the main Steam folder.
+        if (!Directory.Exists(steamRoot))
         {
             return found;
         }
 
         try
         {
-            foreach (var manifest in Directory.EnumerateFiles(manifests, "appmanifest_*.acf"))
+            foreach (var manifest in manifests)
             {
                 if (SteamAppManifest.TryGetAppIdFromFileName(Path.GetFileName(manifest)) is not { } appId)
                 {

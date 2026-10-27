@@ -30,7 +30,7 @@ public class RuntimeChoiceTests
 
         // One per kind, always. A row's column binds to a real object every time rather than sometimes
         // binding to nothing, which leaves the interface with no way to tell absence from a fault.
-        Assert.Equal(9, choices.Count);
+        Assert.Equal(Enum.GetValues<RuntimeKind>().Length, choices.Count);
         Assert.Equal(
             Enum.GetValues<RuntimeKind>().OrderBy(RuntimeKindNames.Display),
             choices.Select(c => c.Kind));
@@ -234,7 +234,8 @@ public class RuntimeChoiceTests
         var labels = groups.Select(g => g.Label).ToList();
 
         Assert.Equal(
-            ["DLSS", "DLSS Frame Gen", "DLSS Ray Recon", "FSR", "FSR (Vulkan)", "XeLL", "XeSS", "XeSS (DX11)", "XeSS Frame Gen"],
+            ["DLSS", "DLSS Frame Gen", "DLSS Ray Recon", "FSR", "FSR (Vulkan)", "FSR Frame Gen", "FSR Upscaler",
+             "XeLL", "XeSS", "XeSS (DX11)", "XeSS Frame Gen"],
             labels);
         Assert.DoesNotContain(labels, l => l.Contains(".dll", StringComparison.Ordinal));
         Assert.DoesNotContain(labels, l => l.Contains("nvngx", StringComparison.OrdinalIgnoreCase));

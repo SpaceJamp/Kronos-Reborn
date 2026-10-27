@@ -95,41 +95,6 @@ public class RuntimeImporterTests
         Assert.Contains("could not be found", preview.Error!, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void AMultiFileRuntimeNeedsAllOfItsFilesTogether()
-    {
-        using var temp = new TemporaryDirectory();
-
-        // FSR is two DLLs. Only one is present.
-        var primary = WriteRuntimeFile(temp, RuntimeKind.Fsr, RuntimeDlls.ByKind[RuntimeKind.Fsr][0]);
-
-        var preview = RuntimeImporter.Inspect(primary);
-
-        // The bug this guards: a catalog entry existed for this runtime with only one of its two
-        // files, so the picker offered something that could never be installed.
-        Assert.False(preview.CanImport);
-        Assert.Equal([RuntimeDlls.ByKind[RuntimeKind.Fsr][1]], preview.MissingFiles);
-        Assert.Contains("not in the same folder", preview.Error!, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AMultiFileRuntimeTakesEveryFileBesideIt()
-    {
-        using var temp = new TemporaryDirectory();
-
-        foreach (var name in RuntimeDlls.ByKind[RuntimeKind.Fsr])
-        {
-            WriteRuntimeFile(temp, RuntimeKind.Fsr, name);
-        }
-
-        var primary = Path.Combine(temp.Root, RuntimeDlls.ByKind[RuntimeKind.Fsr][0]);
-        var preview = RuntimeImporter.Inspect(primary);
-
-        Assert.True(preview.CanImport);
-        Assert.Empty(preview.MissingFiles);
-        Assert.Equal(2, preview.Files.Count);
-    }
-
     // ------------------------------------------------------------ Importing
 
     [Fact]
@@ -227,6 +192,31 @@ public class RuntimeImporterTests
         // One version is one entry, however many times it is offered.
         Assert.Single(fixture.Catalog.Entries);
         Assert.Equal(first.Entry!.Id, second.Entry!.Id);
+    }
+
+    [Fact]
+    public void AnUntrustedCopyCannotReplaceATrustedVersionOfTheSameNumber()
+    {
+        using var temp = new TemporaryDirectory();
+        using var fixture = new ImportFixture(temp);
+        var dll = WriteRuntimeFile(temp, RuntimeKind.Dlss);
+        Assert.True(VersionNumber.TryRead(dll, out var version, out _, out _));
+
+        // A trusted copy of this version is already held, in the folder an import would write to.
+        var folder = fixture.Paths.RuntimeFolder(RuntimeKind.Dlss, version!);
+        Directory.CreateDirectory(folder);
+        var held = Path.Combine(folder, RuntimeDlls.ByKind[RuntimeKind.Dlss][0]);
+        WriteRealDll(held);
+        File.AppendAllText(held, "trusted");
+        Assert.NotNull(fixture.Catalog.AddImport(
+            RuntimeKind.Dlss, version!, folder, "vendor", RuntimeTrust.Trusted));
+
+        var result = fixture.Importer.Import(dll, acceptUntrusted: true);
+
+        // Refused, and the trusted file was not overwritten underneath its trusted label.
+        Assert.False(result.Succeeded);
+        Assert.Contains("already in the collection", result.Error);
+        Assert.EndsWith("trusted", File.ReadAllText(held));
     }
 
     [Fact]

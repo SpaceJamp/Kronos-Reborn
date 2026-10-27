@@ -108,6 +108,32 @@ public static class VersionNumber
         return true;
     }
 
+    /// <summary>Whether <paramref name="left"/> is an older version than <paramref name="right"/>.</summary>
+    /// <remarks>False when either is unknown: an unknown version is never guessed to be older.</remarks>
+    public static bool IsOlder(string? left, string? right)
+    {
+        var a = Components(left);
+        var b = Components(right);
+
+        if (a.Length == 0 || b.Length == 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < Math.Max(a.Length, b.Length); i++)
+        {
+            var av = i < a.Length ? a[i] : 0;
+            var bv = i < b.Length ? b[i] : 0;
+
+            if (av != bv)
+            {
+                return av < bv;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>The numeric components of a version, with anything unparseable treated as zero.</summary>
     private static int[] Components(string? version)
     {

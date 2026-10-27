@@ -22,6 +22,8 @@ public static class RuntimeKindNames
         RuntimeKind.XessFg => "XeSS Frame Gen",
         RuntimeKind.XessDx11 => "XeSS (DX11)",
         RuntimeKind.Xell => "XeLL",
+        RuntimeKind.FsrUpscaler => "FSR Upscaler",
+        RuntimeKind.FsrFg => "FSR Frame Gen",
         _ => kind.ToString(),
     };
 }

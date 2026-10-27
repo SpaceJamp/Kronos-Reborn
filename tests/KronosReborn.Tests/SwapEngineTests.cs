@@ -33,26 +33,26 @@ public class SwapEngineTests
     [Fact]
     public void VersionComparerDetectsOlder()
     {
-        Assert.True(VersionComparer.IsOlder("3.7.10", "3.8.0"));
-        Assert.True(VersionComparer.IsOlder("3.7.10", "3.7.11"));
-        Assert.True(VersionComparer.IsOlder("2.0.0", "3.0.0"));
-        Assert.True(VersionComparer.IsOlder("1.0.0", "1.0.1"));
-        Assert.True(VersionComparer.IsOlder("1.0", "1.0.1"));
+        Assert.True(VersionNumber.IsOlder("3.7.10", "3.8.0"));
+        Assert.True(VersionNumber.IsOlder("3.7.10", "3.7.11"));
+        Assert.True(VersionNumber.IsOlder("2.0.0", "3.0.0"));
+        Assert.True(VersionNumber.IsOlder("1.0.0", "1.0.1"));
+        Assert.True(VersionNumber.IsOlder("1.0", "1.0.1"));
     }
 
     [Fact]
     public void VersionComparerDetectsNewerOrEqual()
     {
-        Assert.False(VersionComparer.IsOlder("3.8.0", "3.7.10"));
-        Assert.False(VersionComparer.IsOlder("3.7.10", "3.7.10"));
-        Assert.False(VersionComparer.IsOlder("3.7.11", "3.7.10"));
+        Assert.False(VersionNumber.IsOlder("3.8.0", "3.7.10"));
+        Assert.False(VersionNumber.IsOlder("3.7.10", "3.7.10"));
+        Assert.False(VersionNumber.IsOlder("3.7.11", "3.7.10"));
     }
 
     [Fact]
     public void VersionComparerHandlesDifferentLengths()
     {
-        Assert.True(VersionComparer.IsOlder("1.0", "1.0.1"));
-        Assert.False(VersionComparer.IsOlder("1.0.1", "1.0"));
+        Assert.True(VersionNumber.IsOlder("1.0", "1.0.1"));
+        Assert.False(VersionNumber.IsOlder("1.0.1", "1.0"));
     }
 
     // ------------------------------------------------------------ SwapPlanner
@@ -178,16 +178,84 @@ public class SwapEngineTests
     }
 
     [Fact]
-    public void SwapPlannerProducesNothingWhenTheCatalogLacksPartOfTheKind()
+    public void SwapPlannerProducesNothingWhenTheCollectionFileIsGone()
     {
         using var fixture = new SwapFixture(RuntimeKind.Fsr);
         fixture.InstallRuntime("3.2.0");
 
-        // Remove one of the two DLLs an FSR runtime consists of.
-        var missing = Path.Combine(fixture.CollectionFolder, RuntimeDlls.ByKind[RuntimeKind.Fsr][1]);
-        File.Delete(missing);
+        File.Delete(Path.Combine(fixture.CollectionFolder, RuntimeDlls.ByKind[RuntimeKind.Fsr][0]));
 
         Assert.Empty(fixture.Plan());
+    }
+
+    [Fact]
+    public void AVersionFoundInAGameIsNotInstalledOnceThatGameRunsAnotherVersion()
+    {
+        // The collection entry for a version found in a game points at that game's own DLL. Here the
+        // entry says 99.0.0 but the file now declares the test assembly's version, as happens once
+        // the game it came from is swapped: copying it would install the wrong version.
+        using var fixture = new SwapFixture(RuntimeKind.Dlss);
+        fixture.InstallRuntime("99.0.0");
+        File.Copy(
+            typeof(SwapEngineTests).Assembly.Location,
+            Path.Combine(fixture.CollectionFolder, "nvngx_dlss.dll"),
+            overwrite: true);
+
+        Assert.Empty(fixture.Plan());
+    }
+
+    [Fact]
+    public void ASwapReplacesEveryCopyTheGameCarries()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Dlss);
+        fixture.InstallRuntime("3.8.0");
+        var second = Path.Combine(fixture.GameFolder, "plugin", "nvngx_dlss.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(second)!);
+        File.WriteAllText(second, SwapFixture.OldContent("nvngx_dlss.dll"));
+
+        Assert.True(Assert.Single(fixture.Swap().Results).Succeeded);
+
+        Assert.Equal(SwapFixture.NewContent("nvngx_dlss.dll"), File.ReadAllText(second));
+        Assert.Equal(SwapFixture.NewContent("nvngx_dlss.dll"),
+            File.ReadAllText(Path.Combine(fixture.GameFolder, "nvngx_dlss.dll")));
+    }
+
+    [Fact]
+    public void ASwapThatCannotBeRecordedIsPutBack()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Dlss);
+        fixture.InstallRuntime("3.8.0");
+        var plan = Assert.Single(fixture.Plan());
+
+        // History cannot be written: its folder is a file.
+        File.WriteAllText(fixture.Paths.HistoryDirectory, "in the way");
+
+        var result = Assert.Single(fixture.Execute(plan).Results);
+
+        // A swap with no undo record must not survive.
+        Assert.False(result.Succeeded);
+        Assert.Contains("could not be recorded", result.ErrorMessage);
+        Assert.Equal(SwapFixture.OldContent("nvngx_dlss.dll"),
+            File.ReadAllText(Path.Combine(fixture.GameFolder, "nvngx_dlss.dll")));
+    }
+
+    [Fact]
+    public void WhenOnePartOfAGameFailsTheOtherPartsArePutBack()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Dlss);
+        fixture.InstallRuntime("3.8.0");
+        var dlss = Assert.Single(fixture.Plan());
+
+        // A second part of the same game that cannot be applied.
+        var broken = dlss with { RuntimeKind = RuntimeKind.DlssG, TargetEntryId = "missing-entry" };
+
+        var batch = fixture.Execute(dlss, broken);
+
+        Assert.All(batch.Results, r => Assert.False(r.Succeeded));
+        Assert.Contains(batch.Results, r => r.ErrorMessage!.Contains("Rolled back", StringComparison.Ordinal));
+        Assert.Equal(SwapFixture.OldContent("nvngx_dlss.dll"),
+            File.ReadAllText(Path.Combine(fixture.GameFolder, "nvngx_dlss.dll")));
+        Assert.Empty(fixture.Persistence.GetHistory(fixture.GameId).Entries);
     }
 
     [Theory]
@@ -200,6 +268,8 @@ public class SwapEngineTests
     [InlineData(RuntimeKind.XessFg)]
     [InlineData(RuntimeKind.XessDx11)]
     [InlineData(RuntimeKind.Xell)]
+    [InlineData(RuntimeKind.FsrUpscaler)]
+    [InlineData(RuntimeKind.FsrFg)]
     public void SwapPlannerTargetsEveryDllOfTheKind(RuntimeKind kind)
     {
         using var fixture = new SwapFixture(kind);
@@ -245,6 +315,8 @@ public class SwapEngineTests
     [InlineData(RuntimeKind.XessFg)]
     [InlineData(RuntimeKind.XessDx11)]
     [InlineData(RuntimeKind.Xell)]
+    [InlineData(RuntimeKind.FsrUpscaler)]
+    [InlineData(RuntimeKind.FsrFg)]
     public void SwapInstallsEveryDllOfTheKind(RuntimeKind kind)
     {
         using var fixture = new SwapFixture(kind);
@@ -407,7 +479,7 @@ public class SwapEngineTests
         {
             GameId = "other-game",
             GameName = "Other Game",
-            TargetVersion = "9.9.9",
+            TargetEntryId = "missing-entry",
         };
 
         var batch = fixture.Execute(good, broken);
@@ -430,6 +502,8 @@ public class SwapEngineTests
     [InlineData(RuntimeKind.XessFg)]
     [InlineData(RuntimeKind.XessDx11)]
     [InlineData(RuntimeKind.Xell)]
+    [InlineData(RuntimeKind.FsrUpscaler)]
+    [InlineData(RuntimeKind.FsrFg)]
     public void UndoRestoresEveryDllOfTheKind(RuntimeKind kind)
     {
         using var fixture = new SwapFixture(kind);
@@ -532,13 +606,98 @@ public class SwapEngineTests
         Assert.Equal(SwapFixture.OldContent("nvngx_dlss.dll"),
             File.ReadAllText(Path.Combine(fixture.GameFolder, "nvngx_dlss.dll")));
 
-        // R26: each step is separately reversible. The undo used to write a history entry with no
-        // backups, so the second undo reported "nothing to undo" and the change was permanent.
-        var redo = fixture.Undo();
+        // R26: each step is separately reversible.
+        var redo = fixture.Redo();
 
         Assert.True(redo.Succeeded, redo.ErrorMessage);
         Assert.Equal(SwapFixture.NewContent("nvngx_dlss.dll"),
             File.ReadAllText(Path.Combine(fixture.GameFolder, "nvngx_dlss.dll")));
+
+        // And the redo can be undone again.
+        Assert.True(fixture.Undo().Succeeded);
+        Assert.Equal(SwapFixture.OldContent("nvngx_dlss.dll"),
+            File.ReadAllText(Path.Combine(fixture.GameFolder, "nvngx_dlss.dll")));
+    }
+
+    [Fact]
+    public void RepeatedUndoWalksBackThroughSwapsInsteadOfRedoing()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Dlss);
+        fixture.InstallRuntime("3.8.0");
+        var game = Path.Combine(fixture.GameFolder, "nvngx_dlss.dll");
+
+        Assert.True(Assert.Single(fixture.Swap().Results).Succeeded);
+        fixture.GameReportedVersion = "3.8.0";
+        fixture.AddVersion("3.9.0", "NEWER");
+        Assert.True(Assert.Single(fixture.Swap().Results).Succeeded);
+        Assert.Equal("NEWER", File.ReadAllText(game));
+
+        // The first undo goes back to 3.8.0, the second to the original, and a third has nothing left.
+        Assert.True(fixture.Undo().Succeeded);
+        Assert.Equal(SwapFixture.NewContent("nvngx_dlss.dll"), File.ReadAllText(game));
+        Assert.True(fixture.Undo().Succeeded);
+        Assert.Equal(SwapFixture.OldContent("nvngx_dlss.dll"), File.ReadAllText(game));
+        Assert.Contains("Nothing to undo", fixture.Undo().ErrorMessage);
+
+        // Redo replays them in order, and the undo stack survives a restart.
+        var redone = fixture.RedoAfterRestart();
+        Assert.True(redone.Succeeded, redone.ErrorMessage);
+        Assert.Equal(SwapFixture.NewContent("nvngx_dlss.dll"), File.ReadAllText(game));
+        Assert.True(fixture.RedoAfterRestart().Succeeded);
+        Assert.Equal("NEWER", File.ReadAllText(game));
+        Assert.Contains("Nothing to redo", fixture.RedoAfterRestart().ErrorMessage);
+    }
+
+    [Fact]
+    public void RedoPutsBackFilesTheUndoRemoved()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Dlss);
+        fixture.InstallRuntime("3.8.0");
+        var game = Path.Combine(fixture.GameFolder, "nvngx_dlss.dll");
+        File.Delete(game);
+
+        Assert.True(Assert.Single(fixture.Swap().Results).Succeeded);
+        Assert.True(fixture.Undo().Succeeded);
+        Assert.False(File.Exists(game));
+
+        var redo = fixture.Redo();
+
+        Assert.True(redo.Succeeded, redo.ErrorMessage);
+        Assert.Equal(SwapFixture.NewContent("nvngx_dlss.dll"), File.ReadAllText(game));
+
+        // And undoing the redo removes it again.
+        Assert.True(fixture.Undo().Succeeded);
+        Assert.False(File.Exists(game));
+    }
+
+    [Fact]
+    public void AnUndoThatFailsPartWayPutsTheGameBackAndCanBeRetried()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Dlss);
+        fixture.InstallRuntime("3.8.0");
+
+        // Two copies of the DLL, so the undo has a second file to fail on after the first is done.
+        var first = Path.Combine(fixture.GameFolder, "nvngx_dlss.dll");
+        var second = Path.Combine(fixture.GameFolder, "zz", "nvngx_dlss.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(second)!);
+        File.WriteAllText(second, SwapFixture.OldContent("nvngx_dlss.dll"));
+        Assert.True(Assert.Single(fixture.Swap().Results).Succeeded);
+
+        SwapResult failed;
+        using (new FileStream(second, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            failed = fixture.Undo();
+        }
+
+        Assert.False(failed.Succeeded);
+        Assert.Contains("put back as it was", failed.ErrorMessage);
+        Assert.Equal(SwapFixture.NewContent("nvngx_dlss.dll"), File.ReadAllText(first));
+
+        // The game is still as the swap left it, so the undo is not refused when run again.
+        var retry = fixture.Undo();
+        Assert.True(retry.Succeeded, retry.ErrorMessage);
+        Assert.Equal(SwapFixture.OldContent("nvngx_dlss.dll"), File.ReadAllText(first));
+        Assert.Equal(SwapFixture.OldContent("nvngx_dlss.dll"), File.ReadAllText(second));
     }
 
     [Fact]
@@ -687,6 +846,25 @@ internal sealed class SwapFixture : IDisposable
         Entry = Catalog.AddFromDiscovery(detected, GameId, "Test Game", "Steam");
     }
 
+    /// <summary>Adds another version to the collection and makes it the one <see cref="Plan"/> installs.</summary>
+    public void AddVersion(string version, string content)
+    {
+        var folder = Path.Combine(_temp.Root, "Collection", Kind + "-" + version);
+        Directory.CreateDirectory(folder);
+
+        foreach (var fileName in RuntimeDlls.ByKind[Kind])
+        {
+            File.WriteAllText(Path.Combine(folder, fileName), content);
+        }
+
+        var primary = Path.Combine(folder, RuntimeDlls.ByKind[Kind][0]);
+        Entry = Catalog.AddFromDiscovery(
+            new DetectedRuntime(
+                Kind, RuntimeDlls.ByKind[Kind][0], RuntimeDlls.ByKind[Kind][0], primary, version, null,
+                Exists: true),
+            "other-game", "Other Game", "Steam");
+    }
+
     /// <summary>Plans a swap of the collection's runtime into the game.</summary>
     public IReadOnlyList<SwapPlan> Plan()
     {
@@ -722,6 +900,18 @@ internal sealed class SwapFixture : IDisposable
     /// <summary>Undoes the most recent swap for this fixture's runtime kind.</summary>
     public SwapResult Undo() =>
         new UndoEngine(Persistence, Paths).Undo(GameId, Kind);
+
+    /// <summary>Redoes the most recent undo for this fixture's runtime kind.</summary>
+    public SwapResult Redo() =>
+        new UndoEngine(Persistence, Paths).Redo(GameId, Kind);
+
+    /// <summary>Redoes using history read back from disk, as a fresh start of the program would.</summary>
+    public SwapResult RedoAfterRestart()
+    {
+        var restarted = new PersistenceService(Paths);
+        restarted.Load();
+        return new UndoEngine(restarted, Paths).Redo(GameId, Kind);
+    }
 
     public void Dispose() => _temp.Dispose();
 }

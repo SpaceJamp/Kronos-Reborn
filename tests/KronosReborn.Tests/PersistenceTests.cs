@@ -257,16 +257,17 @@ public class PersistenceTests
     }
 
     [Fact]
-    public void GameHistoryGetLatestForReturnsCorrectEntry()
+    public void GameHistoryNextToUndoIsTheNewestOfThatKind()
     {
         var h = new GameHistory("1", ImmutableList<HistoryEntry>.Empty);
+        BackupRecord[] saved = [new BackupRecord(@"C:\G\a.dll", @"C:\data\b", new string('a', 64))];
 
-        h = h.Add(Entry("1.0", "1.0", at: DateTimeOffset.UtcNow.AddMinutes(-10)), 10);
-        h = h.Add(Entry("3.0", "3.0", at: DateTimeOffset.UtcNow.AddMinutes(-5), kind: RuntimeKind.Fsr), 10);
-        h = h.Add(Entry("1.0", "2.0", at: DateTimeOffset.UtcNow), 10);
+        h = h.Add(Entry("1.0", "1.0", at: DateTimeOffset.UtcNow.AddMinutes(-10), backups: saved), 10);
+        h = h.Add(Entry("3.0", "3.0", at: DateTimeOffset.UtcNow.AddMinutes(-5), kind: RuntimeKind.Fsr, backups: saved), 10);
+        h = h.Add(Entry("1.0", "2.0", at: DateTimeOffset.UtcNow, backups: saved), 10);
 
-        Assert.Equal("2.0", h.GetLatestFor(RuntimeKind.Dlss)!.NewVersion);
-        Assert.Equal("3.0", h.GetLatestFor(RuntimeKind.Fsr)!.NewVersion);
+        Assert.Equal("2.0", h.NextToUndo(RuntimeKind.Dlss)!.NewVersion);
+        Assert.Equal("3.0", h.NextToUndo(RuntimeKind.Fsr)!.NewVersion);
     }
 
     [Fact]
@@ -279,10 +280,8 @@ public class PersistenceTests
             [new BackupRecord(@"C:\G\a.dll", @"C:\data\b", new string('a', 64))]), 10);
         h = h.Add(Entry("1.0", "2.0", backups: [], createdFiles: []), 10);
 
-        Assert.Equal("2.0", h.GetLatestFor(RuntimeKind.Dlss)!.NewVersion);
-
         // It must not be offered as undoable, so the one below it is found instead.
-        Assert.Equal("1.5", h.GetLatestUndoableFor(RuntimeKind.Dlss)!.NewVersion);
+        Assert.Equal("1.5", h.NextToUndo(RuntimeKind.Dlss)!.NewVersion);
     }
 
     [Fact]
@@ -303,6 +302,11 @@ public class PersistenceTests
         Assert.Equal(@"C:\data\c", reverted.Backups[0].BackupPath);
         Assert.Equal("hash-after", reverted.Backups[0].PostSwapSha256);
         Assert.True(reverted.CanUndo);
+
+        // Going back over an upgrade is a downgrade, and it is recorded as an undo.
+        Assert.True(reverted.WasDowngrade);
+        Assert.Equal(HistoryAction.Undo, reverted.Action);
+        Assert.False(reverted.AsReverted([], [], HistoryAction.Redo).WasDowngrade);
     }
 
     [Fact]
@@ -473,6 +477,47 @@ public class PersistenceTests
         Assert.Equal(2, result.Histories.Count);
         Assert.Single(result.Problems);
         Assert.Equal("History", result.Problems[0].Scope);
+
+        // Kept aside, so the next swap of that game does not write a fresh history over it.
+        Assert.False(File.Exists(Path.Combine(service.Paths.HistoryDirectory, "broken.json")));
+        Assert.Single(Directory.GetFiles(service.Paths.HistoryDirectory, "broken.json.unreadable-*"));
+    }
+
+    [Fact]
+    public void BackupsOfDroppedEntriesAreDeleted()
+    {
+        using var temp = new TemporaryDirectory();
+        var service = NewService(temp);
+        service.SaveSettings(Settings.Default.With(maxHistoryPerGame: 1));
+
+        var backups = Path.Combine(service.Paths.BackupDirectory, "game");
+        Directory.CreateDirectory(backups);
+        var old = Path.Combine(backups, "old.dll");
+        var current = Path.Combine(backups, "current.dll");
+        File.WriteAllText(old, "x");
+        File.WriteAllText(current, "x");
+
+        service.AddHistoryEntry("game-1", Entry("1.0", "2.0",
+            backups: [new BackupRecord(@"C:\G\a.dll", old, new string('a', 64))]));
+        service.AddHistoryEntry("game-1", Entry("2.0", "3.0",
+            backups: [new BackupRecord(@"C:\G\a.dll", current, new string('b', 64))]));
+
+        // The first entry fell off the end of the history, and its saved copy with it.
+        Assert.False(File.Exists(old));
+        Assert.True(File.Exists(current));
+    }
+
+    [Fact]
+    public void AHistoryLimitOfZeroStillRecordsTheSwap()
+    {
+        using var temp = new TemporaryDirectory();
+        var service = NewService(temp);
+        service.SaveSettings(Settings.Default.With(maxHistoryPerGame: 0));
+
+        // Used to throw, which left the swap applied with nothing to undo it.
+        service.AddHistoryEntry("game-1", Entry("1.0", "2.0"));
+
+        Assert.Single(service.GetHistory("game-1").Entries);
     }
 
     [Fact]

@@ -33,6 +33,12 @@ public enum RuntimeKind
 
     /// <summary>Intel XeLL (Low Latency).</summary>
     Xell,
+
+    /// <summary>FSR upscaler from the FidelityFX SDK 2, shipped beside its loader.</summary>
+    FsrUpscaler,
+
+    /// <summary>FSR frame generation from the FidelityFX SDK 2.</summary>
+    FsrFg,
 }
 
 /// <summary>
@@ -51,12 +57,14 @@ public static class RuntimeDlls
             { RuntimeKind.Dlss,  ["nvngx_dlss.dll"] },
             { RuntimeKind.DlssG, ["nvngx_dlssg.dll"] },
             { RuntimeKind.DlssR, ["nvngx_dlssd.dll"] },
-            { RuntimeKind.Fsr,   ["amd_fidelityfx_dx12.dll", "ffx_fsr2_api_dx12.dll"] },
+            { RuntimeKind.Fsr,   ["amd_fidelityfx_dx12.dll"] },
             { RuntimeKind.FsrVk, ["amd_fidelityfx_vk.dll"] },
             { RuntimeKind.Xess,  ["libxess.dll"] },
             { RuntimeKind.XessFg, ["libxess_fg.dll"] },
             { RuntimeKind.XessDx11, ["libxess_dx11.dll"] },
             { RuntimeKind.Xell,  ["libxell.dll"] },
+            { RuntimeKind.FsrUpscaler, ["amd_fidelityfx_upscaler_dx12.dll"] },
+            { RuntimeKind.FsrFg, ["amd_fidelityfx_framegeneration_dx12.dll"] },
         }.AsReadOnly();
 
     /// <summary>Reverse lookup: file name to kind.</summary>

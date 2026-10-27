@@ -46,7 +46,8 @@ internal sealed record AuthenticodeResult(
 internal static class Authenticode
 {
     private const uint WTD_UI_NONE = 2;
-    private const uint WTD_REVOKE_NONE = 0x00000010;
+    private const uint WTD_REVOKE_NONE = 0x00000000;
+    private const uint WTD_REVOKE_WHOLECHAIN = 0x00000001;
     private const uint WTD_SAFER_FLAG = 0x00000100;
     private const uint WTD_STATEACTION_VERIFY = 0x00000001;
     private const uint WTD_STATEACTION_CLOSE = 0x00000002;
@@ -54,8 +55,32 @@ internal static class Authenticode
     /// <summary>TRUST_E_NOSIGNATURE: the file carries no signature at all.</summary>
     private const uint TrustENoSignature = 0x800B0100;
 
-    /// <summary>Validates the signature on a file.</summary>
+    /// <summary>CERT_E_REVOCATION_FAILURE: whether the certificate was revoked could not be checked.</summary>
+    private const uint CertERevocationFailure = 0x800B010E;
+
+    /// <summary>CRYPT_E_REVOCATION_OFFLINE: the revocation server could not be reached.</summary>
+    private const uint CryptERevocationOffline = 0x80092013;
+
+    /// <summary>Validates the signature on a file, including whether its certificate was revoked.</summary>
+    /// <remarks>
+    /// A stolen vendor certificate that has since been revoked still produces a signature that
+    /// validates, so revocation is checked. When it cannot be checked, as on a machine with no
+    /// network, the verdict without it is used instead: refusing every file offline would make the
+    /// collection unusable, and a revoked certificate is still refused whenever the list is reachable.
+    /// </remarks>
     public static AuthenticodeResult Verify(string filePath)
+    {
+        var status = Run(filePath, WTD_REVOKE_WHOLECHAIN);
+
+        if (unchecked((uint)status) is CertERevocationFailure or CryptERevocationOffline)
+        {
+            status = Run(filePath, WTD_REVOKE_NONE);
+        }
+
+        return Interpret(status);
+    }
+
+    private static int Run(string filePath, uint revocationChecks)
     {
         var dataPointer = Marshal.AllocHGlobal(Marshal.SizeOf<WinTrustData>());
         var pathPointer = IntPtr.Zero;
@@ -80,7 +105,7 @@ internal static class Authenticode
                 {
                     cbStruct = (uint)Marshal.SizeOf<WinTrustData>(),
                     dwUIChoice = WTD_UI_NONE,
-                    fdwRevocationChecks = WTD_REVOKE_NONE,
+                    fdwRevocationChecks = revocationChecks,
                     dwUnionChoice = 1, // WTD_CHOICE_FILE
                     pFile = fileInfoPointer,
                     dwStateAction = WTD_STATEACTION_VERIFY,
@@ -92,23 +117,15 @@ internal static class Authenticode
             var action = WinTrustActionGenericVerifyV2;
             var status = WinVerifyTrust(IntPtr.Zero, ref action, dataPointer);
 
-            // The provider allocates and the caller must release, whatever the outcome. Skipping
-            // this leaks on every call.
-            var closing = new WinTrustData
-            {
-                cbStruct = (uint)Marshal.SizeOf<WinTrustData>(),
-                dwUIChoice = WTD_UI_NONE,
-                fdwRevocationChecks = WTD_REVOKE_NONE,
-                dwUnionChoice = 1,
-                pFile = fileInfoPointer,
-                dwStateAction = WTD_STATEACTION_CLOSE,
-                dwProvFlags = WTD_SAFER_FLAG,
-            };
-
+            // The provider allocates state and hands its handle back in the same structure; closing
+            // must pass that handle, so the structure is read back rather than built afresh. A fresh
+            // one carries a zero handle and releases nothing.
+            var closing = Marshal.PtrToStructure<WinTrustData>(dataPointer);
+            closing.dwStateAction = WTD_STATEACTION_CLOSE;
             Marshal.StructureToPtr(closing, dataPointer, fDeleteOld: false);
             _ = WinVerifyTrust(IntPtr.Zero, ref action, dataPointer);
 
-            return Interpret(status);
+            return status;
         }
         finally
         {
