@@ -71,8 +71,8 @@ public class RuntimeChoiceTests
 
         // The defect this guards: a DLSS version appearing in the Frame Generation picker, or the two
         // groups showing each other's versions. Choosing from the wrong group installs the wrong DLL.
-        Assert.Equal(["310.2.1", "310.9.1"], dlss.Options.Select(o => o.Version));
-        Assert.Equal(["310.2.1", "310.9.1"], frameGen.Options.Select(o => o.Version));
+        Assert.Equal(["310.9.1", "310.2.1"], dlss.Options.Select(o => o.Version));
+        Assert.Equal(["310.9.1", "310.2.1"], frameGen.Options.Select(o => o.Version));
         Assert.All(dlss.Options, o => Assert.Equal(RuntimeKind.Dlss, o.Kind));
         Assert.All(frameGen.Options, o => Assert.Equal(RuntimeKind.DlssG, o.Kind));
     }
@@ -239,6 +239,41 @@ public class RuntimeChoiceTests
             labels);
         Assert.DoesNotContain(labels, l => l.Contains(".dll", StringComparison.Ordinal));
         Assert.DoesNotContain(labels, l => l.Contains("nvngx", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void VersionsAreListedNewestFirstAsNumbersNotText()
+    {
+        var dlss = Groups(versions:
+            [(RuntimeKind.Dlss, "4.0.0"), (RuntimeKind.Dlss, "310.2.1"), (RuntimeKind.Dlss, "310.10.0"),
+             (RuntimeKind.Dlss, "310.9.1")])
+            .Single(g => g.Kind == RuntimeKind.Dlss);
+
+        // As text, "310.10.0" sorted before "310.9.1" and "4.0.0" after both.
+        Assert.Equal(["310.10.0", "310.9.1", "310.2.1", "4.0.0"], dlss.Options.Select(o => o.Version));
+    }
+
+    [Fact]
+    public void ChooseNewestPicksTheTopVersionButNeverADowngrade()
+    {
+        var upgrade = Groups(currentDlss: "310.2.1",
+                versions: [(RuntimeKind.Dlss, "310.2.1"), (RuntimeKind.Dlss, "310.9.1")])
+            .Single(g => g.Kind == RuntimeKind.Dlss);
+
+        Assert.True(upgrade.ChooseNewest());
+        Assert.Equal("310.9.1", upgrade.Selected!.Version);
+        Assert.True(upgrade.HasChange);
+
+        var newer = Groups(currentDlss: "310.10.0", versions: [(RuntimeKind.Dlss, "310.9.1")])
+            .Single(g => g.Kind == RuntimeKind.Dlss);
+
+        Assert.False(newer.ChooseNewest());
+        Assert.Null(newer.Selected);
+
+        // A runtime the game does not carry is never added by it.
+        var absent = Groups(Fsr: false, versions: [(RuntimeKind.Fsr, "3.1.0")])
+            .Single(g => g.Kind == RuntimeKind.Fsr);
+        Assert.False(absent.ChooseNewest());
     }
 
     [Fact]

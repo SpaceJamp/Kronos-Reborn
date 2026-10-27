@@ -81,11 +81,10 @@ public sealed record RuntimeImportResult(
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is the only sanctioned route for a version this machine does not already have, and it is the
-/// one the specification chose. Downloading from a mirror was considered and rejected: it would make
-/// the program depend on a service someone else runs, which C3 forbids, and it would put a
-/// third-party CDN inside the trust boundary that <see cref="SignatureVerifier"/> exists to keep
-/// outside. The user fetches the file; the program checks it before it can reach a game.
+/// This is the single route into the collection for a version this machine does not already have.
+/// Downloads use it too (<see cref="KronosReborn.Data.Downloads.VendorDownloader"/>), fetching only
+/// from the vendors' own repositories, never a mirror, so every file is checked here before it can
+/// reach a game.
 /// </para>
 /// <para>
 /// A runtime kind is a unit, and FSR is two files that only work as a pair. So the chosen file is

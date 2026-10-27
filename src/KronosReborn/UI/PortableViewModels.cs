@@ -398,6 +398,32 @@ public sealed class RuntimeChoice : INotifyPropertyChanged
         _selected = option;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Selected)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusText)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasChange)));
+    }
+
+    /// <summary>
+    /// Chooses the newest version the collection holds, if it is newer than what the game runs.
+    /// </summary>
+    /// <remarks>
+    /// Never a downgrade, and quiet: the caller choosing for many games rebuilds the preview once
+    /// at the end rather than once per choice.
+    /// </remarks>
+    /// <returns>Whether a version was chosen.</returns>
+    public bool ChooseNewest()
+    {
+        if (!IsAvailable || Options.Count == 0)
+        {
+            return false;
+        }
+
+        var newest = Options[0];
+        if (CurrentVersion is not null && !VersionNumber.IsOlder(CurrentVersion, newest.Version))
+        {
+            return false;
+        }
+
+        SetSelectedWithoutNotification(newest);
+        return true;
     }
 
     /// <summary>Whether this runtime can be chosen for at all.</summary>
@@ -437,20 +463,32 @@ public sealed class RuntimeChoice : INotifyPropertyChanged
                 {
                     var detected = snapshot?.Runtimes.FirstOrDefault(r => r.Kind == kind);
 
+                    // Newest first, so the version most people want is at the top. One option per
+                    // version: the same number found in a game and imported is one choice, and the
+                    // trusted, owned copy is the one offered. Sorted as numbers, since as text
+                    // "310.2.1" sorted before "4.0.0".
                     var options = catalogEntries
                         .Where(e => e.Kind == kind)
-                        .OrderBy(e => e.Version)
+                        .GroupBy(e => VersionNumber.Normalize(e.Version) ?? e.Version)
+                        .Select(g => g
+                            .OrderBy(e => e.Trust == RuntimeTrust.Trusted ? 0 : 1)
+                            .ThenBy(e => e.Source == RuntimeSource.Discovered ? 1 : 0)
+                            .First())
                         .Select(e => new RuntimeOption(e.Id, e.Kind, e.Version, e.Trust))
-                        .ToArray();
+                        .ToList();
+                    options.Sort((a, b) =>
+                        VersionNumber.IsOlder(a.Version, b.Version) ? 1
+                        : VersionNumber.IsOlder(b.Version, a.Version) ? -1
+                        : 0);
 
                     // R45: not offered unless the game carries it and the collection has something.
-                    var available = detected is { Exists: true } && options.Length > 0;
+                    var available = detected is { Exists: true } && options.Count > 0;
 
                     return new RuntimeChoice(
                         kind,
                         RuntimeKindNames.Display(kind),
                         detected?.Version,
-                        options,
+                        options.ToArray(),
                         available);
                 }),
         ];

@@ -72,12 +72,15 @@ Windows on ARM, while FSR and XeSS would.
 
 ### Where runtime versions come from
 
-There is no download, deliberately. The specification records the decision: a version found in a
-game already on this machine, or a file the user obtained themselves and imported. Adding a download
-would make the program depend on a service somebody else runs, which C3 rules out, and would put a
-third-party CDN inside the trust boundary that the signature check exists to keep outside.
+Three places: a version found in a game already on this machine, a download, or a file you import.
 
-To get a version your library does not have: download it yourself, then use **Import…**. The file is
+**⬇ Download** fetches DLLs straight from the vendors' own release repositories on GitHub —
+`NVIDIA/DLSS`, `GPUOpen-LibrariesAndSDKs/FidelityFX-SDK` and `intel/xess` — never from a mirror or a
+third-party CDN. **Get newest for my games** downloads the newest version of every runtime your games
+carry in one click; or pick any runtime and release. Each download goes through the same checks as an
+import, and only a file signed by its vendor is added.
+
+To add a file you got elsewhere, use **Import…**. The file is
 read, its version and publisher are shown, and its signature is judged **before** anything is copied.
 If it is not signed by NVIDIA, AMD or Intel the button says so and asks; accepting it records it as
 user-accepted rather than trusted.

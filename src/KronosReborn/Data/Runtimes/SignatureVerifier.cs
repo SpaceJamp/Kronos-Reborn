@@ -60,6 +60,9 @@ public static class SignatureVerifier
     private static readonly string[] TrustedPublishers =
     [
         "NVIDIA Corporation",
+        // What AMD's FidelityFX DLLs are actually signed as; without it every genuine FSR DLL was
+        // judged untrusted.
+        "Advanced Micro Devices",
         "Advanced Micro Devices, Inc.",
         "Advanced Micro Devices Inc",
         "Intel Corporation",
@@ -172,22 +175,27 @@ public static class SignatureVerifier
     /// Prefers the organisation, then the common name. Subject strings are
     /// "CN=..., O=..., L=..., C=..." and the organisation is the field that identifies the publisher;
     /// taking whichever came first meant a certificate could put a misleading value in CN.
+    /// <para>
+    /// Parsed as a distinguished name rather than split on commas: a name containing a comma is
+    /// quoted in the subject, as in <c>O="Advanced Micro Devices, Inc."</c>, and splitting it read the
+    /// organisation as <c>"Advanced Micro Devices</c>.
+    /// </para>
     /// </remarks>
-    private static string? ExtractPublisherName(string subject)
+    internal static string? ExtractPublisherName(string subject)
     {
         string? organisation = null;
         string? commonName = null;
 
-        foreach (var part in subject.Split(
-                     ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in new X500DistinguishedName(subject).EnumerateRelativeDistinguishedNames())
         {
-            if (organisation is null && part.StartsWith("O=", StringComparison.OrdinalIgnoreCase))
+            switch (part.GetSingleElementType().Value)
             {
-                organisation = part[2..];
-            }
-            else if (commonName is null && part.StartsWith("CN=", StringComparison.OrdinalIgnoreCase))
-            {
-                commonName = part[3..];
+                case "2.5.4.10": // O
+                    organisation ??= part.GetSingleElementValue();
+                    break;
+                case "2.5.4.3": // CN
+                    commonName ??= part.GetSingleElementValue();
+                    break;
             }
         }
 
