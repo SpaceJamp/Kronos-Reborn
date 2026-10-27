@@ -60,6 +60,9 @@ public sealed partial class MainWindow : Window, IFilePicker
         };
     }
 
+    /// <summary>Covers already decoded, by path: the grid is rebuilt on every search keystroke.</summary>
+    private static readonly Dictionary<string, Bitmap> Posters = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Turns a poster path into an image, or nothing when it cannot be read.</summary>
     public static FuncValueConverter<string?, Bitmap?> PosterImage { get; } = new(path =>
     {
@@ -68,11 +71,16 @@ public sealed partial class MainWindow : Window, IFilePicker
             return null;
         }
 
+        if (Posters.TryGetValue(path, out var cached))
+        {
+            return cached;
+        }
+
         try
         {
             // Decoded to card size, so a library of large covers does not hold full-size bitmaps.
             using var stream = File.OpenRead(path);
-            return Bitmap.DecodeToWidth(stream, 300);
+            return Posters[path] = Bitmap.DecodeToWidth(stream, 300);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {

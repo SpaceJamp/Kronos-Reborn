@@ -63,9 +63,6 @@ public sealed class GameRow : INotifyPropertyChanged
 
 
 
-    /// <summary>Whether any runtime in this row has a version chosen that is not the one installed.</summary>
-    public bool HasAnyChange => Choices.Any(c => c.HasChange);
-
     private RuntimeChoice ChoiceFor(RuntimeKind kind) =>
         Choices.FirstOrDefault(c => c.Kind == kind) ?? Unavailable(kind);
 
@@ -78,6 +75,9 @@ public sealed class GameRow : INotifyPropertyChanged
     /// </remarks>
     public void RebuildChoices(IReadOnlyList<CatalogEntry> catalogEntries)
     {
+        // A version already chosen is kept: a download or an import used to clear every pick in every game.
+        var picked = Choices.Where(c => c.Selected is not null).ToDictionary(c => c.Kind, c => c.Selected!.EntryId);
+
         foreach (var existing in Choices)
         {
             existing.Changed -= OnChoiceChanged;
@@ -87,10 +87,14 @@ public sealed class GameRow : INotifyPropertyChanged
 
         foreach (var choice in Choices)
         {
+            if (picked.TryGetValue(choice.Kind, out var entryId)
+                && choice.Options.FirstOrDefault(o => o.EntryId == entryId) is { } option)
+            {
+                choice.SetSelectedWithoutNotification(option);
+            }
+
             choice.Changed += OnChoiceChanged;
         }
-
-        OnPropertyChanged(nameof(HasAnyChange));
     }
 
     /// <summary>Raised when any version in this row is chosen or cleared.</summary>
@@ -111,7 +115,6 @@ public sealed class GameRow : INotifyPropertyChanged
 
     private void OnChoiceChanged(object? sender, EventArgs e)
     {
-        OnPropertyChanged(nameof(HasAnyChange));
         ChoiceChanged?.Invoke(this, EventArgs.Empty);
     }
 

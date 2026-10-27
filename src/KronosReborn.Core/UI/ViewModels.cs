@@ -106,23 +106,39 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _games.CollectionChanged += OnGamesCollectionChanged;
     }
 
+    /// <remarks>
+    /// A refresh replaces every row. The selected game and the ticks are carried over to the new rows
+    /// by game id: the pane used to keep showing the discarded row, so after any Apply it showed the
+    /// old versions and a version chosen there changed nothing.
+    /// </remarks>
     public ObservableCollection<GameRow> Games
     {
         get => _games;
-        private set
+        internal set
         {
-            if (_games != null)
+            var ticked = _games.Where(g => g.IsSelected).Select(g => g.GameId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var selectedId = _selectedGame?.GameId;
+
+            _games.CollectionChanged -= OnGamesCollectionChanged;
+            foreach (var row in _games)
             {
-                _games.CollectionChanged -= OnGamesCollectionChanged;
+                row.PropertyChanged -= OnGameRowChanged;
             }
+
             _games = value;
-            if (_games != null)
+            _games.CollectionChanged += OnGamesCollectionChanged;
+
+            // Built with its rows already in it, so no "added" event fires for them.
+            foreach (var row in _games)
             {
-                _games.CollectionChanged += OnGamesCollectionChanged;
+                row.IsSelected = ticked.Contains(row.GameId);
+                row.PropertyChanged += OnGameRowChanged;
             }
+
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasGames));
             ApplyFilter();
+            SelectedGame = _games.FirstOrDefault(g => string.Equals(g.GameId, selectedId, StringComparison.OrdinalIgnoreCase));
             RaiseSwapCommandStates();
         }
     }
@@ -803,7 +819,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             game.WatchChoices(OnGameChoiceChanged, subscribe: true);
         }
 
-        ClearPreview();
+        PreviewSwap();
         OnPropertyChanged(nameof(PendingChangeCount));
         OnPropertyChanged(nameof(HasPendingChanges));
         OnPropertyChanged(nameof(LibraryEntries));
@@ -1002,9 +1018,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 () => _executor.Execute(plans, cancellation.Token));
 
             StatusText = Describe(batch);
-
             ClearPreview();
-            RebuildAllChoices();
 
             // Re-read what the games now run, so the list reflects what was just done.
             IsWorking = false;

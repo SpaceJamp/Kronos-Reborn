@@ -1,4 +1,3 @@
-#if WINDOWS
 using System;
 using System.Globalization;
 using KronosReborn;
@@ -84,4 +83,3 @@ public class BuildInfoTests
         Assert.NotEqual("unknown", BuildInfo.InformationalVersion);
     }
 }
-#endif
