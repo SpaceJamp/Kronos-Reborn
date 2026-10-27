@@ -89,6 +89,12 @@
                         Command="{Binding RefreshCommand}"
                         ToolTip="Scan libraries and detect runtimes (F5)" />
 
+                <!-- Add a game no library reports -->
+                <Button Content="+ Add Game"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding AddGameCommand}"
+                        ToolTip="Add a game by choosing the folder it is installed in" />
+
                 <!-- Group toggle -->
                 <Button Content="{Binding GroupModeText}"
                         Style="{StaticResource ToolbarButtonStyle}"
@@ -173,6 +179,14 @@
                            Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap"
                            Margin="0,2,0,12" />
+
+                <Button Content="Remove from list"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding RemoveGameCommand}"
+                        HorizontalAlignment="Left"
+                        Margin="0,0,0,12"
+                        ToolTip="Take this hand-added game off the list. Its files are not touched."
+                        Visibility="{Binding SelectedGame.IsAddedByHand, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}" />
 
                 <!--
                 Each runtime with its own label over its own dropdown. Two columns, because there are

@@ -27,6 +27,9 @@ public sealed class GameRow : INotifyPropertyChanged
     public string LibraryName { get; }
     public bool ExistsOnDisk { get; }
 
+    /// <summary>Whether the user added this game by choosing its folder, so can also remove it.</summary>
+    public bool IsAddedByHand => LibraryName.Contains(ManualLibrary.LibraryName, StringComparison.Ordinal);
+
     public GameRow(GameRecord record, GameRuntimeSnapshot? snapshot = null)
     {
         GameId = record.Id;

@@ -24,4 +24,10 @@ public interface IFilePicker
     /// <param name="suggestedName">The file name offered by default.</param>
     /// <returns>The chosen path, or null if the user cancelled.</returns>
     string? AskWhereToSaveDiagnostics(string suggestedName);
+
+    /// <summary>
+    /// Shows a chooser for a game's installation folder, for a game no library reports.
+    /// </summary>
+    /// <returns>The chosen folder, or null if the user cancelled.</returns>
+    string? AskForGameFolder();
 }

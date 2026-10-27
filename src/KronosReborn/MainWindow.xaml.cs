@@ -109,6 +109,16 @@ public partial class MainWindow : Window
             return dialog.ShowDialog(owner) == true ? dialog.FileName : null;
         }
 
+        public string? AskForGameFolder()
+        {
+            var dialog = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "Choose the folder the game is installed in",
+            };
+
+            return dialog.ShowDialog(owner) == true ? dialog.FolderName : null;
+        }
+
         public string? AskWhereToSaveDiagnostics(string suggestedName)
         {
             var dialog = new Microsoft.Win32.SaveFileDialog
