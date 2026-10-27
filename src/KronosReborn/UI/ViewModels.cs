@@ -48,8 +48,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _statusText = "Ready";
     private int _selectedCount;
 
-    private readonly NgxDownloader _ngxDownloader;
-    private readonly NgxDownloadViewModel _downloadViewModel;
+    private readonly DownloadsViewModel _downloads;
     private readonly DiagnosticsViewModel _diagnostics;
     private bool _isDiagnosticsOpen;
 
@@ -72,19 +71,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         _executor = new SwapExecutor(persistence, catalog, paths);
         _undo = new UndoEngine(persistence, paths);
-        _ngxDownloader = new NgxDownloader(paths);
-        _downloadViewModel = new NgxDownloadViewModel(_ngxDownloader, catalog);
+        _downloads = new DownloadsViewModel(
+            new VendorDownloader(VendorDownloader.CreateClient(), catalog, paths),
+            () => _games.SelectMany(g => g.Snapshot?.Runtimes ?? []).Where(r => r.Exists).Select(r => r.Kind));
+
+        // A downloaded version is offered in every game's picker straight away.
+        _downloads.CollectionChanged += (_, _) => RebuildAllChoices();
 
         // Problems from loading settings and history were reported by Load() and then dropped; the
         // diagnostics panel is where they are shown, alongside the latest scan's.
         var loadProblems = startupProblems ?? [];
         _diagnostics = new DiagnosticsViewModel(
             paths, catalog, persistence, () => [.. loadProblems, .. Problems], recentLog, filePicker);
-        _downloadViewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(NgxDownloadViewModel.IsDownloading))
-                OnPropertyChanged(nameof(IsDownloading));
-        };
 
         // Initialize group mode from settings
         _groupMode = settings.GroupByLibrary ? GroupMode.ByLibrary : GroupMode.Flat;
@@ -98,13 +96,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ToggleThemeCommand = new RelayCommand(_ => _themeManager.ToggleTheme());
         OpenSettingsCommand = new RelayCommand(_ => IsSettingsOpen = !IsSettingsOpen);
         ToggleSettingsCommand = new RelayCommand(_ => IsSettingsOpen = !IsSettingsOpen);
-        PreviewSwapCommand = new RelayCommand(_ => PreviewSwap(), _ => CanSwap);
+        ChooseNewestCommand = new RelayCommand(_ => ChooseNewest(), _ => !IsBusy && (SelectedGame is not null || _games.Any(g => g.IsSelected)));
         ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsWorking);
         UndoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: false), _ => SelectedGame is not null && !IsWorking);
         RedoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: true), _ => SelectedGame is not null && !IsWorking);
         CancelCommand = new RelayCommand(
             _ => _operationCancellation.Cancel(), _ => IsBusy);
-        CancelDownloadCommand = new RelayCommand(_ => _downloadViewModel.Cancel());
 
         // Choosing a file needs the window, which the view model does not have. The picker is supplied to
         // it, so the command can stay a command and every command the model exposes is one the window
@@ -176,6 +173,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (e.PropertyName == nameof(GameRow.IsSelected))
         {
             UpdateSelectedCount();
+            ((RelayCommand)ChooseNewestCommand).RaiseCanExecuteChanged();
         }
     }
 
@@ -228,14 +226,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    /// <summary>Whether a download is in progress.</summary>
-    public bool IsDownloading
-    {
-        get => _downloadViewModel.IsDownloading;
-    }
-
-    /// <summary>The view model for the DLSS download panel.</summary>
-    public NgxDownloadViewModel DownloadViewModel => _downloadViewModel;
+    /// <summary>The view model for the download panel.</summary>
+    public DownloadsViewModel Downloads => _downloads;
 
     /// <summary>The view model for the diagnostics panel.</summary>
     public DiagnosticsViewModel Diagnostics => _diagnostics;
@@ -527,7 +519,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void RaiseSwapCommandStates()
     {
-        ((RelayCommand)PreviewSwapCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)ChooseNewestCommand).RaiseCanExecuteChanged();
         ((RelayCommand)ApplySwapCommand).RaiseCanExecuteChanged();
         ((RelayCommand)UndoCommand).RaiseCanExecuteChanged();
         ((RelayCommand)RedoCommand).RaiseCanExecuteChanged();
@@ -592,12 +584,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand ToggleThemeCommand { get; }
     public ICommand OpenSettingsCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
-    public ICommand PreviewSwapCommand { get; }
+    public ICommand ChooseNewestCommand { get; }
     public ICommand ApplySwapCommand { get; }
     public ICommand UndoCommand { get; }
     public ICommand RedoCommand { get; }
     public ICommand CancelCommand { get; }
-    public ICommand CancelDownloadCommand { get; }
     public ICommand ToggleDiagnosticsCommand { get; }
     public ICommand BeginImportCommand { get; }
     public ICommand ConfirmImportCommand { get; }
@@ -740,8 +731,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// the choices are now made. A game being selected in the list no longer has any bearing on what
     /// would be swapped.
     /// </remarks>
-    private bool CanSwap => !IsBusy && PendingChangeCount > 0;
-
     /// <summary>Anything that went wrong during discovery, for the user to read.</summary>
     public IReadOnlyList<ScanProblem> Problems
     {
@@ -960,18 +949,52 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// Reacts to a version being chosen in any row.
     /// </summary>
     /// <remarks>
-    /// The preview is dropped, because it was built from a set of choices that no longer holds. Leaving
-    /// it on screen would mean Apply acting on something other than what the user is looking at.
+    /// The preview is rebuilt straight away, so what Apply will do is always on screen and a swap is
+    /// two steps, choose then apply, instead of three. It used to be dropped here, which made every
+    /// change of mind need another press of Preview.
     /// </remarks>
     private void OnGameChoiceChanged(object? sender, EventArgs e)
     {
-        ClearPreview();
+        PreviewSwap();
         OnPropertyChanged(nameof(PendingChangeCount));
         OnPropertyChanged(nameof(HasPendingChanges));
         OnPropertyChanged(nameof(LibraryEntries));
         OnPropertyChanged(nameof(LibrarySummary));
         OnPropertyChanged(nameof(LibraryKinds));
         RaiseSwapCommandStates();
+    }
+
+    /// <summary>
+    /// Chooses the newest version held for every runtime in the ticked games, or the selected game.
+    /// </summary>
+    /// <remarks>
+    /// The common case, "bring these up to date", in one click. Only upgrades are chosen, and nothing
+    /// is written: the preview shows what Apply would do.
+    /// </remarks>
+    private void ChooseNewest()
+    {
+        var rows = _games.Where(g => g.IsSelected).ToList();
+        if (rows.Count == 0 && SelectedGame is not null)
+        {
+            rows.Add(SelectedGame);
+        }
+
+        var chosen = rows
+            .Where(r => r.ExistsOnDisk)
+            .SelectMany(r => r.Choices)
+            .Count(c => c.ChooseNewest());
+
+        PreviewSwap();
+        OnPropertyChanged(nameof(PendingChangeCount));
+        OnPropertyChanged(nameof(HasPendingChanges));
+        RaiseSwapCommandStates();
+
+        if (chosen == 0)
+        {
+            StatusText = rows.Count == 1
+                ? $"{rows[0].GameName} already runs the newest version you hold of everything it has."
+                : "Every game chosen already runs the newest versions you hold.";
+        }
     }
 
     /// <summary>
@@ -988,6 +1011,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         if (pending.Count == 0)
         {
+            ClearPreview();
             return;
         }
 
@@ -1263,7 +1287,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _themeManager.ThemeChanged -= OnThemeChanged;
         _games.CollectionChanged -= OnGamesCollectionChanged;
         _operationCancellation.Dispose();
-        _downloadViewModel.Dispose();
+        _downloads.Dispose();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

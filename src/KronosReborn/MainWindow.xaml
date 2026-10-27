@@ -264,11 +264,11 @@
                         Command="{Binding ToggleDiagnosticsCommand}"
                         ToolTip="Check the collection, undo history and data folder for problems" />
 
-                <!-- Download DLSS -->
-                <Button Content="⬇ DLSS"
+                <!-- Download -->
+                <Button Content="⬇ Download"
                         Style="{StaticResource ToolbarButtonStyle}"
                         Command="{Binding ToggleDownloadCommand}"
-                        ToolTip="Download DLSS runtimes from NVIDIA CDN" />
+                        ToolTip="Download DLSS, FSR and XeSS straight from NVIDIA, AMD and Intel" />
             </StackPanel>
         </Border>
 
@@ -375,9 +375,9 @@
             </DockPanel>
         </Border>
 
-        <!-- Download DLSS panel -->
+        <!-- Download panel -->
         <Border Grid.Row="1"
-                Width="420"
+                Width="440"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top"
                 Background="{DynamicResource SurfaceBrush}"
@@ -387,58 +387,60 @@
                 Margin="0,16,16,16"
                 Padding="16"
                 Visibility="{Binding IsDownloadOpen, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel>
-                <TextBlock Text="Download DLSS" Style="{StaticResource TitleStyle}" Margin="0,0,0,12" />
-
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                    <Button Content="Scan NVIDIA CDN"
-                            Style="{StaticResource ToolbarButtonStyle}"
-                            Command="{Binding DownloadViewModel.ScanCommand}" />
-                    <Button Content="Stop"
-                            Style="{StaticResource ToolbarButtonStyle}"
-                            Command="{Binding CancelDownloadCommand}"
-                            Margin="4,0,0,0" />
-                </StackPanel>
-
-                <ItemsControl ItemsSource="{Binding DownloadViewModel.Versions}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                <TextBlock Text="{Binding AssetType}"
-                                           FontWeight="SemiBold"
-                                           FontSize="{StaticResource FontSizeSmall}"
-                                           Width="40" />
-                                <TextBlock Text="{Binding VersionPacked}"
-                                           FontFamily="Consolas"
-                                           FontSize="{StaticResource FontSizeSmall}"
-                                           Width="60" />
-                                <Button Content="Download"
-                                        Style="{StaticResource ToolbarButtonStyle}"
-                                        Command="{Binding DataContext.DownloadViewModel.DownloadCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                        CommandParameter="{Binding}"
-                                        Margin="8,0,0,0" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <TextBlock Text="{Binding DownloadViewModel.StatusText}"
+            <StackPanel DataContext="{Binding Downloads}">
+                <TextBlock Text="Download" Style="{StaticResource TitleStyle}" Margin="0,0,0,4" />
+                <TextBlock Text="Straight from NVIDIA, AMD and Intel's own release repositories. Only files signed by their vendor are added."
                            Style="{StaticResource SubtitleStyle}"
                            Foreground="{DynamicResource TextSecondaryBrush}"
-                           Margin="0,8,0,0"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,12" />
+
+                <Button Content="Get newest for my games"
+                        Style="{StaticResource ToolbarButtonStyle}"
+                        Command="{Binding GetNewestForGamesCommand}"
+                        HorizontalAlignment="Left"
+                        ToolTip="Download the newest version of every runtime your games carry"
+                        Margin="0,0,0,12" />
+
+                <TextBlock Text="Or choose one" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <StackPanel Orientation="Horizontal">
+                    <ComboBox ItemsSource="{Binding Kinds}"
+                              SelectedItem="{Binding SelectedKind}"
+                              DisplayMemberPath="Label"
+                              Width="170"
+                              AutomationProperties.Name="Runtime to download" />
+                    <ComboBox ItemsSource="{Binding Releases}"
+                              SelectedItem="{Binding SelectedRelease}"
+                              Width="120"
+                              Margin="6,0,0,0"
+                              AutomationProperties.Name="Release to download" />
+                    <Button Content="Download"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding DownloadSelectedCommand}"
+                            Margin="6,0,0,0" />
+                </StackPanel>
+
+                <TextBlock Text="{Binding StatusText}"
+                           Style="{StaticResource SubtitleStyle}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,12,0,0"
                            TextWrapping="Wrap" />
 
-                <ProgressBar Value="{Binding DownloadViewModel.Progress, Mode=OneWay}"
+                <ProgressBar Value="{Binding Progress, Mode=OneWay}"
                              Maximum="100"
                              Height="6"
                              Margin="0,4,0,0"
-                             Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibility}}" />
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
 
-                <Button Content="Close"
-                        Style="{StaticResource ToolbarButtonStyle}"
-                        Command="{Binding ToggleDownloadCommand}"
-                        Margin="0,12,0,0"
-                        HorizontalAlignment="Right" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                    <Button Content="Stop"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding StopCommand}" />
+                    <Button Content="Close"
+                            Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding DataContext.ToggleDownloadCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            Margin="4,0,0,0" />
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -850,8 +852,9 @@
 
             Inline rather than a dialog, because the specification asks for a single window and says
             not to use a modal dialog for a question that can be asked inline. Selecting a game fills
-            the picker with the versions the collection holds for that game; Preview says what would
-            change before anything does, and Apply is only enabled once a preview exists.
+            the picker with the versions the collection holds for that game, newest first; the preview
+            of what would change updates as soon as a version is chosen, and Apply acts on exactly that.
+            Newest chooses the newest version held for everything in the ticked games in one click.
         -->
         <Border Grid.Row="2"
                 Background="{DynamicResource SurfaceBrush}"
@@ -885,10 +888,11 @@
                                VerticalAlignment="Center"
                                Margin="0,0,12,0"
                                Visibility="{Binding HasPendingChanges, Converter={StaticResource BoolToVisibility}}" />
-                    <Button Content="Preview"
+                    <Button Content="⬆ Newest"
                             Style="{StaticResource ToolbarButtonStyle}"
-                            Command="{Binding PreviewSwapCommand}"
-                            Margin="4,0,0,0" />
+                            Command="{Binding ChooseNewestCommand}"
+                            Margin="4,0,0,0"
+                            ToolTip="Choose the newest version you hold of every runtime in the ticked games, or the selected game" />
 
                     <Button Content="Apply"
                             Style="{StaticResource ToolbarButtonStyle}"
