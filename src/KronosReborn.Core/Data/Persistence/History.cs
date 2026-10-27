@@ -106,8 +106,6 @@ public sealed record HistoryEntry(
     public bool CanUndo => Backups.Count > 0 || CreatedFiles.Count > 0;
 
     /// <summary>Every path this entry is responsible for putting back the way it found it.</summary>
-    public IEnumerable<string> AffectedPaths =>
-        Backups.Select(b => b.OriginalPath).Concat(CreatedFiles);
 
     /// <summary>An entry describing the reverse of this one, written when an undo or redo succeeds.</summary>
     /// <remarks>

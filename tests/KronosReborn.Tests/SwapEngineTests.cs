@@ -205,6 +205,24 @@ public class SwapEngineTests
     }
 
     [Fact]
+    public void AnOlderSecondCopyIsNotTakenForAlreadyInstalled()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Dlss);
+        fixture.InstallRuntime("3.8.0");
+
+        // The first copy, the one the snapshot reads, is already 3.8.0; another copy is not. The test
+        // assembly stands in for it, carrying its own, different version.
+        fixture.GameReportedVersion = "3.8.0";
+        var plugin = Path.Combine(fixture.GameFolder, "Engine", "Plugins", "nvngx_dlss.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(plugin)!);
+        File.Copy(typeof(SwapEngineTests).Assembly.Location, plugin);
+
+        var plan = Assert.Single(fixture.Plan());
+
+        Assert.Contains(plugin, plan.TargetFiles, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ASwapReplacesEveryCopyTheGameCarries()
     {
         using var fixture = new SwapFixture(RuntimeKind.Dlss);

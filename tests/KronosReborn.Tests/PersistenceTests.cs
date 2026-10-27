@@ -194,7 +194,6 @@ public class PersistenceTests
             [new BackupRecord(@"C:\G\nvngx_dlss.dll", @"C:\data\backups\x", new string('a', 64))]);
 
         Assert.True(entry.CanUndo);
-        Assert.Equal([@"C:\G\nvngx_dlss.dll"], entry.AffectedPaths);
     }
 
     [Fact]
@@ -205,7 +204,6 @@ public class PersistenceTests
         var entry = Entry("3.7.10", "3.8.0", backups: [], createdFiles: [@"C:\G\nvngx_dlss.dll"]);
 
         Assert.True(entry.CanUndo);
-        Assert.Equal([@"C:\G\nvngx_dlss.dll"], entry.AffectedPaths);
     }
 
     [Fact]

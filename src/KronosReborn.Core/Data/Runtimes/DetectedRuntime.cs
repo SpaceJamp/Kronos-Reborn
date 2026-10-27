@@ -71,16 +71,11 @@ public sealed record DetectedRuntime(
 /// <param name="GameName">The game's display name.</param>
 /// <param name="GamePath">The game's installation folder.</param>
 /// <param name="Runtimes">Every runtime DLL found, whether present or not.</param>
-/// <param name="LastChangedByUs">
-/// When this game was last modified by this program, if known from history. Null means never
-/// or unknown.
-/// </param>
 public sealed record GameRuntimeSnapshot(
     string GameId,
     string GameName,
     string GamePath,
-    IReadOnlyList<DetectedRuntime> Runtimes,
-    DateTimeOffset? LastChangedByUs = null)
+    IReadOnlyList<DetectedRuntime> Runtimes)
 {
     /// <summary>Whether any runtime in this game is missing its version info.</summary>
     public bool HasUnknownVersions => Runtimes.Any(r => r.Exists && !r.IsVersionKnown);

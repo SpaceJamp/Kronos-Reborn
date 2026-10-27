@@ -229,16 +229,22 @@ public static class SwapPlanner
             // would copy a file onto itself, which either throws or leaves the game untouched while
             // reporting a change — and the picker lists the game's own version first, so this is the
             // option most likely to be chosen by accident.
-            if (hasCurrentVersion
-                && VersionNumber.AreEquivalent(currentVersion, targetEntry.Version))
-            {
-                continue;
-            }
-
             var targets = ResolveTargetFiles(game.GamePath, runtimeKind);
             if (targets.Count == 0)
             {
                 continue; // Can't install if we don't know where to put it
+            }
+
+            // The snapshot reads the first copy only. Another copy, often the one the game loads, can
+            // still be older, so every other copy is read too before calling the swap unnecessary.
+            if (hasCurrentVersion
+                && VersionNumber.AreEquivalent(currentVersion, targetEntry.Version)
+                && targets
+                    .Where(t => !t.Equals(currentRuntime!.FullPath, SwapPlan.PathComparison))
+                    .All(t => VersionNumber.TryRead(t, out var other, out _, out _)
+                              && VersionNumber.AreEquivalent(other, targetEntry.Version)))
+            {
+                continue;
             }
 
             // Never write a file onto itself. The collection entry for a version found in a game

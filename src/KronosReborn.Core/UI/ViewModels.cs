@@ -83,15 +83,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
         ChooseNewestCommand = new RelayCommand(_ => ChooseNewest(), _ => !IsBusy && (SelectedGame is not null || _games.Any(g => g.IsSelected)));
-        ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsWorking);
-        UndoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: false), _ => SelectedGame is not null && !IsWorking);
+        ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsBusy);
+        UndoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: false), _ => SelectedGame is not null && !IsBusy);
         AddGameCommand = new RelayCommand(async _ => await AddGameAsync(), _ => !IsBusy && _filePicker is not null);
         AddFolderCommand = new RelayCommand(async _ => await AddFolderAsync(), _ => !IsBusy && _filePicker is not null);
         RemoveFolderCommand = new RelayCommand(
             async folder => await RemoveFolderAsync(folder as string), _ => !IsBusy);
         RemoveGameCommand = new RelayCommand(
             async _ => await RemoveGameAsync(), _ => !IsBusy && SelectedGame?.IsAddedByHand == true);
-        RedoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: true), _ => SelectedGame is not null && !IsWorking);
+        RedoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: true), _ => SelectedGame is not null && !IsBusy);
         CancelCommand = new RelayCommand(
             _ => _operationCancellation.Cancel(), _ => IsBusy);
 
@@ -356,7 +356,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsScanning
     {
         get => _isScanning;
-        private set
+        internal set
         {
             _isScanning = value;
             OnPropertyChanged();
@@ -368,7 +368,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsWorking
     {
         get => _isWorking;
-        private set
+        internal set
         {
             _isWorking = value;
             OnPropertyChanged();
@@ -1207,6 +1207,22 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _persistence.SaveSettings(_settings);
             OnPropertyChanged(nameof(MaxHistoryPerGame));
         }
+    }
+
+    /// <summary>Whether the window may close now, saying why not when it may not.</summary>
+    /// <remarks>
+    /// A swap writes its undo record only after each game's files are replaced, so closing part way
+    /// through left games changed with no way to undo them from here.
+    /// </remarks>
+    public bool CanClose()
+    {
+        if (!IsWorking)
+        {
+            return true;
+        }
+
+        StatusText = "A swap or undo is still running. Wait for it to finish, then close.";
+        return false;
     }
 
     /// <summary>Stops subscribing to events owned elsewhere.</summary>
