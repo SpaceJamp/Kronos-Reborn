@@ -275,6 +275,43 @@ public sealed class RuntimeCatalog : IDisposable
     }
 
     /// <summary>
+    /// Drops versions found in games whose file is gone, or no longer holds that version.
+    /// </summary>
+    /// <remarks>
+    /// Such an entry points into a game that was updated, moved or uninstalled. It can never be
+    /// installed, yet it stayed in every picker forever. Nothing is lost by dropping it: the entry is
+    /// only a pointer, and the next scan finds the version again wherever a game still has it. Run
+    /// after a scan has added what it found, so an entry another game still holds is re-pointed
+    /// rather than dropped. Imported versions are the collection's own files and are never touched.
+    /// </remarks>
+    /// <returns>How many were dropped.</returns>
+    public int PruneDiscovered()
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            var stale = _entries.Values
+                .Where(e => e.Source == RuntimeSource.Discovered
+                            && (!StillHolds(e)
+                                || RuntimeDlls.KindFor(Path.GetFileName(e.FilePath)) != e.Kind))
+                .Select(e => e.Id)
+                .ToList();
+
+            if (stale.Count > 0)
+            {
+                _entries = _entries.RemoveRange(stale);
+                Save();
+            }
+
+            return stale.Count;
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
+
+    /// <summary>
     /// Removes an entry from the catalog.
     /// </summary>
     /// <remarks>

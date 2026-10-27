@@ -267,6 +267,44 @@ public class RuntimeCatalogTests
     }
 
     [Fact]
+    public void PruneDropsFoundVersionsThatCanNoLongerBeInstalledAndKeepsTheRest()
+    {
+        using var temp = new TemporaryDirectory();
+        using var catalog = new RuntimeCatalog(Path.Combine(temp.Root, "catalog.json"));
+
+        CatalogEntry Found(string folder, string fileName, RuntimeKind kind, string version)
+        {
+            var path = Path.Combine(temp.Root, folder, fileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, CreateDummyDll());
+            return catalog.AddFromDiscovery(
+                new DetectedRuntime(kind, fileName, fileName, path, version, version, true), folder, folder, "Steam")!;
+        }
+
+        var kept = Found("kept", "nvngx_dlss.dll", RuntimeKind.Dlss, "3.7.10");
+        var gone = Found("uninstalled", "nvngx_dlssg.dll", RuntimeKind.DlssG, "3.7.10");
+        // A file name the kind does not use, as an older build of the program recorded.
+        var misnamed = Found("old", "nvngx_dlssnr.dll", RuntimeKind.DlssR, "310.8.0");
+        File.Delete(gone.FilePath);
+
+        var importFolder = Path.Combine(temp.Root, "import");
+        Directory.CreateDirectory(importFolder);
+        File.WriteAllBytes(Path.Combine(importFolder, "libxess.dll"), CreateDummyDll());
+        var imported = catalog.AddImport(RuntimeKind.Xess, "2.0.0", importFolder, "x", RuntimeTrust.Trusted)!;
+        File.Delete(imported.FilePath);
+
+        Assert.Equal(2, catalog.PruneDiscovered());
+
+        var ids = catalog.Entries.Select(e => e.Id).ToArray();
+        Assert.Contains(kept.Id, ids);
+        Assert.DoesNotContain(gone.Id, ids);
+        Assert.DoesNotContain(misnamed.Id, ids);
+
+        // An import is the collection's own and is reported, never silently dropped.
+        Assert.Contains(imported.Id, ids);
+    }
+
+    [Fact]
     public void RuntimeCatalogAddFromDiscoveryAddsEntry()
     {
         using var temp = new TemporaryDirectory();
