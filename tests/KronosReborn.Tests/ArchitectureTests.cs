@@ -391,7 +391,7 @@ public class ArchitectureTests
         // versions but could not change anything. Nothing about the engine's own tests would have
         // shown that, because they call it directly.
         var viewModel = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "src", "KronosReborn", "UI", "ViewModels.cs"));
+            Path.Combine(RepositoryRoot, "src", "KronosReborn.Core", "UI", "ViewModels.cs"));
 
         foreach (var type in new[] { "SwapExecutor", "UndoEngine", "SwapPlanner" })
         {
@@ -409,7 +409,7 @@ public class ArchitectureTests
         // feature that cannot be reached. The group toggle was bound, worked, and did nothing to the
         // grouping, which is the same class of mistake.
         var viewModel = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "src", "KronosReborn", "UI", "ViewModels.cs"));
+            Path.Combine(RepositoryRoot, "src", "KronosReborn.Core", "UI", "ViewModels.cs"));
 
         var window = File.ReadAllText(
             Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.axaml"));

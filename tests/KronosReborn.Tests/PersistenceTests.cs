@@ -109,67 +109,55 @@ public class PersistenceTests
     {
         var s = Settings.Default;
 
-        Assert.Empty(s.EnabledLibraryRoots);
         Assert.False(s.AllowUntrustedRuntimes); // R42: off by default
         Assert.Equal(50, s.MaxHistoryPerGame);  // R53: default limit
-        Assert.True(s.GroupByLibrary);          // R12 default
         Assert.Equal(1600, s.WindowWidth);
         Assert.Equal(960, s.WindowHeight);
         Assert.False(s.WindowMaximized);
     }
 
     [Fact]
-    public void SettingsWithCreatesModifiedCopy()
-    {
-        var s = Settings.Default
-            .With(allowUntrustedRuntimes: true, maxHistoryPerGame: 100);
-
-        Assert.True(s.AllowUntrustedRuntimes);
-        Assert.Equal(100, s.MaxHistoryPerGame);
-        Assert.True(s.GroupByLibrary); // unchanged, default is true
-    }
-
-    [Fact]
     public void SettingsWithLeavesEverythingElseAlone()
     {
-        var original = Settings.Default.With(
-            enabledLibraryRoots: ["C:\\Steam"],
-            maxHistoryPerGame: 7,
-            groupByLibrary: false,
-            windowWidth: 1200);
+        var original = Settings.Default.With(maxHistoryPerGame: 7, windowWidth: 1200);
 
         var changed = original.With(allowUntrustedRuntimes: true);
 
-        Assert.Equal(["C:\\Steam"], changed.EnabledLibraryRoots);
+        Assert.True(changed.AllowUntrustedRuntimes);
         Assert.Equal(7, changed.MaxHistoryPerGame);
-        Assert.False(changed.GroupByLibrary);
         Assert.Equal(1200, changed.WindowWidth);
     }
 
     [Fact]
-    public void SettingsDataRoundTrips()
+    public void SettingsRoundTripThroughTheirFile()
     {
-        var original = Settings.Default
-            .With(enabledLibraryRoots: ["C:\\Steam", "D:\\Games"],
-                  allowUntrustedRuntimes: true,
-                  maxHistoryPerGame: 25,
-                  groupByLibrary: false,
-                  windowWidth: 1200,
-                  windowHeight: 800,
-                  windowMaximized: true,
-                  columnWidths: new Dictionary<string, double> { { "Game", 300 }, { "DLSS", 120 } });
+        using var temp = new TemporaryDirectory();
+        var original = Settings.Default.With(
+            allowUntrustedRuntimes: true, maxHistoryPerGame: 25, windowWidth: 1200, windowHeight: 800, windowMaximized: true);
 
-        var restored = SettingsData.FromSettings(original).ToSettings();
+        NewService(temp).SaveSettings(original);
 
-        Assert.Equal(original.EnabledLibraryRoots, restored.EnabledLibraryRoots);
-        Assert.Equal(original.AllowUntrustedRuntimes, restored.AllowUntrustedRuntimes);
-        Assert.Equal(original.MaxHistoryPerGame, restored.MaxHistoryPerGame);
-        Assert.Equal(original.GroupByLibrary, restored.GroupByLibrary);
-        Assert.Equal(original.WindowWidth, restored.WindowWidth);
-        Assert.Equal(original.WindowHeight, restored.WindowHeight);
-        Assert.Equal(original.WindowMaximized, restored.WindowMaximized);
-        Assert.Equal(original.ColumnWidths, restored.ColumnWidths);
-        Assert.Equal(original.ThemeMode, restored.ThemeMode);
+        Assert.Equal(original, NewService(temp).Load().Settings);
+    }
+
+    [Fact]
+    public void ASettingsFileFromAnOlderVersionStillLoads()
+    {
+        using var temp = new TemporaryDirectory();
+        var service = NewService(temp);
+
+        // Settings that no longer exist, and one that is missing, as an older version wrote them.
+        File.WriteAllText(service.Paths.SettingsPath, """
+            { "enabledLibraryRoots": [], "groupByLibrary": false, "themeMode": "Dark",
+              "allowUntrustedRuntimes": true, "windowWidth": 1300 }
+            """);
+
+        var result = service.Load();
+
+        Assert.Empty(result.Problems);
+        Assert.True(result.Settings.AllowUntrustedRuntimes);
+        Assert.Equal(1300, result.Settings.WindowWidth);
+        Assert.Equal(50, result.Settings.MaxHistoryPerGame);
     }
 
     // ------------------------------------------------------------ HistoryEntry

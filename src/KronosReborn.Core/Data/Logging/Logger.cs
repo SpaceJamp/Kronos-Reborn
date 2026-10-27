@@ -196,15 +196,6 @@ public sealed class Logger : IDisposable
         }
     }
 
-    /// <summary>Removes a sink.</summary>
-    public bool RemoveSink(ILogSink sink)
-    {
-        lock (_lock)
-        {
-            return _sinks.Remove(sink);
-        }
-    }
-
     /// <summary>Sets a global property included in every log entry.</summary>
     public void SetGlobalProperty(string name, object? value)
     {
@@ -212,18 +203,6 @@ public sealed class Logger : IDisposable
         {
             _globalProperties[name] = value;
         }
-    }
-
-    /// <summary>Logs at Trace level.</summary>
-    public void Trace(string message, string? category = null, params (string Name, object? Value)[] properties)
-    {
-        Write(LogLevel.Trace, message, category, properties);
-    }
-
-    /// <summary>Logs at Debug level.</summary>
-    public void Debug(string message, string? category = null, params (string Name, object? Value)[] properties)
-    {
-        Write(LogLevel.Debug, message, category, properties);
     }
 
     /// <summary>Logs at Information level.</summary>
@@ -244,22 +223,10 @@ public sealed class Logger : IDisposable
         Write(LogLevel.Error, message, category, properties);
     }
 
-    /// <summary>Logs at Critical level.</summary>
-    public void Critical(string message, string? category = null, params (string Name, object? Value)[] properties)
-    {
-        Write(LogLevel.Critical, message, category, properties);
-    }
-
     /// <summary>Logs an exception at Error level.</summary>
     public void Error(Exception exception, string? message = null, string? category = null)
     {
         WriteException(LogLevel.Error, exception, message, category);
-    }
-
-    /// <summary>Logs an exception at Critical level.</summary>
-    public void Critical(Exception exception, string? message = null, string? category = null)
-    {
-        WriteException(LogLevel.Critical, exception, message, category);
     }
 
     /// <summary>Flushes all sinks.</summary>

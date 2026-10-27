@@ -125,7 +125,7 @@ public sealed class PersistenceService : IDisposable
         try
         {
             _settings = settings;
-            AtomicWrite(_paths.SettingsPath, JsonSerializer.Serialize(SettingsData.FromSettings(settings), JsonOptions.Default));
+            AtomicWrite(_paths.SettingsPath, JsonSerializer.Serialize(settings, JsonOptions.Default));
         }
         finally
         {
@@ -278,8 +278,7 @@ public sealed class PersistenceService : IDisposable
         try
         {
             var json = File.ReadAllText(path);
-            var data = JsonSerializer.Deserialize<SettingsData>(json, JsonOptions.Default);
-            return data?.ToSettings() ?? Settings.Default;
+            return JsonSerializer.Deserialize<Settings>(json, JsonOptions.Default) ?? Settings.Default;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
