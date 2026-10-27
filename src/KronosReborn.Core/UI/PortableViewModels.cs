@@ -52,38 +52,16 @@ public sealed class GameRow : INotifyPropertyChanged
     /// </remarks>
     public IReadOnlyList<RuntimeChoice> Choices { get; private set; } = [];
 
-    /// <summary>The choice shown in this game's DLSS column.</summary>
-    public RuntimeChoice DlssChoice => ChoiceFor(RuntimeKind.Dlss);
 
-    /// <summary>The choice shown in this game's DLSS Frame Generation column.</summary>
-    public RuntimeChoice DlssGChoice => ChoiceFor(RuntimeKind.DlssG);
 
-    /// <summary>The choice shown in this game's DLSS Ray Reconstruction column.</summary>
-    public RuntimeChoice DlssRChoice => ChoiceFor(RuntimeKind.DlssR);
 
-    /// <summary>The choice shown in this game's FSR column.</summary>
-    public RuntimeChoice FsrChoice => ChoiceFor(RuntimeKind.Fsr);
 
-    /// <summary>The choice shown in this game's FSR (Vulkan) column.</summary>
-    public RuntimeChoice FsrVkChoice => ChoiceFor(RuntimeKind.FsrVk);
 
-    /// <summary>The choice shown in this game's XeSS column.</summary>
-    public RuntimeChoice XessChoice => ChoiceFor(RuntimeKind.Xess);
 
-    /// <summary>The choice shown in this game's XeSS Frame Generation column.</summary>
-    public RuntimeChoice XessFgChoice => ChoiceFor(RuntimeKind.XessFg);
 
-    /// <summary>The choice shown in this game's XeSS (DX11) column.</summary>
-    public RuntimeChoice XessDx11Choice => ChoiceFor(RuntimeKind.XessDx11);
 
-    /// <summary>The choice shown in this game's XeLL column.</summary>
-    public RuntimeChoice XellChoice => ChoiceFor(RuntimeKind.Xell);
 
-    /// <summary>The choice shown in this game's FSR Upscaler (SDK 2) column.</summary>
-    public RuntimeChoice FsrUpscalerChoice => ChoiceFor(RuntimeKind.FsrUpscaler);
 
-    /// <summary>The choice shown in this game's FSR Frame Generation (SDK 2) column.</summary>
-    public RuntimeChoice FsrFgChoice => ChoiceFor(RuntimeKind.FsrFg);
 
     /// <summary>Whether any runtime in this row has a version chosen that is not the one installed.</summary>
     public bool HasAnyChange => Choices.Any(c => c.HasChange);
@@ -112,17 +90,6 @@ public sealed class GameRow : INotifyPropertyChanged
             choice.Changed += OnChoiceChanged;
         }
 
-        OnPropertyChanged(nameof(DlssChoice));
-        OnPropertyChanged(nameof(DlssGChoice));
-        OnPropertyChanged(nameof(DlssRChoice));
-        OnPropertyChanged(nameof(FsrChoice));
-        OnPropertyChanged(nameof(FsrVkChoice));
-        OnPropertyChanged(nameof(XessChoice));
-        OnPropertyChanged(nameof(XessFgChoice));
-        OnPropertyChanged(nameof(XessDx11Choice));
-        OnPropertyChanged(nameof(XellChoice));
-        OnPropertyChanged(nameof(FsrUpscalerChoice));
-        OnPropertyChanged(nameof(FsrFgChoice));
         OnPropertyChanged(nameof(HasAnyChange));
     }
 
@@ -175,40 +142,12 @@ public sealed class GameRow : INotifyPropertyChanged
         {
             _snapshot = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(DlssVersion));
-            OnPropertyChanged(nameof(DlssGVersion));
-            OnPropertyChanged(nameof(DlssRVersion));
-            OnPropertyChanged(nameof(FsrVersion));
-            OnPropertyChanged(nameof(XessVersion));
-            OnPropertyChanged(nameof(HasDlssG));
-            OnPropertyChanged(nameof(HasDlssR));
             OnPropertyChanged(nameof(HasAnyRuntime));
             OnPropertyChanged(nameof(HasUnknownVersions));
             OnPropertyChanged(nameof(StatusText));
-            OnPropertyChanged(nameof(StatusColor));
         }
     }
 
-    public string? DlssVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.Dlss)?.Version;
-    public string? DlssGVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.DlssG)?.Version;
-    public string? DlssRVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.DlssR)?.Version;
-    public string? FsrVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.Fsr)?.Version;
-    public string? XessVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.Xess)?.Version;
-    public string? FsrVkVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.FsrVk)?.Version;
-    public string? XessFgVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.XessFg)?.Version;
-    public string? XessDx11Version => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.XessDx11)?.Version;
-    public string? XellVersion => Snapshot?.Runtimes.FirstOrDefault(r => r.Kind == RuntimeKind.Xell)?.Version;
-
-    /// <summary>Whether this game has DLSS Frame Generation, so the row can label it.</summary>
-    /// <remarks>
-    /// The markup used to bind the label to the version string itself. A string is not a boolean, so
-    /// the binding could not produce a Visibility and the label was always on screen. Visibility is
-    /// asked for here instead, where the answer is unambiguous.
-    /// </remarks>
-    public bool HasDlssG => !string.IsNullOrWhiteSpace(DlssGVersion);
-
-    /// <summary>Whether this game has DLSS Ray Reconstruction.</summary>
-    public bool HasDlssR => !string.IsNullOrWhiteSpace(DlssRVersion);
 
     public bool HasAnyRuntime => Snapshot?.HasAnyRuntime == true;
     public bool HasUnknownVersions => Snapshot?.HasUnknownVersions == true;
@@ -224,21 +163,6 @@ public sealed class GameRow : INotifyPropertyChanged
             return "OK";
         }
     }
-
-    public string StatusColor
-    {
-        get
-        {
-            if (IsMissing) return "#E74C3C";
-            if (!HasAnyRuntime) return "#F39C12";
-            if (HasUnknownVersions) return "#F39C12";
-            return "#27AE60";
-        }
-    }
-
-    public string LastChangedText =>
-        Snapshot?.LastChangedByUs?.ToString("g", System.Globalization.CultureInfo.CurrentCulture)
-        ?? "Never";
 
     public bool IsSelected
     {
@@ -575,23 +499,5 @@ public sealed record LibraryKindOption(RuntimeKind? Kind, string Label)
     public static LibraryKindOption All { get; } = new(null, "All runtimes");
 }
 
-/// <summary>Which pane of the main area is showing.</summary>
-public enum MainArea
-{
-    /// <summary>The games, as a list or as poster cards.</summary>
-    Games,
-
-    /// <summary>The collection's versions, as cards.</summary>
-    Library,
-}
-
-public enum GroupMode
-{
-    /// <summary>Flat list, no grouping.</summary>
-    Flat,
-
-    /// <summary>Group by library name.</summary>
-    ByLibrary,
-}
 
 /// <summary>

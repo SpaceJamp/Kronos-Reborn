@@ -1,0 +1,328 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:KronosReborn"
+        xmlns:vm="using:KronosReborn.UI"
+        xmlns:diag="using:KronosReborn.Data.Diagnostics"
+        xmlns:log="using:KronosReborn.Data.Logging"
+        x:Class="KronosReborn.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Kronos Reborn"
+        Width="1320" Height="820" MinWidth="960" MinHeight="600">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.heading">
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Opacity" Value="0.7" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="ListBox.covers">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ListBox.covers ListBoxItem">
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+    </Window.Styles>
+
+    <DockPanel>
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Padding="12,6" BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding BuildInfoText}" Classes="muted" Margin="12,0,0,0" />
+            </Grid>
+        </Border>
+
+        <TabControl TabStripPlacement="Left" Padding="16,12">
+
+            <!-- ============================================================ Games -->
+            <TabItem Header="Games">
+                <Grid ColumnDefinitions="*,380" RowDefinitions="Auto,*,Auto">
+
+                    <!-- Toolbar -->
+                    <WrapPanel Grid.ColumnSpan="2" Margin="0,0,0,12">
+                        <Button Content="Refresh" Command="{Binding RefreshCommand}" Classes="accent" Margin="0,0,6,6"
+                                ToolTip.Tip="Look for games and the runtimes they carry" />
+                        <Button Content="+ Add Game" Command="{Binding AddGameCommand}" Margin="0,0,6,6"
+                                ToolTip.Tip="Add a game by choosing the folder it is installed in" />
+                        <Button Content="⬆ Newest" Command="{Binding ChooseNewestCommand}" Margin="0,0,6,6"
+                                ToolTip.Tip="Choose the newest version you hold of every runtime in the ticked games, or the selected game" />
+                        <Button Content="Import…" Command="{Binding BeginImportCommand}" Margin="0,0,6,6"
+                                ToolTip.Tip="Add a runtime file you got elsewhere to the collection" />
+                        <Button Content="Undo" Command="{Binding UndoCommand}" Margin="0,0,6,6" />
+                        <Button Content="Redo" Command="{Binding RedoCommand}" Margin="0,0,6,6" />
+                        <Button Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,6,6"
+                                IsVisible="{Binding IsBusy}" />
+                        <TextBox Text="{Binding SearchText}" Watermark="Search games" Width="240" Margin="12,0,0,6"
+                                 AutomationProperties.Name="Search games" />
+                    </WrapPanel>
+
+                    <!-- Cover grid, one section per library -->
+                    <ScrollViewer Grid.Row="1">
+                        <StackPanel>
+                            <TextBlock Classes="muted" Margin="0,24" IsVisible="{Binding !HasGames}"
+                                       Text="No games yet. Press Refresh to look for them, or + Add Game to add one by its folder." />
+                            <TextBlock Classes="muted" Margin="0,24" IsVisible="{Binding IsSearchMissingEverything}"
+                                       Text="No game matches that search." />
+
+                            <ItemsControl ItemsSource="{Binding GameGroups}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:GameGroup">
+                                        <StackPanel Margin="0,0,0,16">
+                                            <TextBlock Text="{Binding Library}" Classes="heading" />
+                                            <ListBox Classes="covers" ItemsSource="{Binding Games}"
+                                                     SelectionChanged="OnGameSelected"
+                                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                                <ListBox.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel />
+                                                    </ItemsPanelTemplate>
+                                                </ListBox.ItemsPanel>
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:GameRow">
+                                                        <StackPanel Width="140" ToolTip.Tip="{Binding InstallPath}">
+                                                            <Panel Height="210">
+                                                                <Border CornerRadius="6" ClipToBounds="True"
+                                                                        Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+                                                                    <Panel>
+                                                                        <TextBlock Text="{Binding Initial}" FontSize="48" Opacity="0.5"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                   IsVisible="{Binding !HasPoster}" />
+                                                                        <!-- Whole, not cropped: a capsule is the card's own 2:3 shape, and a wide header kept whole still shows its title. -->
+                                                                        <Image Source="{Binding PosterPath, Converter={x:Static local:MainWindow.PosterImage}}"
+                                                                               Stretch="Uniform" />
+                                                                    </Panel>
+                                                                </Border>
+                                                                <!-- Backed, so the box shows on dark covers too. -->
+                                                                <Border Background="{DynamicResource SystemControlBackgroundAltMediumHighBrush}" CornerRadius="4" Margin="4" Padding="2,0,0,0"
+                                                                        HorizontalAlignment="Left" VerticalAlignment="Top">
+                                                                    <CheckBox IsChecked="{Binding IsSelected}" MinWidth="0" Padding="0"
+                                                                              ToolTip.Tip="Tick to include in ⬆ Newest"
+                                                                              AutomationProperties.Name="Include in Newest" />
+                                                                </Border>
+                                                            </Panel>
+                                                            <TextBlock Text="{Binding GameName}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0" />
+                                                            <TextBlock Text="{Binding StatusText}" Classes="muted" FontSize="12" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- The selected game -->
+                    <Border Grid.Row="1" Grid.Column="1" Margin="16,0,0,0" Padding="16" CornerRadius="8"
+                            Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+                        <ScrollViewer>
+                            <StackPanel Margin="0,0,14,0">
+                                <TextBlock Classes="muted" IsVisible="{Binding !HasDetailPanel}"
+                                           Text="Choose a game to see the runtimes it carries and pick versions for them." />
+
+                                <StackPanel IsVisible="{Binding HasDetailPanel}">
+                                    <TextBlock Text="{Binding SelectedGame.GameName, FallbackValue=''}" Classes="heading" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding SelectedGame.LibraryName, FallbackValue=''}" Classes="muted" />
+                                    <TextBlock Text="{Binding SelectedGame.InstallPath, FallbackValue=''}" Classes="muted" FontSize="12" Margin="0,2,0,12" />
+
+                                    <Button Content="Remove from list" Command="{Binding RemoveGameCommand}" Margin="0,0,0,12"
+                                            IsVisible="{Binding SelectedGame.IsAddedByHand, FallbackValue=False}"
+                                            ToolTip.Tip="Take this hand-added game off the list. Its files are not touched." />
+
+                                    <ItemsControl ItemsSource="{Binding SelectedGame.Choices, FallbackValue={x:Null}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:RuntimeChoice">
+                                                <StackPanel Margin="0,0,0,12" IsVisible="{Binding IsAvailable}">
+                                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                                    <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}"
+                                                              HorizontalAlignment="Stretch" Margin="0,4,0,2"
+                                                              PlaceholderText="Choose a version"
+                                                              AutomationProperties.Name="{Binding Label}">
+                                                        <ComboBox.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:RuntimeOption">
+                                                                <TextBlock Text="{Binding Label}" />
+                                                            </DataTemplate>
+                                                        </ComboBox.ItemTemplate>
+                                                    </ComboBox>
+                                                    <TextBlock Text="{Binding CurrentText, StringFormat='Now: {0}'}" Classes="muted" FontSize="12" />
+                                                    <TextBlock Text="{Binding StatusText}" FontSize="12" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- What Apply will do, and an import waiting to be confirmed -->
+                    <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="0,12,0,0">
+                        <StackPanel IsVisible="{Binding HasImportPreview}" Margin="0,0,0,8">
+                            <TextBlock Text="{Binding ImportPreviewText}" TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <Button Content="{Binding ImportConfirmLabel}" Command="{Binding ConfirmImportCommand}" Margin="0,0,6,0" />
+                                <Button Content="Discard" Command="{Binding DiscardImportCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <ItemsControl ItemsSource="{Binding Preview}" IsVisible="{Binding HasPreview}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PreviewLine">
+                                    <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0" IsVisible="{Binding HasPreview}">
+                            <Button Content="Apply" Command="{Binding ApplySwapCommand}" Classes="accent" />
+                            <TextBlock Text="{Binding PendingChangeCount, StringFormat='{}{0} version(s) chosen'}"
+                                       Classes="muted" VerticalAlignment="Center" Margin="12,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- ============================================================ Download -->
+            <TabItem Header="Download">
+                <ScrollViewer>
+                    <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+                        <TextBlock Text="Download" Classes="heading" />
+                        <TextBlock Classes="muted" Margin="0,0,0,12"
+                                   Text="Straight from NVIDIA, AMD and Intel's own release repositories. Only files signed by their vendor are added." />
+
+                        <Button Content="Get newest for my games" Command="{Binding Downloads.GetNewestForGamesCommand}"
+                                Classes="accent" Margin="0,0,0,12"
+                                ToolTip.Tip="Download the newest version of every runtime your games carry" />
+
+                        <TextBlock Text="Or choose one" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox ItemsSource="{Binding Downloads.Kinds}" SelectedItem="{Binding Downloads.SelectedKind}"
+                                      Width="200" PlaceholderText="Runtime" AutomationProperties.Name="Runtime to download">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:DownloadKind">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <ComboBox ItemsSource="{Binding Downloads.Releases}" SelectedItem="{Binding Downloads.SelectedRelease}"
+                                      Width="140" Margin="6,0,0,0" AutomationProperties.Name="Release to download" />
+                            <Button Content="Download" Command="{Binding Downloads.DownloadSelectedCommand}" Margin="6,0,0,0" />
+                            <Button Content="Stop" Command="{Binding Downloads.StopCommand}" Margin="6,0,0,0" />
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding Downloads.StatusText}" Classes="muted" Margin="0,12,0,0" />
+                        <ProgressBar Value="{Binding Downloads.Progress}" Maximum="100" Height="6" Margin="0,4,0,0"
+                                     IsVisible="{Binding Downloads.IsBusy}" />
+
+                        <TextBlock Text="Versions you hold" Classes="heading" Margin="0,28,0,4" />
+                        <TextBlock Text="{Binding LibrarySummary}" Classes="muted" Margin="0,0,0,8" />
+                        <ComboBox ItemsSource="{Binding LibraryKindOptions}" SelectedItem="{Binding LibraryKind}"
+                                  Width="200" Margin="0,0,0,8" AutomationProperties.Name="Filter by runtime">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:LibraryKindOption">
+                                    <TextBlock Text="{Binding Label}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <ItemsControl ItemsSource="{Binding LibraryEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:LibraryEntry">
+                                    <Grid ColumnDefinitions="160,140,*" Margin="0,0,0,6">
+                                        <TextBlock Text="{Binding KindLabel}" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Version}" FontFamily="Consolas" />
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="{Binding TrustText}" FontSize="12" />
+                                            <TextBlock Text="{Binding UsageText}" Classes="muted" FontSize="12" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============================================================ Diagnostics -->
+            <TabItem Header="Diagnostics" IsSelected="{Binding IsDiagnosticsOpen}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="Diagnostics" Classes="heading" />
+                        <TextBlock Text="{Binding Diagnostics.StatusText}" Classes="muted" Margin="0,0,0,8" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <Button Content="Run again" Command="{Binding Diagnostics.RunCommand}" Margin="0,0,6,0" />
+                            <Button Content="Copy report" Command="{Binding Diagnostics.CopyCommand}" Margin="0,0,6,0" />
+                            <Button Content="Export…" Command="{Binding Diagnostics.ExportCommand}"
+                                    ToolTip.Tip="Save the report, logs, settings, collection and history as a zip" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <ScrollViewer>
+                        <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                            <TextBlock Text="Environment" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <ItemsControl ItemsSource="{Binding Diagnostics.Environment}" Margin="0,0,0,12">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="diag:DiagnosticFact">
+                                        <Grid ColumnDefinitions="160,*">
+                                            <TextBlock Text="{Binding Name}" Classes="muted" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="Checks" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <ItemsControl ItemsSource="{Binding Diagnostics.Checks}" Margin="0,0,0,12">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="diag:DiagnosticCheck">
+                                        <Grid ColumnDefinitions="24,*" Margin="0,0,0,6" ToolTip.Tip="{Binding Detail}">
+                                            <TextBlock Text="{Binding Glyph}" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding Area}" Classes="muted" FontSize="12" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="Recent errors" FontWeight="SemiBold" Margin="0,0,0,4"
+                                       IsVisible="{Binding Diagnostics.HasRecentErrors}" />
+                            <ItemsControl ItemsSource="{Binding Diagnostics.RecentErrors}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="log:LogEntry">
+                                        <StackPanel Margin="0,0,0,6" ToolTip.Tip="{Binding ExceptionStackTrace}">
+                                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Category}" Classes="muted" FontSize="12" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ============================================================ Settings -->
+            <TabItem Header="Settings">
+                <StackPanel MaxWidth="560" HorizontalAlignment="Left">
+                    <TextBlock Text="Settings" Classes="heading" />
+                    <CheckBox Content="Allow untrusted runtimes" IsChecked="{Binding AllowUntrustedRuntimes}" Margin="0,0,0,4" />
+                    <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,12"
+                               Text="Import files that are not signed by NVIDIA, AMD or Intel without asking each time. A warning is still shown before one goes into a game." />
+                    <TextBlock Text="Undo steps kept per game" Margin="0,0,0,4" />
+                    <NumericUpDown Value="{Binding MaxHistoryPerGame}" Minimum="1" Maximum="1000" Increment="1"
+                                   FormatString="0" Width="160" HorizontalAlignment="Left"
+                                   AutomationProperties.Name="Undo steps kept per game" />
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>
