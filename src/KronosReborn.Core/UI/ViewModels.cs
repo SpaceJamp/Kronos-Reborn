@@ -48,7 +48,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private readonly DownloadsViewModel _downloads;
     private readonly HttpClient _http = VendorDownloader.CreateClient();
-    private readonly StorePosterFinder _posters;
     private readonly DiagnosticsViewModel _diagnostics;
     private bool _isDiagnosticsOpen;
 
@@ -68,7 +67,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _filePicker = filePicker;
 
         _executor = new SwapExecutor(persistence, catalog, paths);
-        _posters = new StorePosterFinder(_http, paths.PostersDirectory);
         _undo = new UndoEngine(persistence, paths);
         _downloads = new DownloadsViewModel(
             new VendorDownloader(_http, catalog, paths),
@@ -752,9 +750,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         games = [.. GameRecord.Deduplicate(games)];
 
         // Games Steam's cache has no art for get a cover from Steam's store, fetched once and kept.
+        // A finder per refresh, so one that found Steam unreachable tries again next time.
+        var posters = new StorePosterFinder(_http, _paths.PostersDirectory);
         games = [.. games.Select(g => g.PosterPath is not null ? g : g with
         {
-            PosterPath = _posters.Find(g.Id, g.Name, g.LibraryName == "Steam" ? g.Id : null, token),
+            PosterPath = posters.Find(g.Id, g.Name, g.LibraryName == "Steam" ? g.Id : null, token),
         })];
 #else
         // On non-Windows platforms, library discovery is not available.
