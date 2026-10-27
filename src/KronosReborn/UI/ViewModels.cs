@@ -16,9 +16,11 @@ using KronosReborn.Data.Logging;
 using KronosReborn.Data.Persistence;
 using KronosReborn.Data.Runtimes;
 using KronosReborn.UI;
-using Microsoft.Win32;
 
 namespace KronosReborn.UI;
+
+/// <summary>One library's games, as the cover grid shows them under a heading.</summary>
+public sealed record GameGroup(string Library, IReadOnlyList<GameRow> Games);
 
 public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
@@ -27,7 +29,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly RuntimeCatalog _catalog;
     private readonly PersistenceService _persistence;
     private Settings _settings;
-    private readonly ThemeManager _themeManager;
     private readonly DataPaths _paths;
     private readonly IFilePicker? _filePicker;
     private readonly SwapExecutor _executor;
@@ -40,13 +41,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private IReadOnlyList<ScanProblem> _problems = [];
     private RuntimeImportPreview? _importPreview;
 
-    private GroupMode _groupMode = GroupMode.ByLibrary;
     private GameRow? _selectedGame;
     private bool _isScanning;
     private bool _isWorking;
-    private bool _isDownloadOpen;
     private string _statusText = "Ready";
-    private int _selectedCount;
 
     private readonly DownloadsViewModel _downloads;
     private readonly DiagnosticsViewModel _diagnostics;
@@ -56,7 +54,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         RuntimeCatalog catalog,
         PersistenceService persistence,
         Settings settings,
-        ThemeManager themeManager,
         DataPaths paths,
         IFilePicker? filePicker = null,
         MemoryLogSink? recentLog = null,
@@ -65,7 +62,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _catalog = catalog;
         _persistence = persistence;
         _settings = settings;
-        _themeManager = themeManager;
         _paths = paths;
         _filePicker = filePicker;
 
@@ -84,18 +80,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _diagnostics = new DiagnosticsViewModel(
             paths, catalog, persistence, () => [.. loadProblems, .. Problems], recentLog, filePicker);
 
-        // Initialize group mode from settings
-        _groupMode = settings.GroupByLibrary ? GroupMode.ByLibrary : GroupMode.Flat;
-
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
-        ToggleGroupCommand = new RelayCommand(_ => GroupMode = GroupMode == GroupMode.Flat ? GroupMode.ByLibrary : GroupMode.Flat);
-        ToggleDownloadCommand = new RelayCommand(_ => IsDownloadOpen = !IsDownloadOpen);
-        ToggleDiagnosticsCommand = new RelayCommand(_ => IsDiagnosticsOpen = !IsDiagnosticsOpen);
-
-        ToggleAreaCommand = new RelayCommand(_ => Area = Area == MainArea.Games ? MainArea.Library : MainArea.Games);
-        ToggleThemeCommand = new RelayCommand(_ => _themeManager.ToggleTheme());
-        OpenSettingsCommand = new RelayCommand(_ => IsSettingsOpen = !IsSettingsOpen);
-        ToggleSettingsCommand = new RelayCommand(_ => IsSettingsOpen = !IsSettingsOpen);
         ChooseNewestCommand = new RelayCommand(_ => ChooseNewest(), _ => !IsBusy && (SelectedGame is not null || _games.Any(g => g.IsSelected)));
         ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsWorking);
         UndoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: false), _ => SelectedGame is not null && !IsWorking);
@@ -110,19 +95,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         // it, so the command can stay a command and every command the model exposes is one the window
         // binds — a command that exists but is not bound is a feature nobody can reach.
         BeginImportCommand = new RelayCommand(
-            _ => BeginImport(_filePicker?.AskForRuntimeFile()), _ => !IsBusy && _filePicker is not null);
+            async _ => BeginImport(_filePicker is null ? null : await _filePicker.AskForRuntimeFileAsync()),
+            _ => !IsBusy && _filePicker is not null);
         ConfirmImportCommand = new RelayCommand(_ => ConfirmImport(), _ => CanConfirmImport);
         DiscardImportCommand = new RelayCommand(_ => DiscardImport(), _ => HasImportPreview);
 
         _games.CollectionChanged += OnGamesCollectionChanged;
-
-        // Subscribe to theme changes to persist
-        _themeManager.ThemeChanged += OnThemeChanged;
-    }
-
-    private void OnThemeChanged(ThemeMode mode)
-    {
-        _persistence.SaveSettings(_settings.With(themeMode: mode));
     }
 
     public ObservableCollection<GameRow> Games
@@ -140,9 +118,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 _games.CollectionChanged += OnGamesCollectionChanged;
             }
             OnPropertyChanged();
-            OnPropertyChanged(nameof(VisibleGames));
             OnPropertyChanged(nameof(HasGames));
-            UpdateSelectedCount();
+            ApplyFilter();
+            RaiseSwapCommandStates();
         }
     }
 
@@ -168,32 +146,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             }
         }
 
-        UpdateSelectedCount();
+        RaiseSwapCommandStates();
     }
 
     private void OnGameRowChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(GameRow.IsSelected))
         {
-            UpdateSelectedCount();
+            RaiseSwapCommandStates();
             ((RelayCommand)ChooseNewestCommand).RaiseCanExecuteChanged();
         }
     }
-
-    private void UpdateSelectedCount()
-    {
-        var previous = _selectedCount;
-        SelectedCount = _games?.Count(g => g.IsSelected) ?? 0;
-
-        if (previous != _selectedCount)
-        {
-            OnPropertyChanged(nameof(HasSelection));
-        }
-
-        RaiseSwapCommandStates();
-    }
-
-    public IEnumerable<GameRow> VisibleGames => _games;
 
     /// <summary>Whether there is at least one game to show.</summary>
     /// <remarks>
@@ -203,9 +166,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// nothing there. Visibility is asked for here instead.
     /// </remarks>
     public bool HasGames => _games.Count > 0;
-
-    /// <summary>Whether any game is ticked.</summary>
-    public bool HasSelection => SelectedCount > 0;
 
     /// <summary>
     /// Whether the detail panel has a game to show.
@@ -217,25 +177,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// </remarks>
     public bool HasDetailPanel => SelectedGame is not null;
 
-    /// <summary>Whether the download panel is open.</summary>
-    public bool IsDownloadOpen
-    {
-        get => _isDownloadOpen;
-        set
-        {
-            if (_isDownloadOpen == value) return;
-            _isDownloadOpen = value;
-            OnPropertyChanged();
-        }
-    }
-
     /// <summary>The view model for the download panel.</summary>
     public DownloadsViewModel Downloads => _downloads;
 
     /// <summary>The view model for the diagnostics panel.</summary>
     public DiagnosticsViewModel Diagnostics => _diagnostics;
 
-    /// <summary>Whether the diagnostics panel is open. Opening it runs the checks.</summary>
+    /// <summary>Whether the diagnostics page is showing. Showing it runs the checks.</summary>
     public bool IsDiagnosticsOpen
     {
         get => _isDiagnosticsOpen;
@@ -253,44 +201,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>
-    /// Whether the detail panel is actually on screen.
-    /// </summary>
-    /// <remarks>
-    /// Not the same as <see cref="HasDetailPanel"/>. The panel is drawn over the main area, and the
-    /// version library is drawn over the main area too and would cover it — so a panel that stayed
-    /// "shown" while the library was up would be a control that could not be seen or reached.
-    /// </remarks>
-    public bool ShowDetailPanel => HasDetailPanel && ShowingGames;
-
-    public GroupMode GroupMode
-    {
-        get => _groupMode;
-        set
-        {
-            if (_groupMode == value)
-            {
-                return;
-            }
-
-            _groupMode = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(GroupModeText));
-
-            // R12: the choice persists. It previously changed the label and nothing else — neither
-            // the grouping in the list nor the stored setting.
-            _persistence.SaveSettings(_settings.With(groupByLibrary: value == GroupMode.ByLibrary));
-        }
-    }
-
-    public string GroupModeText => GroupMode == GroupMode.Flat ? "Flat list" : "Group by library";
-
-    /// <summary>
     /// Text typed into the search box, filtering the games as it changes.
     /// </summary>
     /// <remarks>
-    /// Applied by the collection view rather than by rebuilding the collection, so filtering does not
-    /// discard the rows' chosen versions. Rebuilding would silently throw away a change the user had
-    /// made and was about to apply.
+    /// Filters <see cref="GameGroups"/>, which holds the same row objects as <see cref="Games"/>, so
+    /// searching never discards a version chosen in a row and not yet applied.
     /// </remarks>
     public string SearchText
     {
@@ -310,43 +225,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>Whether the search found nothing, so an empty library reads as a bad search.</summary>
-    public bool IsSearchMissingEverything => _searchText.Length > 0 && Games.Count == 0;
+    public bool IsSearchMissingEverything => _searchText.Length > 0 && GameGroups.Count == 0;
 
     private string _searchText = string.Empty;
-
-    /// <summary>Applies the search text to whichever view of the games is showing.</summary>
-    // ------------------------------------------------------------ The version library
-
-    /// <summary>Which pane of the main area is showing.</summary>
-    public MainArea Area
-    {
-        get => _area;
-        set
-        {
-            if (_area == value)
-            {
-                return;
-            }
-
-            _area = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(ShowingGames));
-            OnPropertyChanged(nameof(ShowingLibrary));
-            OnPropertyChanged(nameof(ShowDetailPanel));
-        }
-    }
-
-    /// <summary>Whether the games pane is the one showing.</summary>
-    public bool ShowingGames => Area == MainArea.Games;
-
-    /// <summary>Whether the library pane is the one showing.</summary>
-    public bool ShowingLibrary => Area == MainArea.Library;
-
-    /// <summary>Switches between the games and the version library.</summary>
-    public ICommand ToggleAreaCommand { get; }
-
-    /// <summary>What the area toggle says it will switch to.</summary>
-    public string AreaText => Area == MainArea.Games ? "Versions ▤" : "◀ Games";
 
     /// <summary>Which runtime the library is filtered to.</summary>
     public LibraryKindOption LibraryKind
@@ -430,58 +311,26 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 VersionNumber.AreEquivalent(r.Version, entry.Version)) == true)
             .Select(g => g.GameName)];
 
-    private MainArea _area = MainArea.Games;
     private RuntimeKind? _libraryKind;
+
+    /// <summary>The games matching the search, one group per library, libraries in name order.</summary>
+    public IReadOnlyList<GameGroup> GameGroups { get; private set; } = [];
 
     private void ApplyFilter()
     {
         var text = _searchText.Trim();
 
-        // Both views are filtered, not just the one on screen, so switching view does not reveal games
-        // the search was meant to hide.
-        var filtered = text.Length == 0
-            ? null
-            : _games.Where(g => g.GameName.Contains(text, StringComparison.OrdinalIgnoreCase)).ToList();
+        GameGroups =
+        [
+            .. _games
+                .Where(g => text.Length == 0 || g.GameName.Contains(text, StringComparison.OrdinalIgnoreCase))
+                .GroupBy(g => g.LibraryName, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new GameGroup(g.Key, [.. g.OrderBy(r => r.GameName, StringComparer.OrdinalIgnoreCase)])),
+        ];
 
-        if (filtered is null)
-        {
-            if (ListView is not null)
-            {
-                ListView.Filter = null;
-            }
-        }
-        else
-        {
-            var keep = filtered.ToHashSet();
-
-            if (ListView is not null)
-            {
-                ListView.Filter = o => o is GameRow row && keep.Contains(row);
-            }
-        }
-
-        if (ListView is not null)
-        {
-            ListView.Refresh();
-        }
-
+        OnPropertyChanged(nameof(GameGroups));
         OnPropertyChanged(nameof(IsSearchMissingEverything));
-    }
-
-    private System.ComponentModel.ICollectionView? ListView { get; set; }
-
-    /// <summary>
-    /// Hands the view model the collection view it filters.
-    /// </summary>
-    /// <remarks>
-    /// Supplied by the window because a collection view belongs to a view. Filtering is done on the
-    /// view rather than by rebuilding <see cref="Games"/>, so that searching does not discard the
-    /// versions the user has chosen but not yet applied.
-    /// </remarks>
-    public void AttachViews(System.ComponentModel.ICollectionView list)
-    {
-        ListView = list;
-        ApplyFilter();
     }
 
     public bool IsScanning
@@ -491,12 +340,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             _isScanning = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(IsNotScanning));
             RaiseBusyStates();
         }
     }
-
-    public bool IsNotScanning => !IsScanning;
 
     /// <summary>Whether a swap or undo is running.</summary>
     public bool IsWorking
@@ -543,21 +389,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public int SelectedCount
-    {
-        get => _selectedCount;
-        private set
-        {
-            _selectedCount = value;
-            OnPropertyChanged();
-        }
-    }
-
     /// <summary>
     /// Build identity shown in the status bar.
     /// </summary>
     /// <remarks>
-    /// An instance property because WPF binds to it, although it reads no instance state. The
+    /// An instance property because the window binds to it, although it reads no instance state. The
     /// analyzer's suggestion to make it static cannot be followed without breaking the binding.
     /// </remarks>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
@@ -583,12 +419,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public ICommand RefreshCommand { get; }
-    public ICommand ToggleGroupCommand { get; }
-    public ICommand ToggleDownloadCommand { get; }
-
-    public ICommand ToggleThemeCommand { get; }
-    public ICommand OpenSettingsCommand { get; }
-    public ICommand ToggleSettingsCommand { get; }
     public ICommand ChooseNewestCommand { get; }
     public ICommand AddGameCommand { get; }
     public ICommand RemoveGameCommand { get; }
@@ -596,7 +426,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand UndoCommand { get; }
     public ICommand RedoCommand { get; }
     public ICommand CancelCommand { get; }
-    public ICommand ToggleDiagnosticsCommand { get; }
     public ICommand BeginImportCommand { get; }
     public ICommand ConfirmImportCommand { get; }
     public ICommand DiscardImportCommand { get; }
@@ -721,8 +550,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _selectedGame = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasDetailPanel));
-            RebuildAllChoices();
-            ClearPreview();
             RaiseSwapCommandStates();
         }
     }
@@ -746,11 +573,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             _problems = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(HasProblems));
         }
     }
-
-    public bool HasProblems => Problems.Count > 0;
 
     /// <summary>
     /// Rediscovers games and re-reads the runtime versions each one runs.
@@ -999,7 +823,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Adds a game from a folder the user chooses, for games no library reports.</summary>
     private async System.Threading.Tasks.Task AddGameAsync()
     {
-        if (_filePicker?.AskForGameFolder() is not { } folder)
+        if (_filePicker is null || await _filePicker.AskForGameFolderAsync() is not { } folder)
         {
             return;
         }
@@ -1289,17 +1113,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             .Select(g => new SwapGameInfo(g.GameId, g.GameName, g.InstallPath, g.ExistsOnDisk, g.Snapshot));
     }
 
-    private bool _isSettingsOpen;
-    public bool IsSettingsOpen
-    {
-        get => _isSettingsOpen;
-        set
-        {
-            _isSettingsOpen = value;
-            OnPropertyChanged(nameof(IsSettingsOpen));
-        }
-    }
-
     public bool AllowUntrustedRuntimes
     {
         get => _settings.AllowUntrustedRuntimes;
@@ -1330,23 +1143,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public bool GroupByLibrary
-    {
-        get => _settings.GroupByLibrary;
-        set
-        {
-            if (_settings.GroupByLibrary == value) return;
-            _settings = _settings.With(groupByLibrary: value);
-            _persistence.SaveSettings(_settings);
-            GroupMode = value ? GroupMode.ByLibrary : GroupMode.Flat;
-            OnPropertyChanged(nameof(GroupByLibrary));
-        }
-    }
-
     /// <summary>Stops subscribing to events owned elsewhere.</summary>
     public void Dispose()
     {
-        _themeManager.ThemeChanged -= OnThemeChanged;
         _games.CollectionChanged -= OnGamesCollectionChanged;
         _operationCancellation.Dispose();
         _downloads.Dispose();

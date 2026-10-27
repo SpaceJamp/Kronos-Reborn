@@ -68,18 +68,31 @@ public class GamePosterLocatorTests
     }
 
     [Fact]
-    public void FallsBackToAHashedFileWhenThereAreNoNamedOnes()
+    public void TheCoverInAHashSubfolderWinsOverTheIconNamedForItsHash()
     {
         using var temp = new TemporaryDirectory();
         var steam = SteamRoot(temp);
 
-        // What the current layout leaves at the top level: one file named for its own hash.
+        // The current layout, as Hogwarts Legacy has it: a 32x32 icon at the top named for its hash,
+        // and each real image in a hash-named subfolder. The icon used to be taken as the cover.
+        WriteImage(steam, "appcache/librarycache/990080", null, "a9ecb94f249768d0ee5ccecbffe8d8c06d9bed59.jpg");
+        WriteImage(steam, "appcache/librarycache/990080", "471c718aa6d4e2111ae24d7a7427a7485c076f38", "library_hero.jpg");
+        WriteImage(steam, "appcache/librarycache/990080", "dca9bb926befe37ff9754e3336cd9fe4c969c1e9", "library_capsule.jpg");
+
+        var found = GamePosterLocator.Find("990080", [steam]);
+
+        Assert.Equal("library_capsule.jpg", Path.GetFileName(found));
+    }
+
+    [Fact]
+    public void TheIconNamedForItsHashIsNeverUsedAsTheCover()
+    {
+        using var temp = new TemporaryDirectory();
+        var steam = SteamRoot(temp);
+
         WriteImage(steam, "appcache/librarycache/1938090", null, "8eaf32220060344996cbf11f697a4f4be943e5f3.jpg");
 
-        var found = GamePosterLocator.Find("1938090", [steam]);
-
-        Assert.NotNull(found);
-        Assert.EndsWith(".jpg", found, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(GamePosterLocator.Find("1938090", [steam]));
     }
 
     [Fact]

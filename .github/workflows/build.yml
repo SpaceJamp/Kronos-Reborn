@@ -37,7 +37,7 @@ jobs:
       #   level instead.
       #
       # Verified both ways: with -r the solution build fails, without it the output still lands in
-      # bin\Release\net10.0-windows\win-x64.
+      # bin\Release\net10.0\win-x64.
 
       # Restore in locked mode before building anything.
       #
@@ -57,9 +57,8 @@ jobs:
       # compiler does not, and a repository whose formatting drifts is one where real diffs get lost
       # in the noise.
       #
-      # Before the build, deliberately. Building a WPF project leaves a temporary project behind in
-      # the source tree, and the formatter then has an extra project to read that is not part of the
-      # repository.
+      # Before the build, deliberately, so the formatter reads only the projects in the repository and
+      # none of the build output.
       - name: Check formatting
         run: dotnet format KronosReborn.sln --verify-no-changes --verbosity minimal
 
@@ -70,7 +69,7 @@ jobs:
       # again for now, so this is the whole build matrix rather than the x64 half of it.
       #
       # Tests are architecture independent by construction anyway: the test project deliberately does
-      # not reference WPF, so there is nothing in it that would behave differently elsewhere.
+      # not reference the UI framework, so there is nothing in it that would behave differently elsewhere.
       #
       # dotnet run rather than dotnet test, because `dotnet test` reports "Zero tests ran" against
       # xUnit v4's in-process console runner on this SDK. The same tests pass when the test

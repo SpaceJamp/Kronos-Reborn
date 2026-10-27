@@ -45,7 +45,7 @@ public sealed class DiagnosticsViewModel : INotifyPropertyChanged
         _filePicker = filePicker;
 
         RunCommand = new RelayCommand(async _ => await RunAsync(), _ => !IsRunning);
-        CopyCommand = new RelayCommand(_ => Copy(), _ => _report is not null);
+        CopyCommand = new RelayCommand(async _ => await CopyAsync(), _ => _report is not null && _filePicker is not null);
         ExportCommand = new RelayCommand(async _ => await ExportAsync(), _ => !IsRunning && _filePicker is not null);
     }
 
@@ -123,29 +123,21 @@ public sealed class DiagnosticsViewModel : INotifyPropertyChanged
                 new DiagnosticFact("Commit", BuildInfo.GitCommitShort ?? "unknown"),
             ]);
 
-    private void Copy()
+    private async Task CopyAsync()
     {
-        if (_report is null)
+        if (_report is null || _filePicker is null)
         {
             return;
         }
 
-        try
-        {
-            System.Windows.Clipboard.SetText(_report.ToText());
-            StatusText = "Report copied to the clipboard.";
-        }
-        catch (System.Runtime.InteropServices.ExternalException ex)
-        {
-            // Another program holding the clipboard is common and harmless; say so and move on.
-            StatusText = $"The clipboard is busy ({ex.Message}). Try again.";
-        }
+        await _filePicker.SetClipboardTextAsync(_report.ToText());
+        StatusText = "Report copied to the clipboard.";
     }
 
     /// <summary>Re-runs the checks so the export is current, then writes the zip where the user chose.</summary>
     private async Task ExportAsync()
     {
-        var target = _filePicker?.AskWhereToSaveDiagnostics(
+        var target = _filePicker is null ? null : await _filePicker.AskWhereToSaveDiagnosticsAsync(
             $"kronos-diagnostics-{DateTime.Now:yyyyMMdd-HHmmss}.zip");
 
         if (target is null)

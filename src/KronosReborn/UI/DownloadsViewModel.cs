@@ -29,7 +29,7 @@ public sealed class DownloadsViewModel : INotifyPropertyChanged, IDisposable
     private string? _selectedRelease;
     private bool _isBusy;
     private double _progress;
-    private string _statusText = "Downloads come straight from NVIDIA, AMD and Intel, and each file's signature is checked.";
+    private string _statusText = string.Empty;
 
     public DownloadsViewModel(VendorDownloader downloader, Func<IEnumerable<RuntimeKind>> kindsInGames)
     {

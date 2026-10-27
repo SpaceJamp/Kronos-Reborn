@@ -36,8 +36,9 @@ public static class GamePosterLocator
     /// File names to look for, most preferred first.
     /// </summary>
     /// <remarks>
-    /// Ordered by how well each suits a narrow poster column. The capsule images are the vertical
-    /// ones; the hero and header images are wide, so they are only used when nothing better exists.
+    /// Ordered by how well each suits a portrait cover. The capsule images are the vertical ones; the
+    /// header and hero are wide, so they are only used when nothing better exists, the header first
+    /// because it carries the game's title and the hero is often a dark banner without one.
     /// </remarks>
     private static readonly string[] PreferredNames =
     [
@@ -45,8 +46,9 @@ public static class GamePosterLocator
         "library_600x900.jpg",
         "capsule.jpg",
         "p Capsule.jpg",
-        "library_hero.jpg",
         "header.jpg",
+        "library_header.jpg",
+        "library_hero.jpg",
     ];
 
     /// <summary>
@@ -93,63 +95,29 @@ public static class GamePosterLocator
     /// The best artwork inside one app folder.
     /// </summary>
     /// <remarks>
-    /// A named file is looked for at the top of the folder first, because that is the layout a current
-    /// client writes and it puts the preferred names exactly where they are expected. Only then are
-    /// the hash subfolders searched, which is the older layout and which holds hashed file names.
+    /// Current clients keep each image in its own hash-named subfolder
+    /// (<c>990080\dca9…\library_capsule.jpg</c>); older ones put them at the top. So each preferred
+    /// name is looked for everywhere before the next is tried. The one unnamed image at the top, named
+    /// for its hash, is a 32x32 icon: it was taken as the cover and shown stretched and blurred, and
+    /// the initial drawn when there is no poster is better than that.
     /// </remarks>
     private static string? Search(string appFolder)
     {
+        string[] folders = [appFolder, .. SafeEnumerateDirectories(appFolder)];
+
         foreach (var name in PreferredNames)
         {
-            var direct = Path.Combine(appFolder, name);
-            if (IsImage(direct))
+            foreach (var folder in folders)
             {
-                return direct;
-            }
-        }
-
-        // The hashed layout keeps one image directly under the app folder, named for its hash, with
-        // the descriptive names inside a subfolder. Enumeration here is not recursive, so everything
-        // it returns is at the top level; that file is the capsule, so it is preferred over any
-        // subfolder content.
-        var hashed = SafeEnumerateFiles(appFolder).FirstOrDefault(IsImage);
-
-        if (hashed is not null)
-        {
-            return hashed;
-        }
-
-        foreach (var directory in SafeEnumerateDirectories(appFolder))
-        {
-            foreach (var name in PreferredNames)
-            {
-                var candidate = Path.Combine(directory, name);
+                var candidate = Path.Combine(folder, name);
                 if (IsImage(candidate))
                 {
                     return candidate;
                 }
             }
-
-            var anyImage = SafeEnumerateFiles(directory).FirstOrDefault(IsImage);
-            if (anyImage is not null)
-            {
-                return anyImage;
-            }
         }
 
         return null;
-    }
-
-    private static IEnumerable<string> SafeEnumerateFiles(string directory)
-    {
-        try
-        {
-            return Directory.EnumerateFiles(directory).ToArray();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
     }
 
     private static IEnumerable<string> SafeEnumerateDirectories(string directory)

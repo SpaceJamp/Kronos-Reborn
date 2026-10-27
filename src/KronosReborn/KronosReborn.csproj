@@ -1,15 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!--
+    Avalonia rather than WPF, so the same window can run on Linux once the core can. The target is
+    plain net10.0 for that reason; nothing here is Windows-only.
+    -->
+    <TargetFramework>net10.0</TargetFramework>
     <OutputType>WinExe</OutputType>
-    <UseWPF>true</UseWPF>
 
     <!--
     RootNamespace and AssemblyName are kept equal deliberately. Embedded resource names are derived
     from the root namespace, so if the two drift apart a resource looked up by name silently stops
-    being found. That class of bug produces an empty list or a startup failure rather than a compile
-    error, so the coupling is worth stating rather than leaving to convention.
+    being found.
     -->
     <AssemblyName>KronosReborn</AssemblyName>
     <RootNamespace>KronosReborn</RootNamespace>
@@ -19,25 +21,27 @@
     <Company>Kronos Reborn</Company>
     <Authors>Kronos Reborn contributors</Authors>
 
-    <!--
-    Not TreatWarningsAsErrors. Auditing and analyzers are configured to warn, and promoting those to
-    errors would make an unfixable transitive advisory block all work. Compile warnings are still
-    visible, and CI treats the build as failed on them via the workflow rather than globally.
-    -->
-
-    <!--
-    No ApplicationIcon yet. An icon is a binary asset, and a placeholder in the first commit tends to
-    outlive its usefulness. Set it here once real artwork exists, together with SetupIconFile in
-    package/Installer.iss so the executable and the installer agree.
-    -->
+    <!-- Bindings are checked when the XAML compiles, so a misspelt property fails the build. -->
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
 
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <!-- Store discovery behind #if WINDOWS reads the registry, which exists only there. -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
-    <InternalsVisibleTo Include="KronosReborn.Tests" />
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KronosReborn.Core\KronosReborn.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

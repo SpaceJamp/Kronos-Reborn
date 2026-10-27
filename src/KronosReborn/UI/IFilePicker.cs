@@ -16,18 +16,21 @@ public interface IFilePicker
     /// Shows a chooser for a graphics runtime file.
     /// </summary>
     /// <returns>The chosen path, or null if the user cancelled.</returns>
-    string? AskForRuntimeFile();
+    Task<string?> AskForRuntimeFileAsync();
 
     /// <summary>
     /// Shows a save dialog for a diagnostics bundle.
     /// </summary>
     /// <param name="suggestedName">The file name offered by default.</param>
     /// <returns>The chosen path, or null if the user cancelled.</returns>
-    string? AskWhereToSaveDiagnostics(string suggestedName);
+    Task<string?> AskWhereToSaveDiagnosticsAsync(string suggestedName);
 
     /// <summary>
     /// Shows a chooser for a game's installation folder, for a game no library reports.
     /// </summary>
     /// <returns>The chosen folder, or null if the user cancelled.</returns>
-    string? AskForGameFolder();
+    Task<string?> AskForGameFolderAsync();
+
+    /// <summary>Puts text on the clipboard, which like a dialog belongs to the window.</summary>
+    Task SetClipboardTextAsync(string text);
 }

@@ -253,228 +253,16 @@ public class ArchitectureTests
     }
 
     [Fact]
-    public void TheGameListFitsTheWindowAtItsNarrowest()
-    {
-        // Adding posters widened the game column and pushed the runtime columns off the right edge,
-        // at which point the list scrolled sideways and the version you were comparing was the one
-        // you could no longer see. Nothing else fails when this happens: the columns are still there
-        // and still bound, they are just off screen.
-        var xaml = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
-
-        var minWidth = ReadAttribute(xaml, "MinWidth");
-        Assert.True(minWidth > 0, "MinWidth could not be read from the window.");
-
-        var widths = ColumnWidths(xaml).ToList();
-
-        // Asserted as a count so this cannot pass by finding nothing at all and dividing by it.
-        Assert.True(
-            widths.Count >= 5,
-            $"Only {widths.Count} fixed column widths were found, so this check cannot see the list.");
-
-        var total = widths.Sum();
-
-        Assert.True(
-            total <= minWidth,
-            $"The game list's columns total {total}px, wider than the window's {minWidth}px minimum. " +
-            "The right-hand columns will be off screen and the list will scroll sideways. " +
-            $"Widest columns: {string.Join(", ", widths.OrderByDescending(w => w).Take(4))}.");
-    }
-
-    [Fact]
-    public void EveryRuntimeTheInterfaceSupportsHasItsOwnColumnInTheGameList()
-    {
-        // DLSS, DLSS Frame Generation and DLSS Ray Reconstruction are three separate choices the user
-        // makes separately. Sharing one column — or sharing one picker — makes a version number
-        // ambiguous, because all three routinely hold the same one: on a real library both DLSS and
-        // Frame Generation hold 310.2.1 and 310.9.1, so a line reading only "310.2.1" does not say
-        // which of them would be installed.
-        //
-        // The version columns were read-only text at one point, with the only picker in a bar for the
-        // selected game. This is what stops that coming back.
-        var xaml = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
-
-        foreach (var column in new[] { "DLSS", "DLSS FG", "DLSS RR", "FSR", "XeSS" })
-        {
-            Assert.Contains($"Header=\"{column}\"", xaml, StringComparison.Ordinal);
-        }
-
-        // Each runtime column reads its own property on the row rather than one shared list, so
-        // the cells cannot end up showing each other's versions.
-        foreach (var property in new[]
-                 {
-                     "DlssChoice.CurrentText", "DlssGChoice.CurrentText", "DlssRChoice.CurrentText",
-                     "FsrChoice.CurrentText", "XessChoice.CurrentText",
-                 })
-        {
-            Assert.Contains($"Binding {property}", xaml, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
     public void AVersionIsChangedInExactlyOnePlace()
     {
-        // The pickers were in every row of the list and also in the selected game's panel. Two controls
-        // showing the same value is a defect however well they agree: it doubles the places a change
-        // can be made, makes the whole list look editable, and leaves the list with no room for the
-        // game name.
+        // Two controls showing the same value is a defect however well they agree: it doubles the
+        // places a change can be made. The version pickers live in the selected game's pane only, so
+        // it is clear which game a version chosen there goes into.
         var xaml = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
+            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.axaml"));
 
-        var uses = Regex.Count(
-            xaml,
-            @"ContentTemplate=""\{StaticResource RuntimePickerTemplate\}""",
-            RegexOptions.None,
-            TimeSpan.FromSeconds(5));
-
-        Assert.Equal(1, uses);
-        Assert.Contains("x:Key=\"RuntimePickerTemplate\"", xaml, StringComparison.Ordinal);
-
-        // And it is inside the panel, named after the selected game, so it is clear which game a
-        // version chosen there would go into.
+        Assert.Equal(1, Regex.Count(xaml, @"ItemsSource=""\{Binding Options\}""", RegexOptions.None, TimeSpan.FromSeconds(5)));
         Assert.Contains("SelectedGame.Choices", xaml, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void PostersAreShownSmallEnoughToKeepRowsCompact()
-    {
-        // Steam's artwork is up to 600x900. Shown near its own size, each row is as tall as a poster
-        // and only four or five games are visible at a time, which is worse than no posters at all.
-        var xaml = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
-
-        var poster = Regex.Match(
-            xaml,
-            @"Grid\.Column=""0""\s+Width=""(?<w>\d+)""\s+Height=""(?<h>\d+)""",
-            RegexOptions.None,
-            TimeSpan.FromSeconds(5));
-
-        Assert.True(
-            poster.Success,
-            "The poster cell could not be found in the window. If it was renamed, this guard needs " +
-            "to be pointed at the new markup rather than deleted.");
-
-        var width = int.Parse(poster.Groups["w"].Value, CultureInfo.InvariantCulture);
-        var height = int.Parse(poster.Groups["h"].Value, CultureInfo.InvariantCulture);
-
-        Assert.True(height <= 56, $"Posters are {height}px tall, so rows are too tall to scan.");
-
-        // Steam's capsule images are 600x900, two parts wide to three parts high. Distorting them
-        // would stretch the artwork, so the cell has to keep that ratio.
-        Assert.Equal(1.5, height / (double)width, 2);
-    }
-
-    /// <summary>Reads a numeric window attribute such as MinWidth.</summary>
-    private static int ReadAttribute(string xaml, string name)
-    {
-        var match = Regex.Match(
-            xaml,
-            $@"{name}=""(?<v>\d+)""",
-            RegexOptions.None,
-            TimeSpan.FromSeconds(5));
-
-        return match.Success
-            ? int.Parse(match.Groups["v"].Value, CultureInfo.InvariantCulture)
-            : 0;
-    }
-
-    /// <summary>Every fixed width declared on a list column.</summary>
-    private static IEnumerable<int> ColumnWidths(string xaml) =>
-        Regex.Matches(
-            xaml,
-            @"GridViewColumn[^>]*\bWidth=""(?<w>\d+)""",
-            RegexOptions.None,
-            TimeSpan.FromSeconds(5))
-        .Select(m => int.Parse(m.Groups["w"].Value, CultureInfo.InvariantCulture));
-
-    [Fact]
-    public void EveryVisibilityBindingInTheWindowCanProduceAVisibility()
-    {
-        // This is the guard for a failure nothing else could see. The empty-state panel was bound to
-        // Games.Count through a converter that returned a bool; WPF cannot turn a bool into a
-        // Visibility, so the binding was discarded and the panel kept its default of Visible. It sat
-        // over a fully populated list for ever, showing "No games found" over seven found games. The
-        // status bar said the right thing the whole time, which is what made it look like discovery
-        // was broken rather than the window.
-        //
-        // So: every Visibility binding must go through one of the two converters that return a
-        // Visibility, and its source must be a boolean property rather than a count or a string.
-        var xaml = File.ReadAllText(Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
-
-        var converters = new[] { "InverseBool", "BoolToVisibility" };
-        var offenders = new List<string>();
-        var bindings = new List<Match>();
-
-        foreach (Match match in Regex.Matches(
-                     xaml, @"Visibility=""\{Binding ([^,}]+)[^}]*Converter=\{StaticResource ([^}]+)\}\}"""))
-        {
-            bindings.Add(match);
-
-            var source = match.Groups[1].Value.Trim();
-            var converter = match.Groups[2].Value.Trim();
-
-            if (!converters.Contains(converter, StringComparer.Ordinal))
-            {
-                offenders.Add($"'{source}' uses converter '{converter}', which does not return a Visibility");
-                continue;
-            }
-
-            if (source.Contains('.', StringComparison.Ordinal))
-            {
-                offenders.Add(
-                    $"'{source}' is a member access, not a boolean property; a count or a string " +
-                    "cannot produce a Visibility");
-            }
-        }
-
-        // Without this the test would pass if the pattern stopped matching the markup at all, which is
-        // how a guard quietly becomes decoration. It failed exactly that way the first time.
-        Assert.True(
-            bindings.Count >= 6,
-            $"Only {bindings.Count} visibility bindings were recognised in MainWindow.xaml. " +
-            "The pattern itself has probably stopped matching, which would make this test check nothing.");
-
-        Assert.True(
-            offenders.Count == 0,
-            "These visibility bindings cannot work:" + Environment.NewLine +
-            string.Join(Environment.NewLine, offenders));
-    }
-
-    [Fact]
-    public void TheVisibilityConvertersReturnAVisibilityRatherThanABoolean()
-    {
-        // The other half of the same guard, at the source. Checking only the markup would miss a
-        // converter that is used correctly by markup and still returns the wrong type.
-        var converters = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "src", "KronosReborn", "UI", "Converters.cs"));
-
-        foreach (var name in new[] { "BooleanToVisibilityConverter", "InverseBooleanConverter" })
-        {
-            Assert.True(
-                converters.Contains(name, StringComparison.Ordinal),
-                $"{name} is missing from Converters.cs.");
-
-            Assert.True(
-                converters.Contains("Visibility.Visible", StringComparison.Ordinal)
-                && converters.Contains("Visibility.Collapsed", StringComparison.Ordinal),
-                $"{name} does not appear to return a Visibility.");
-        }
-    }
-
-    [Fact]
-    public void TheGameListIsBoundDirectlyRatherThanThroughAResource()
-    {
-        // A CollectionViewSource declared in a resource dictionary is a Freezable and does not
-        // reliably inherit the DataContext, which produces a view over nothing while the bound
-        // collection is full. Binding the list to the collection and grouping its default view keeps
-        // the data path explicit.
-        var xaml = File.ReadAllText(Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
-
-        var listView = Regex.Match(xaml, @"<ListView\b.*?>", RegexOptions.Singleline).Value;
-
-        Assert.Contains("ItemsSource=\"{Binding Games", listView, StringComparison.Ordinal);
-        Assert.DoesNotContain("StaticResource GamesViewSource", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -527,8 +315,8 @@ public class ArchitectureTests
         var readers = new[]
         {
             // These are the places a version is read out of a file and handed on.
-            Path.Combine("src", "KronosReborn", "Data", "Runtimes", "GameRuntimeScanner.cs"),
-            Path.Combine("src", "KronosReborn", "Data", "Runtimes", "RuntimeImporter.cs"),
+            Path.Combine("src", "KronosReborn.Core", "Data", "Runtimes", "GameRuntimeScanner.cs"),
+            Path.Combine("src", "KronosReborn.Core", "Data", "Runtimes", "RuntimeImporter.cs"),
         };
 
         foreach (var relative in readers)
@@ -543,12 +331,12 @@ public class ArchitectureTests
 
         // One place reads a version out of a file at all, so one place normalises it.
         var versionNumber = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "src", "KronosReborn", "Data", "Runtimes", "VersionNumber.cs"));
+            Path.Combine(RepositoryRoot, "src", "KronosReborn.Core", "Data", "Runtimes", "VersionNumber.cs"));
 
         Assert.Contains("FileVersionInfo", versionNumber, StringComparison.Ordinal);
 
         var catalog = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "src", "KronosReborn", "Data", "Runtimes", "RuntimeCatalog.cs"));
+            Path.Combine(RepositoryRoot, "src", "KronosReborn.Core", "Data", "Runtimes", "RuntimeCatalog.cs"));
 
         Assert.DoesNotContain(
             "FileVersionInfo.GetVersionInfo",
@@ -624,7 +412,7 @@ public class ArchitectureTests
             Path.Combine(RepositoryRoot, "src", "KronosReborn", "UI", "ViewModels.cs"));
 
         var window = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.xaml"));
+            Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.axaml"));
 
         var exposed = Regex.Matches(viewModel, @"public ICommand (\w+)Command \{ get; \}")
             .Select(m => m.Groups[1].Value + "Command")
@@ -636,7 +424,7 @@ public class ArchitectureTests
         {
             Assert.True(
                 window.Contains(command, StringComparison.Ordinal),
-                $"{command} exists on the view model but is not bound in MainWindow.xaml, " +
+                $"{command} exists on the view model but is not bound in MainWindow.axaml, " +
                 "so it cannot be reached by the user.");
         }
     }

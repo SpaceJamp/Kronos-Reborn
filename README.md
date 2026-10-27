@@ -8,8 +8,7 @@
 > are not built yet.**
 >
 > Steam discovery, runtime version detection, the runtime collection, persistence, swapping and
-> undoing all work and are covered by tests. Settings has no interface, only launch and undo use it
-> so far. Steam, GOG, Epic, Ubisoft Connect, Battle.net, the EA app and the Xbox app are supported, and any other game can be added by hand. Builds are unsigned and no binaries are published yet.
+> undoing all work and are covered by tests. Steam, GOG, Epic, Ubisoft Connect, Battle.net, the EA app and the Xbox app are supported, and any other game can be added by hand. Builds are unsigned and no binaries are published yet.
 
 ## What this is
 
@@ -43,7 +42,7 @@ Windows on ARM, while FSR and XeSS would.
 | | |
 | --- | --- |
 | Version | `0.1.0` |
-| Framework | .NET 10, WPF |
+| Framework | .NET 10, Avalonia 11 (Windows today; Linux is the next step) |
 | Architectures | x64 |
 | Libraries | Steam, GOG, Epic, Ubisoft, Battle.net, EA, Xbox, and games added by hand |
 | Tests | 177, including architecture guards that fail on whole classes of mistake |
@@ -53,10 +52,10 @@ Windows on ARM, while FSR and XeSS would.
 | Area | State |
 | --- | --- |
 | | Steam library discovery, manifests, deduplication | Working |
-| Version picker in the game list, one column per runtime | Working |
-| Poster grid view of games, and search | Working |
-| Version library — every version held, where it came from, what runs it | Working |
-| Per-game panel with a version picker per runtime | Working |
+| Cover grid of games, grouped by library, and search | Working |
+| Per-game pane with a version picker per runtime | Working |
+| Versions you hold — where each came from, what runs it — on the Download page | Working |
+| Light and dark, following the system | Working |
 | Game posters, read from Steam's own artwork cache | Working |
 | Runtime version detection, in nested folders as well as the root | Working |
 | Runtime collection: discovery from games, import, signature checking, removal | Working |
@@ -235,14 +234,13 @@ arbitrary until you know why:
 - **A runtime is imported whole, and owned by the collection.** Choosing a file takes every file of
   that kind beside it and refuses the import, naming what is missing, if any are absent. What is taken is copied into the collection's own folder under the data
   directory, so deleting or moving the folder it was downloaded to does not empty the collection.
-- **Three ways to look at things.** The games as a list with versions side by side; the games as a
-  poster grid, each card carrying the versions it runs, for seeing a whole library at a glance; and
-  the version library, which is what you actually hold — every version, newest first, where it came
-  from, whether it is trusted, and how many games already run it. Search filters whichever is showing.
-- **Versions are changed in one place: the selected game's panel.** It names the game and its install
-  path, and gives each runtime its own dropdown beneath its own label. The list shows what each game
-  runs; the panel is what you change. There is deliberately no control in the list rows — a picker in
-  every row makes the whole list look editable and puts two controls on the same value.
+- **One window, four pages.** **Games** is a cover grid grouped by library, with search; **Download**
+  gets runtimes from their vendors and lists every version you hold; **Diagnostics** checks the
+  collection and undo history; **Settings** holds the two choices there are. The window follows the
+  system's light or dark setting.
+- **Versions are changed in one place: the selected game's pane.** It names the game and its install
+  path, and gives each runtime its own dropdown beneath its own label. The covers are for finding a
+  game; the pane is what you change.
 - **Choosing a version for one runtime installs only that one.** DLSS, DLSS Frame Generation and DLSS
   Ray Reconstruction get separate dropdowns because they routinely hold the same version number, and
   one list of bare numbers cannot say which of them a version belongs to.
@@ -274,8 +272,8 @@ arbitrary until you know why:
   warnings. The default mode only inspects direct references, which is where most advisories slip
   past; but making them errors would let an unfixable transitive advisory block every build.
 - **`packages.lock.json` is committed** and CI restores in locked mode.
-- **The test project does not use WPF,** so tests cannot accidentally depend on a running
-  `Application`.
+- **The test project does not reference the UI framework,** so tests cannot accidentally depend on
+  a running `Application`. Everything but the window lives in `KronosReborn.Core`.
 
 ## Licence
 
