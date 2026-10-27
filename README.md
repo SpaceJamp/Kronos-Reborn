@@ -39,6 +39,10 @@ any runtime and release.
 Folders and hand-added games are listed on the **Settings** page and can be removed there. Removing
 one never touches its files.
 
+Covers come from Steam's artwork cache. A game with none there, such as a repack or an Epic game, is
+looked up by name in Steam's store and its cover downloaded once. That sends the game's name to
+Steam; delete the `posters` folder to have covers looked up again.
+
 ## Runtimes it handles
 
 | Runtime | File |
@@ -75,6 +79,7 @@ Everything lives in `%LOCALAPPDATA%\KronosReborn`, as plain JSON you can read:
 | `history\` | Undo history, one file per game |
 | `backups\` | Copies of every file a swap replaced |
 | `runtimes\` | Imported and downloaded DLLs |
+| `posters\` | Covers fetched from Steam's store |
 | `manual-games.json`, `game-folders.json` | Games and folders you added |
 | `logs\` | The log |
 
