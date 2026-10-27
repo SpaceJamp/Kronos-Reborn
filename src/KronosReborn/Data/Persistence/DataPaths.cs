@@ -47,6 +47,9 @@ public sealed class DataPaths
     /// <summary>Path to the runtime catalog file.</summary>
     public string CatalogPath => Path.Combine(Root, "catalog.json");
 
+    /// <summary>The list of game folders the user added by hand.</summary>
+    public string ManualGamesPath => Path.Combine(Root, "manual-games.json");
+
     /// <summary>Directory holding one JSON file per game's history.</summary>
     public string HistoryDirectory => Path.Combine(Root, "history");
 

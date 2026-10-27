@@ -99,6 +99,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ChooseNewestCommand = new RelayCommand(_ => ChooseNewest(), _ => !IsBusy && (SelectedGame is not null || _games.Any(g => g.IsSelected)));
         ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsWorking);
         UndoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: false), _ => SelectedGame is not null && !IsWorking);
+        AddGameCommand = new RelayCommand(async _ => await AddGameAsync(), _ => !IsBusy && _filePicker is not null);
+        RemoveGameCommand = new RelayCommand(
+            async _ => await RemoveGameAsync(), _ => !IsBusy && SelectedGame?.IsAddedByHand == true);
         RedoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: true), _ => SelectedGame is not null && !IsWorking);
         CancelCommand = new RelayCommand(
             _ => _operationCancellation.Cancel(), _ => IsBusy);
@@ -520,6 +523,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private void RaiseSwapCommandStates()
     {
         ((RelayCommand)ChooseNewestCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)AddGameCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)RemoveGameCommand).RaiseCanExecuteChanged();
         ((RelayCommand)ApplySwapCommand).RaiseCanExecuteChanged();
         ((RelayCommand)UndoCommand).RaiseCanExecuteChanged();
         ((RelayCommand)RedoCommand).RaiseCanExecuteChanged();
@@ -585,6 +590,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand OpenSettingsCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
     public ICommand ChooseNewestCommand { get; }
+    public ICommand AddGameCommand { get; }
+    public ICommand RemoveGameCommand { get; }
     public ICommand ApplySwapCommand { get; }
     public ICommand UndoCommand { get; }
     public ICommand RedoCommand { get; }
@@ -865,6 +872,28 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         games.AddRange(gogResult.Games);
         problems.AddRange(gogResult.Problems);
 
+        // --- Epic, Ubisoft, Battle.net, EA, Xbox, and games added by hand -------
+        var stores = new WindowsStoreRegistry();
+        var drives = System.IO.DriveInfo.GetDrives()
+            .Where(d => d.DriveType == System.IO.DriveType.Fixed && d.IsReady)
+            .Select(d => d.RootDirectory.FullName);
+
+        foreach (var read in new Func<ScanResult>[]
+                 {
+                     () => EpicLibrary.Scan(EpicLibrary.DefaultManifestsFolder),
+                     () => UbisoftLibrary.Scan(stores),
+                     () => PublisherLibrary.BattleNet(stores),
+                     () => PublisherLibrary.Ea(stores),
+                     () => XboxLibrary.Scan(drives),
+                     () => ManualLibrary.Scan(_persistence.ManualGames),
+                 })
+        {
+            token.ThrowIfCancellationRequested();
+            var result = read();
+            games.AddRange(result.Games);
+            problems.AddRange(result.Problems);
+        }
+
         // A game both stores point at is one game folder, so it is listed once.
         games = [.. GameRecord.Deduplicate(games)];
 #else
@@ -965,6 +994,36 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(LibrarySummary));
         OnPropertyChanged(nameof(LibraryKinds));
         RaiseSwapCommandStates();
+    }
+
+    /// <summary>Adds a game from a folder the user chooses, for games no library reports.</summary>
+    private async System.Threading.Tasks.Task AddGameAsync()
+    {
+        if (_filePicker?.AskForGameFolder() is not { } folder)
+        {
+            return;
+        }
+
+        if (!_persistence.SetManualGame(folder, add: true))
+        {
+            StatusText = $"{folder} is already in the list.";
+            return;
+        }
+
+        await RefreshAsync();
+        SelectedGame = _games.FirstOrDefault(g => g.GameId == ManualLibrary.IdFor(folder)) ?? SelectedGame;
+    }
+
+    /// <summary>Takes a hand-added game off the list. The game's files are not touched.</summary>
+    private async System.Threading.Tasks.Task RemoveGameAsync()
+    {
+        if (SelectedGame is not { IsAddedByHand: true } game)
+        {
+            return;
+        }
+
+        _persistence.SetManualGame(game.InstallPath, add: false);
+        await RefreshAsync();
     }
 
     /// <summary>

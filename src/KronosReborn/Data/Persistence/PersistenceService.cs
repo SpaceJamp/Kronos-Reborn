@@ -133,6 +133,72 @@ public sealed class PersistenceService : IDisposable
         }
     }
 
+    /// <summary>The game folders the user added by hand.</summary>
+    /// <remarks>Read from disk each time; it is a handful of paths, read once per refresh.</remarks>
+    public IReadOnlyList<string> ManualGames
+    {
+        get
+        {
+            _lock.EnterReadLock();
+            try
+            {
+                if (!File.Exists(_paths.ManualGamesPath))
+                {
+                    return [];
+                }
+
+                return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(_paths.ManualGamesPath)) ?? [];
+            }
+            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+            {
+                // Kept aside rather than overwritten by the next add, which would lose every folder.
+                DataPaths.SetAside(_paths.ManualGamesPath);
+                return [];
+            }
+            finally
+            {
+                _lock.ExitReadLock();
+            }
+        }
+    }
+
+    /// <summary>Adds a game folder to the hand-added list, or removes one.</summary>
+    /// <returns>Whether the list changed.</returns>
+    public bool SetManualGame(string folder, bool add)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+
+        var folders = ManualGames.ToList();
+        var index = folders.FindIndex(f => string.Equals(
+            Path.GetFullPath(f).TrimEnd('\\'), Path.GetFullPath(folder).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase));
+
+        if (add == index >= 0)
+        {
+            return false;
+        }
+
+        if (add)
+        {
+            folders.Add(folder);
+        }
+        else
+        {
+            folders.RemoveAt(index);
+        }
+
+        _lock.EnterWriteLock();
+        try
+        {
+            AtomicWrite(_paths.ManualGamesPath, JsonSerializer.Serialize(folders, JsonOptions.Default));
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+
+        return true;
+    }
+
     /// <summary>Updates a single history and saves atomically.</summary>
     public void SaveHistory(GameHistory history)
     {

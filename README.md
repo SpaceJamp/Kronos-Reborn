@@ -9,7 +9,7 @@
 >
 > Steam discovery, runtime version detection, the runtime collection, persistence, swapping and
 > undoing all work and are covered by tests. Settings has no interface, only launch and undo use it
-> so far, and only Steam and GOG are supported. Builds are unsigned and no binaries are published yet.
+> so far. Steam, GOG, Epic, Ubisoft Connect, Battle.net, the EA app and the Xbox app are supported, and any other game can be added by hand. Builds are unsigned and no binaries are published yet.
 
 ## What this is
 
@@ -45,7 +45,7 @@ Windows on ARM, while FSR and XeSS would.
 | Version | `0.1.0` |
 | Framework | .NET 10, WPF |
 | Architectures | x64 |
-| Libraries | Steam, GOG |
+| Libraries | Steam, GOG, Epic, Ubisoft, Battle.net, EA, Xbox, and games added by hand |
 | Tests | 177, including architecture guards that fail on whole classes of mistake |
 
 ### What works
@@ -67,7 +67,11 @@ Windows on ARM, while FSR and XeSS would.
 | Settings interface | Not built — values load and persist, but nothing edits them |
 | Undo through the interface | Launches and undo the newest change for the selected game |
 | GOG | Working, read from the install records GOG writes for every game |
-| Epic, Battle.net and the other libraries | Not started |
+| Epic | Working, read from the launcher's manifest for each game |
+| Ubisoft Connect | Working, read from Ubisoft's install records |
+| Battle.net, EA app | Working, found by publisher in Windows' installed-apps list |
+| Xbox app | Working, read from each drive's `.GamingRoot` file |
+| Games added by hand | Working: **+ Add Game** takes any folder; **Remove from list** takes it off again |
 | Batch preview and apply from the interface | Working — set versions in any number of rows, then preview and apply |
 
 ### Where runtime versions come from
