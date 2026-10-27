@@ -22,8 +22,8 @@ public sealed class DiagnosticsViewModel : INotifyPropertyChanged
     private readonly RuntimeCatalog _catalog;
     private readonly PersistenceService _persistence;
     private readonly Func<IEnumerable<ScanProblem>> _problems;
-    private readonly MemoryLogSink? _recentLog;
     private readonly IFilePicker? _filePicker;
+    private readonly Func<Task>? _rescan;
 
     private DiagnosticsReport? _report;
     private bool _isRunning;
@@ -34,17 +34,17 @@ public sealed class DiagnosticsViewModel : INotifyPropertyChanged
         RuntimeCatalog catalog,
         PersistenceService persistence,
         Func<IEnumerable<ScanProblem>> problems,
-        MemoryLogSink? recentLog,
-        IFilePicker? filePicker)
+        IFilePicker? filePicker,
+        Func<Task>? rescan = null)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
         _problems = problems ?? throw new ArgumentNullException(nameof(problems));
-        _recentLog = recentLog;
         _filePicker = filePicker;
+        _rescan = rescan;
 
-        RunCommand = new RelayCommand(async _ => await RunAsync(), _ => !IsRunning);
+        RunCommand = new RelayCommand(async _ => await RunAsync(rescan: true), _ => !IsRunning);
         CopyCommand = new RelayCommand(async _ => await CopyAsync(), _ => _report is not null && _filePicker is not null);
         ExportCommand = new RelayCommand(async _ => await ExportAsync(), _ => !IsRunning && _filePicker is not null);
     }
@@ -80,7 +80,11 @@ public sealed class DiagnosticsViewModel : INotifyPropertyChanged
     public bool HasRecentErrors => RecentErrors.Count > 0;
 
     /// <summary>Runs every check off the UI thread, since it reads every file the collection holds.</summary>
-    public async Task RunAsync()
+    /// <param name="rescan">
+    /// Whether to scan the games again first, as Run again does. The checks alone take milliseconds
+    /// and read only the app's own data, so a rerun without it looked as if nothing had happened.
+    /// </param>
+    public async Task RunAsync(bool rescan = false)
     {
         if (IsRunning)
         {
@@ -88,12 +92,18 @@ public sealed class DiagnosticsViewModel : INotifyPropertyChanged
         }
 
         IsRunning = true;
-        StatusText = "Checking…";
 
         try
         {
+            if (rescan && _rescan is not null)
+            {
+                StatusText = "Scanning your games…";
+                await _rescan();
+            }
+
+            StatusText = "Checking…";
             _report = await Task.Run(Build);
-            StatusText = _report.Summary;
+            StatusText = $"{_report.Summary} Checked at {DateTime.Now:T}.";
 
             OnPropertyChanged(nameof(Environment));
             OnPropertyChanged(nameof(Checks));
@@ -117,7 +127,7 @@ public sealed class DiagnosticsViewModel : INotifyPropertyChanged
             _catalog,
             _persistence.Histories.Values,
             _problems(),
-            _recentLog?.Entries ?? [],
+            DiagnosticsRunner.ReadLog(_paths.LogsDirectory),
             [
                 new DiagnosticFact("App version", BuildInfo.InformationalVersion),
                 new DiagnosticFact("Commit", BuildInfo.GitCommitShort ?? "unknown"),

@@ -54,7 +54,7 @@
                         <Button Content="+ Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,6,6"
                                 ToolTip.Tip="Add a folder that holds games, one per subfolder, such as where repacks are installed" />
                         <Button Content="⬆ Newest" Command="{Binding ChooseNewestCommand}" Margin="0,0,6,6"
-                                ToolTip.Tip="Choose the newest version you hold of every runtime in the ticked games, or the selected game" />
+                                ToolTip.Tip="Choose the newest version you hold of every runtime in every game. Nothing changes until Apply." />
                         <Button Content="Import…" Command="{Binding BeginImportCommand}" Margin="0,0,6,6"
                                 ToolTip.Tip="Add a runtime file you got elsewhere to the collection" />
                         <Button Content="Undo" Command="{Binding UndoCommand}" Margin="0,0,6,6" />
@@ -100,13 +100,6 @@
                                                                         <Image Source="{Binding PosterPath, Converter={x:Static local:MainWindow.PosterImage}}"
                                                                                Stretch="Uniform" />
                                                                     </Panel>
-                                                                </Border>
-                                                                <!-- Backed, so the box shows on dark covers too. -->
-                                                                <Border Background="{DynamicResource SystemControlBackgroundAltMediumHighBrush}" CornerRadius="4" Margin="4" Padding="2,0,0,0"
-                                                                        HorizontalAlignment="Left" VerticalAlignment="Top">
-                                                                    <CheckBox IsChecked="{Binding IsSelected}" MinWidth="0" Padding="0"
-                                                                              ToolTip.Tip="Tick to include in ⬆ Newest"
-                                                                              AutomationProperties.Name="Include in Newest" />
                                                                 </Border>
                                                             </Panel>
                                                             <TextBlock Text="{Binding GameName}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0" />
@@ -257,9 +250,12 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock Text="Diagnostics" Classes="heading" />
-                        <TextBlock Text="{Binding Diagnostics.StatusText}" Classes="muted" Margin="0,0,0,8" />
+                        <TextBlock Text="{Binding Diagnostics.StatusText}" Classes="muted" Margin="0,0,0,4" />
+                        <ProgressBar IsIndeterminate="True" Height="4" Margin="0,0,0,8" MaxWidth="400" HorizontalAlignment="Left"
+                                     IsVisible="{Binding Diagnostics.IsRunning}" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                            <Button Content="Run again" Command="{Binding Diagnostics.RunCommand}" Margin="0,0,6,0" />
+                            <Button Content="Run again" Command="{Binding Diagnostics.RunCommand}" Margin="0,0,6,0"
+                                    ToolTip.Tip="Scan your games again, then run every check" />
                             <Button Content="Copy report" Command="{Binding Diagnostics.CopyCommand}" Margin="0,0,6,0" />
                             <Button Content="Export…" Command="{Binding Diagnostics.ExportCommand}"
                                     ToolTip.Tip="Save the report, logs, settings, collection and history as a zip" />
@@ -295,14 +291,20 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <TextBlock Text="Recent errors" FontWeight="SemiBold" Margin="0,0,0,4"
+                            <TextBlock Text="Errors and crashes" FontWeight="SemiBold" Margin="0,0,0,4"
                                        IsVisible="{Binding Diagnostics.HasRecentErrors}" />
                             <ItemsControl ItemsSource="{Binding Diagnostics.RecentErrors}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="log:LogEntry">
                                         <StackPanel Margin="0,0,0,6" ToolTip.Tip="{Binding ExceptionStackTrace}">
                                             <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding Category}" Classes="muted" FontSize="12" />
+                                            <TextBlock Classes="muted" FontSize="12">
+                                                <Run Text="{Binding Timestamp.LocalDateTime, StringFormat='{}{0:g}', Mode=OneWay}" />
+                                                <Run Text=" · " />
+                                                <Run Text="{Binding Category, Mode=OneWay}" />
+                                                <Run Text=" · " />
+                                                <Run Text="{Binding ExceptionMessage, Mode=OneWay}" />
+                                            </TextBlock>
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

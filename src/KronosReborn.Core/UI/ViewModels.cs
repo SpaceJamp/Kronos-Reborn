@@ -57,7 +57,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Settings settings,
         DataPaths paths,
         IFilePicker? filePicker = null,
-        MemoryLogSink? recentLog = null,
         IReadOnlyList<ScanProblem>? startupProblems = null)
     {
         _catalog = catalog;
@@ -79,10 +78,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         // diagnostics panel is where they are shown, alongside the latest scan's.
         var loadProblems = startupProblems ?? [];
         _diagnostics = new DiagnosticsViewModel(
-            paths, catalog, persistence, () => [.. loadProblems, .. Problems], recentLog, filePicker);
+            paths, catalog, persistence, () => [.. loadProblems, .. Problems], filePicker, RefreshAsync);
 
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
-        ChooseNewestCommand = new RelayCommand(_ => ChooseNewest(), _ => !IsBusy && (SelectedGame is not null || _games.Any(g => g.IsSelected)));
+        ChooseNewestCommand = new RelayCommand(_ => ChooseNewest(), _ => !IsBusy && HasGames);
         ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsBusy);
         UndoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: false), _ => SelectedGame is not null && !IsBusy);
         AddGameCommand = new RelayCommand(async _ => await AddGameAsync(), _ => !IsBusy && _filePicker is not null);
@@ -104,77 +103,26 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ConfirmImportCommand = new RelayCommand(_ => ConfirmImport(), _ => CanConfirmImport);
         DiscardImportCommand = new RelayCommand(_ => DiscardImport(), _ => HasImportPreview);
 
-        _games.CollectionChanged += OnGamesCollectionChanged;
     }
 
     /// <remarks>
-    /// A refresh replaces every row. The selected game and the ticks are carried over to the new rows
-    /// by game id: the pane used to keep showing the discarded row, so after any Apply it showed the
-    /// old versions and a version chosen there changed nothing.
+    /// A refresh replaces every row. The selected game is carried over to the new row by game id: the
+    /// pane used to keep showing the discarded row, so after any Apply it showed the old versions and a
+    /// version chosen there changed nothing.
     /// </remarks>
     public ObservableCollection<GameRow> Games
     {
         get => _games;
         internal set
         {
-            var ticked = _games.Where(g => g.IsSelected).Select(g => g.GameId).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var selectedId = _selectedGame?.GameId;
-
-            _games.CollectionChanged -= OnGamesCollectionChanged;
-            foreach (var row in _games)
-            {
-                row.PropertyChanged -= OnGameRowChanged;
-            }
-
             _games = value;
-            _games.CollectionChanged += OnGamesCollectionChanged;
-
-            // Built with its rows already in it, so no "added" event fires for them.
-            foreach (var row in _games)
-            {
-                row.IsSelected = ticked.Contains(row.GameId);
-                row.PropertyChanged += OnGameRowChanged;
-            }
 
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasGames));
             ApplyFilter();
             SelectedGame = _games.FirstOrDefault(g => string.Equals(g.GameId, selectedId, StringComparison.OrdinalIgnoreCase));
             RaiseSwapCommandStates();
-        }
-    }
-
-    private void OnGamesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        // A row's own PropertyChanged has to be tracked too: ticking a checkbox changes no
-        // collection event, so the selected count used to stay at whatever it was after the last
-        // refresh and the "N selected" label silently lied.
-        if (e.OldItems is not null)
-        {
-            foreach (GameRow row in e.OldItems)
-            {
-                row.PropertyChanged -= OnGameRowChanged;
-            }
-        }
-
-        if (e.NewItems is not null)
-        {
-            foreach (GameRow row in e.NewItems)
-            {
-                row.PropertyChanged -= OnGameRowChanged;
-                row.PropertyChanged += OnGameRowChanged;
-            }
-        }
-
-        RaiseSwapCommandStates();
-    }
-
-    private void OnGameRowChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(GameRow.IsSelected))
-        {
-            RaiseSwapCommandStates();
-            ((RelayCommand)ChooseNewestCommand).RaiseCanExecuteChanged();
         }
     }
 
@@ -919,21 +867,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>
-    /// Chooses the newest version held for every runtime in the ticked games, or the selected game.
+    /// Chooses the newest version held for every runtime in every game.
     /// </summary>
     /// <remarks>
-    /// The common case, "bring these up to date", in one click. Only upgrades are chosen, and nothing
-    /// is written: the preview shows what Apply would do.
+    /// The common case, "bring everything up to date", in one click. Only upgrades are chosen, and
+    /// nothing is written: the preview lists every change, and one game's choice can still be undone
+    /// in its pane before Apply.
     /// </remarks>
     private void ChooseNewest()
     {
-        var rows = _games.Where(g => g.IsSelected).ToList();
-        if (rows.Count == 0 && SelectedGame is not null)
-        {
-            rows.Add(SelectedGame);
-        }
-
-        var chosen = rows
+        var chosen = _games
             .Where(r => r.ExistsOnDisk)
             .SelectMany(r => r.Choices)
             .Count(c => c.ChooseNewest());
@@ -945,9 +888,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         if (chosen == 0)
         {
-            StatusText = rows.Count == 1
-                ? $"{rows[0].GameName} already runs the newest version you hold of everything it has."
-                : "Every game chosen already runs the newest versions you hold.";
+            StatusText = "Every game already runs the newest versions you hold.";
         }
     }
 
@@ -1152,33 +1093,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         RaiseSwapCommandStates();
     }
 
-    /// <summary>
-    /// The games a swap applies to: the ticked ones, or the selected game when nothing is ticked.
-    /// </summary>
-    /// <remarks>
-    /// R35 wants the selection made on the main list rather than in a separate mode, which is what
-    /// the checkbox column is. Falling back to the focused game means the common single-game case
-    /// needs no tick at all.
-    /// </remarks>
-    private IEnumerable<SwapGameInfo> SelectedGamesForSwap()
-    {
-        var ticked = _games.Where(g => g.IsSelected).ToList();
-
-        var targets = new List<GameRow>();
-        if (ticked.Count > 0)
-        {
-            targets.AddRange(ticked);
-        }
-        else if (SelectedGame is not null)
-        {
-            targets.Add(SelectedGame);
-        }
-
-        return targets
-            .Where(g => g.ExistsOnDisk)
-            .Select(g => new SwapGameInfo(g.GameId, g.GameName, g.InstallPath, g.ExistsOnDisk, g.Snapshot));
-    }
-
     public bool AllowUntrustedRuntimes
     {
         get => _settings.AllowUntrustedRuntimes;
@@ -1228,7 +1142,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Stops subscribing to events owned elsewhere.</summary>
     public void Dispose()
     {
-        _games.CollectionChanged -= OnGamesCollectionChanged;
         _operationCancellation.Dispose();
         _downloads.Dispose();
         _http.Dispose();
