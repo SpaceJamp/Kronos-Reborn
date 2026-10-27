@@ -26,10 +26,11 @@ public interface IFilePicker
     Task<string?> AskWhereToSaveDiagnosticsAsync(string suggestedName);
 
     /// <summary>
-    /// Shows a chooser for a game's installation folder, for a game no library reports.
+    /// Shows a folder chooser, for a game no library reports or a folder of such games.
     /// </summary>
+    /// <param name="title">What the chooser asks for.</param>
     /// <returns>The chosen folder, or null if the user cancelled.</returns>
-    Task<string?> AskForGameFolderAsync();
+    Task<string?> AskForGameFolderAsync(string title);
 
     /// <summary>Puts text on the clipboard, which like a dialog belongs to the window.</summary>
     Task SetClipboardTextAsync(string text);

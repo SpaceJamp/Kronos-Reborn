@@ -342,4 +342,41 @@ public static class ManualLibrary
 
         return new ScanResult(GameRecord.Deduplicate(games), [], 1);
     }
+
+
+    /// <summary>
+    /// Every subfolder of each folder is a game, listed under the folder's own path.
+    /// </summary>
+    /// <remarks>
+    /// For games no store records, such as repacks or DRM-free installs kept together in one place.
+    /// Read again on every refresh, so a game added to the folder later appears by itself.
+    /// </remarks>
+    public static ScanResult ScanFolders(IEnumerable<string> parents)
+    {
+        ArgumentNullException.ThrowIfNull(parents);
+
+        var games = new List<GameRecord>();
+        var problems = new List<ScanProblem>();
+
+        foreach (var parent in parents)
+        {
+            string[] subfolders;
+            try
+            {
+                subfolders = Directory.GetDirectories(parent);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                problems.Add(ScanProblem.FromException(
+                    "Game folder", parent, "This folder of games could not be read, so its games were not listed.", ex,
+                    "If it is on a drive that is not connected, reconnect it and refresh."));
+                continue;
+            }
+
+            games.AddRange(subfolders.Select(folder => new GameRecord(
+                parent.TrimEnd('\\', '/'), $"folder:{PathNormalizer.Normalize(folder)}", Path.GetFileName(folder), folder, true)));
+        }
+
+        return new ScanResult(GameRecord.Deduplicate(games), problems, 1);
+    }
 }

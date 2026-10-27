@@ -51,6 +51,8 @@
                                 ToolTip.Tip="Look for games and the runtimes they carry" />
                         <Button Content="+ Add Game" Command="{Binding AddGameCommand}" Margin="0,0,6,6"
                                 ToolTip.Tip="Add a game by choosing the folder it is installed in" />
+                        <Button Content="+ Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,6,6"
+                                ToolTip.Tip="Add a folder that holds games, one per subfolder, such as where repacks are installed" />
                         <Button Content="⬆ Newest" Command="{Binding ChooseNewestCommand}" Margin="0,0,6,6"
                                 ToolTip.Tip="Choose the newest version you hold of every runtime in the ticked games, or the selected game" />
                         <Button Content="Import…" Command="{Binding BeginImportCommand}" Margin="0,0,6,6"
@@ -321,6 +323,24 @@
                     <NumericUpDown Value="{Binding MaxHistoryPerGame}" Minimum="1" Maximum="1000" Increment="1"
                                    FormatString="0" Width="160" HorizontalAlignment="Left"
                                    AutomationProperties.Name="Undo steps kept per game" />
+
+                    <TextBlock Text="Game folders" FontWeight="SemiBold" Margin="0,24,0,4" />
+                    <TextBlock Classes="muted" FontSize="12" Margin="0,0,0,8"
+                               Text="Each subfolder of these is listed as a game on every refresh, so a game added later shows up by itself." />
+                    <ItemsControl ItemsSource="{Binding GameFolders}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                                    <TextBlock Text="{Binding}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="1" Content="Remove" Margin="8,0,0,0"
+                                            Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RemoveFolderCommand}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip.Tip="Stop listing this folder's games. Nothing in it is touched." />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="+ Add Folder" Command="{Binding AddFolderCommand}" Margin="0,4,0,0" />
                 </StackPanel>
             </TabItem>
         </TabControl>

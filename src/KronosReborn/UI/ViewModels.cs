@@ -85,6 +85,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsWorking);
         UndoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: false), _ => SelectedGame is not null && !IsWorking);
         AddGameCommand = new RelayCommand(async _ => await AddGameAsync(), _ => !IsBusy && _filePicker is not null);
+        AddFolderCommand = new RelayCommand(async _ => await AddFolderAsync(), _ => !IsBusy && _filePicker is not null);
+        RemoveFolderCommand = new RelayCommand(
+            async folder => await RemoveFolderAsync(folder as string), _ => !IsBusy);
         RemoveGameCommand = new RelayCommand(
             async _ => await RemoveGameAsync(), _ => !IsBusy && SelectedGame?.IsAddedByHand == true);
         RedoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: true), _ => SelectedGame is not null && !IsWorking);
@@ -370,6 +373,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         ((RelayCommand)ChooseNewestCommand).RaiseCanExecuteChanged();
         ((RelayCommand)AddGameCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)AddFolderCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)RemoveFolderCommand).RaiseCanExecuteChanged();
         ((RelayCommand)RemoveGameCommand).RaiseCanExecuteChanged();
         ((RelayCommand)ApplySwapCommand).RaiseCanExecuteChanged();
         ((RelayCommand)UndoCommand).RaiseCanExecuteChanged();
@@ -421,6 +426,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand RefreshCommand { get; }
     public ICommand ChooseNewestCommand { get; }
     public ICommand AddGameCommand { get; }
+    public ICommand AddFolderCommand { get; }
+    public ICommand RemoveFolderCommand { get; }
+
+    /// <summary>The folders whose subfolders are each listed as a game.</summary>
+    public IReadOnlyList<string> GameFolders => _persistence.GameFolders;
     public ICommand RemoveGameCommand { get; }
     public ICommand ApplySwapCommand { get; }
     public ICommand UndoCommand { get; }
@@ -710,6 +720,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                      () => PublisherLibrary.Ea(stores),
                      () => XboxLibrary.Scan(drives),
                      () => ManualLibrary.Scan(_persistence.ManualGames),
+                     () => ManualLibrary.ScanFolders(_persistence.GameFolders),
                  })
         {
             token.ThrowIfCancellationRequested();
@@ -823,7 +834,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Adds a game from a folder the user chooses, for games no library reports.</summary>
     private async System.Threading.Tasks.Task AddGameAsync()
     {
-        if (_filePicker is null || await _filePicker.AskForGameFolderAsync() is not { } folder)
+        if (_filePicker is null
+            || await _filePicker.AskForGameFolderAsync("Choose the folder the game is installed in") is not { } folder)
         {
             return;
         }
@@ -836,6 +848,37 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         await RefreshAsync();
         SelectedGame = _games.FirstOrDefault(g => g.GameId == ManualLibrary.IdFor(folder)) ?? SelectedGame;
+    }
+
+    /// <summary>Adds a folder whose every subfolder is a game, such as where repacks are installed.</summary>
+    private async System.Threading.Tasks.Task AddFolderAsync()
+    {
+        if (_filePicker is null
+            || await _filePicker.AskForGameFolderAsync("Choose a folder that holds games, one per subfolder") is not { } folder)
+        {
+            return;
+        }
+
+        if (!_persistence.SetGameFolder(folder, add: true))
+        {
+            StatusText = $"{folder} is already a game folder.";
+            return;
+        }
+
+        OnPropertyChanged(nameof(GameFolders));
+        await RefreshAsync();
+    }
+
+    /// <summary>Stops listing a folder's games. Nothing in the folder is touched.</summary>
+    private async System.Threading.Tasks.Task RemoveFolderAsync(string? folder)
+    {
+        if (folder is null || !_persistence.SetGameFolder(folder, add: false))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(GameFolders));
+        await RefreshAsync();
     }
 
     /// <summary>Takes a hand-added game off the list. The game's files are not touched.</summary>

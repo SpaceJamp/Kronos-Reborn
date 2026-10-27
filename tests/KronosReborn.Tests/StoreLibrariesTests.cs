@@ -133,6 +133,37 @@ public class StoreLibrariesTests
         Assert.Empty(service.ManualGames);
     }
 
+    [Fact]
+    public void EverySubfolderOfAGameFolderIsAGameAndAMissingFolderIsReported()
+    {
+        using var temp = new TemporaryDirectory();
+        var repacks = Path.Combine(temp.Root, "Games");
+        Directory.CreateDirectory(Path.Combine(repacks, "Hellraiser - Revival"));
+        Directory.CreateDirectory(Path.Combine(repacks, "Another Game"));
+
+        var result = ManualLibrary.ScanFolders([repacks, Path.Combine(temp.Root, "Unplugged")]);
+
+        Assert.Equal(["Another Game", "Hellraiser - Revival"], result.Games.Select(g => g.Name).Order());
+        Assert.All(result.Games, g => Assert.Equal(repacks, g.LibraryName));
+        Assert.Single(result.Problems);
+    }
+
+    [Fact]
+    public void GameFoldersAreKeptOnceAndApartFromHandAddedGames()
+    {
+        using var temp = new TemporaryDirectory();
+        var service = new PersistenceService(new DataPaths(Path.Combine(temp.Root, "data")));
+
+        Assert.True(service.SetGameFolder(@"C:\Games", add: true));
+        Assert.False(service.SetGameFolder(@"C:\Games\", add: true));
+
+        Assert.Equal([@"C:\Games"], service.GameFolders);
+        Assert.Empty(service.ManualGames);
+
+        Assert.True(service.SetGameFolder(@"C:\Games", add: false));
+        Assert.Empty(service.GameFolders);
+    }
+
     private sealed class FakeRegistry : IStoreRegistry
     {
         public IReadOnlyList<UbisoftInstall> Ubisoft { get; init; } = [];
