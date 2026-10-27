@@ -47,8 +47,14 @@ public sealed partial class MainWindow : Window, IFilePicker
             }
         };
 
-        Closing += (_, _) =>
+        Closing += (_, e) =>
         {
+            if (DataContext is MainViewModel { } vm && !vm.CanClose())
+            {
+                e.Cancel = true;
+                return;
+            }
+
             // From the persisted settings, not the copy read at start: those may have changed since.
             persistence.SaveSettings(persistence.Settings.With(
                 windowWidth: Width,

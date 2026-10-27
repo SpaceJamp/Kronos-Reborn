@@ -412,27 +412,6 @@ public class RuntimeCatalogTests
     }
 
     [Fact]
-    public void RuntimeCatalogAcceptUntrustedChangesTrust()
-    {
-        using var temp = new TemporaryDirectory();
-        var catalogPath = Path.Combine(temp.Root, "catalog.json");
-        var catalog = new RuntimeCatalog(catalogPath);
-
-        var dllPath = Path.Combine(temp.Root, "nvngx_dlss.dll");
-        File.WriteAllBytes(dllPath, CreateDummyDll());
-
-        var detected = new DetectedRuntime(RuntimeKind.Dlss, "nvngx_dlss.dll", "nvngx_dlss.dll", dllPath, "3.7.10", null, true);
-        var entry = catalog.AddFromDiscovery(detected, "123", "Game", "Steam");
-
-        Assert.Equal(RuntimeTrust.Untrusted, entry!.Trust);
-
-        var accepted = catalog.AcceptUntrusted(entry.Id);
-
-        Assert.True(accepted);
-        Assert.Equal(RuntimeTrust.UserAccepted, catalog.TryGet(entry.Id, out var updated) ? updated!.Trust : RuntimeTrust.Untrusted);
-    }
-
-    [Fact]
     public void RuntimeCatalogWriteIsAtomic()
     {
         using var temp = new TemporaryDirectory();

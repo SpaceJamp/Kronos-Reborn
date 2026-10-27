@@ -80,7 +80,23 @@ public sealed class VendorDownloader
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _importer = new RuntimeImporter(catalog, paths);
+
+        // Only a download in progress uses this folder, and none is when the program starts, so what
+        // is here was cut short by the program closing. Each can be a whole DLSS DLL.
+        try
+        {
+            if (Directory.Exists(DownloadsFolder))
+            {
+                Directory.Delete(DownloadsFolder, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Tried again on the next start.
+        }
     }
+
+    private string DownloadsFolder => Path.Combine(_paths.Root, "downloads");
 
     /// <summary>An HTTP client set up for GitHub, which refuses API requests without a user agent.</summary>
     public static HttpClient CreateClient()
@@ -177,7 +193,7 @@ public sealed class VendorDownloader
         var url = new Uri($"https://raw.githubusercontent.com/{source.Repository}/{Uri.EscapeDataString(release)}/{source.Folder}/{fileName}");
 
         // Its own folder, so the importer sees only this file beside the one chosen.
-        var folder = Path.Combine(_paths.Root, "downloads", Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(DownloadsFolder, Guid.NewGuid().ToString("N"));
         var target = Path.Combine(folder, fileName);
 
         try

@@ -40,21 +40,6 @@ public sealed record GameRecord(
     /// </remarks>
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? InstallPath : Name;
 
-    /// <summary>
-    /// Whether two records are the same game found twice.
-    /// </summary>
-    /// <remarks>
-    /// Compared by install path rather than by id, because ids are only unique within a library and
-    /// two different libraries can use the same numeric id for entirely different games. Paths that
-    /// differ only in case or trailing separator are the same folder on Windows.
-    /// </remarks>
-    public static bool IsSameGame(GameRecord a, GameRecord b)
-    {
-        return string.Equals(
-            PathNormalizer.Normalize(a.InstallPath),
-            PathNormalizer.Normalize(b.InstallPath),
-            StringComparison.OrdinalIgnoreCase);
-    }
 
     /// <summary>
     /// Collapses duplicates, keeping one record per distinct install path.

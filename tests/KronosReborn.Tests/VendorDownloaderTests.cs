@@ -69,6 +69,22 @@ public class VendorDownloaderTests
         Assert.Empty(fixture.Requested);
     }
 
+    [Fact]
+    public void ADownloadCutShortByClosingIsClearedOnTheNextStart()
+    {
+        using var temp = new TemporaryDirectory();
+        var paths = new DataPaths(Path.Combine(temp.Root, "data"));
+        var leftover = Path.Combine(paths.Root, "downloads", "0123", "nvngx_dlss.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(leftover)!);
+        File.WriteAllText(leftover, "half a file");
+
+        using var catalog = new RuntimeCatalog(paths.CatalogPath);
+        using var http = new HttpClient();
+        _ = new VendorDownloader(http, catalog, paths);
+
+        Assert.False(Directory.Exists(Path.Combine(paths.Root, "downloads")));
+    }
+
     private static string Raw(string tag, string path) =>
         $"https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/{tag}/{path}";
 

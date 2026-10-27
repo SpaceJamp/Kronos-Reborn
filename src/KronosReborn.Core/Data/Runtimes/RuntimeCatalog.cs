@@ -337,29 +337,6 @@ public sealed class RuntimeCatalog : IDisposable
         }
     }
 
-    /// <summary>
-    /// Marks an untrusted entry as user-accepted.
-    /// </summary>
-    public bool AcceptUntrusted(string id)
-    {
-        _lock.EnterWriteLock();
-        try
-        {
-            if (_entries.TryGetValue(id, out var entry) && entry.Trust == RuntimeTrust.Untrusted)
-            {
-                var updated = entry with { Trust = RuntimeTrust.UserAccepted };
-                _entries = _entries.SetItem(id, updated);
-                Save();
-                return true;
-            }
-            return false;
-        }
-        finally
-        {
-            _lock.ExitWriteLock();
-        }
-    }
-
     private void Load()
     {
         if (!File.Exists(_catalogPath))

@@ -89,6 +89,34 @@ public class MainViewModelTests
         Assert.Equal("Newer version available", row.StatusText);
     }
 
+    [Fact]
+    public void TheWindowMayNotCloseWhileASwapIsRunning()
+    {
+        using var fixture = new Fixture();
+        Assert.True(fixture.Vm.CanClose());
+
+        fixture.Vm.IsWorking = true;
+
+        // Closing part way through left games changed with no undo record.
+        Assert.False(fixture.Vm.CanClose());
+        Assert.Contains("still running", fixture.Vm.StatusText);
+    }
+
+    [Fact]
+    public void NothingThatWritesGameFilesStartsDuringARefresh()
+    {
+        using var fixture = new Fixture();
+        fixture.Vm.Games = Rows("a");
+        fixture.Vm.SelectedGame = fixture.Vm.Games[0];
+        Assert.True(fixture.Vm.UndoCommand.CanExecute(null));
+
+        fixture.Vm.IsScanning = true;
+
+        Assert.False(fixture.Vm.UndoCommand.CanExecute(null));
+        Assert.False(fixture.Vm.RedoCommand.CanExecute(null));
+        Assert.False(fixture.Vm.ApplySwapCommand.CanExecute(null));
+    }
+
     private static ObservableCollection<GameRow> Rows(params string[] ids) =>
         [.. ids.Select(id => new GameRow(
             new GameRecord("Steam", id, $"Game {id}", Path.Combine("C:", id), true),

@@ -131,7 +131,6 @@ public sealed record ScanResult(
     /// The case where an empty game list is least trustworthy: nothing was readable, so nothing is
     /// known. An empty list with no problems, by contrast, is a confident answer.
     /// </remarks>
-    public bool IsNothingKnown => SourcesChecked > 0 && Games.Count == 0 && Problems.Count >= SourcesChecked;
 
     /// <summary>
     /// Folds several scans into one, keeping every problem.
