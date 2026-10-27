@@ -67,6 +67,9 @@ public sealed class DataPaths
     /// </remarks>
     public string BackupDirectory => Path.Combine(Root, "backups");
 
+    /// <summary>Covers fetched from Steam's store for games Steam's own cache has none for.</summary>
+    public string PostersDirectory => Path.Combine(Root, "posters");
+
     /// <summary>
     /// Directory holding copies of the runtime versions the collection owns.
     /// </summary>

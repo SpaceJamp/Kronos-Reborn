@@ -47,6 +47,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _statusText = "Ready";
 
     private readonly DownloadsViewModel _downloads;
+    private readonly HttpClient _http = VendorDownloader.CreateClient();
+    private readonly StorePosterFinder _posters;
     private readonly DiagnosticsViewModel _diagnostics;
     private bool _isDiagnosticsOpen;
 
@@ -66,9 +68,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _filePicker = filePicker;
 
         _executor = new SwapExecutor(persistence, catalog, paths);
+        _posters = new StorePosterFinder(_http, paths.PostersDirectory);
         _undo = new UndoEngine(persistence, paths);
         _downloads = new DownloadsViewModel(
-            new VendorDownloader(VendorDownloader.CreateClient(), catalog, paths),
+            new VendorDownloader(_http, catalog, paths),
             () => _games.SelectMany(g => g.Snapshot?.Runtimes ?? []).Where(r => r.Exists).Select(r => r.Kind));
 
         // A downloaded version is offered in every game's picker straight away.
@@ -747,6 +750,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         // A game both stores point at is one game folder, so it is listed once.
         games = [.. GameRecord.Deduplicate(games)];
+
+        // Games Steam's cache has no art for get a cover from Steam's store, fetched once and kept.
+        games = [.. games.Select(g => g.PosterPath is not null ? g : g with
+        {
+            PosterPath = _posters.Find(g.Id, g.Name, g.LibraryName == "Steam" ? g.Id : null, token),
+        })];
 #else
         // On non-Windows platforms, library discovery is not available.
         // Registry access and Windows-specific paths don't exist.
@@ -1206,6 +1215,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _games.CollectionChanged -= OnGamesCollectionChanged;
         _operationCancellation.Dispose();
         _downloads.Dispose();
+        _http.Dispose();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

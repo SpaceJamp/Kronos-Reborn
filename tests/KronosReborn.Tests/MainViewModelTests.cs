@@ -76,6 +76,19 @@ public class MainViewModelTests
         Assert.Equal(3, rebuilt.Options.Count);
     }
 
+    [Fact]
+    public void TheCardSaysWhetherTheNewestVersionHeldIsInstalled()
+    {
+        // Each row's game runs DLSS 310.2.1.
+        var row = Rows("a")[0];
+
+        row.RebuildChoices([Entry("310.2.1")]);
+        Assert.Equal("Newest installed", row.StatusText);
+
+        row.RebuildChoices([Entry("310.2.1"), Entry("310.9.1")]);
+        Assert.Equal("Newer version available", row.StatusText);
+    }
+
     private static ObservableCollection<GameRow> Rows(params string[] ids) =>
         [.. ids.Select(id => new GameRow(
             new GameRecord("Steam", id, $"Game {id}", Path.Combine("C:", id), true),

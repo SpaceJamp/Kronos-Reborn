@@ -95,6 +95,8 @@ public sealed class GameRow : INotifyPropertyChanged
 
             choice.Changed += OnChoiceChanged;
         }
+
+        OnPropertyChanged(nameof(StatusText));
     }
 
     /// <summary>Raised when any version in this row is chosen or cleared.</summary>
@@ -163,7 +165,12 @@ public sealed class GameRow : INotifyPropertyChanged
             if (IsMissing) return "Missing";
             if (!HasAnyRuntime) return "No runtimes";
             if (HasUnknownVersions) return "Unknown version";
-            return "OK";
+
+            // Against the versions held, newest first in each picker.
+            return Choices.Any(c => c.IsAvailable && c.Options.Count > 0
+                                    && VersionNumber.IsOlder(c.CurrentVersion, c.Options[0].Version))
+                ? "Newer version available"
+                : "Newest installed";
         }
     }
 
