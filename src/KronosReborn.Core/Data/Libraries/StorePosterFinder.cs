@@ -41,7 +41,9 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
             return cover;
         }
 
-        if (File.Exists(none))
+        // Once Steam has failed this refresh, the rest wait for the next one: where Steam is blocked
+        // rather than offline, each attempt would sit out its whole timeout.
+        if (File.Exists(none) || _unreachable)
         {
             return null;
         }
@@ -64,10 +66,14 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
                                       or IOException or UnauthorizedAccessException)
         {
             cancellation.ThrowIfCancellationRequested();
+            _unreachable |= ex is HttpRequestException or TaskCanceledException;
             Log.Instance.Warning($"No cover for {name} this time: {ex.Message}", category: "Posters");
             return null;
         }
     }
+
+    /// <summary>Set once Steam could not be reached; a finder lives for one refresh.</summary>
+    private bool _unreachable;
 
     /// <summary>The words of a name worth searching for.</summary>
     /// <remarks>
@@ -81,12 +87,19 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
             .Where(w => !w.Contains('\'') && !w.Contains('’')),
     ];
 
-    /// <summary>Whether a store result's name contains every searched word.</summary>
-    internal static bool Matches(IReadOnlyCollection<string> words, string candidate)
-    {
-        var have = Words().Matches(candidate).Select(m => m.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return words.Count > 0 && words.All(have.Contains);
-    }
+    /// <summary>Whether a store result can be the game: its name is the searched words, or holds them all.</summary>
+    /// <remarks>
+    /// A single word must be the whole name. Containing it is far too loose: "Control" matched
+    /// "CONTROL Resonant" and "Tools" matched "Tools Up!", which is worse than no cover.
+    /// </remarks>
+    internal static bool Matches(IReadOnlyCollection<string> words, string candidate) =>
+        words.Count > 0 && (IsExactly(words, candidate)
+            || (words.Count > 1 && words.All(Words().Matches(candidate).Select(m => m.Value)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase).Contains)));
+
+    /// <summary>Whether a name is exactly the searched words, ignoring case and punctuation.</summary>
+    private static bool IsExactly(IReadOnlyCollection<string> words, string candidate) =>
+        Words().Matches(candidate).Select(m => m.Value).SequenceEqual(words, StringComparer.OrdinalIgnoreCase);
 
     private string? Search(string name, CancellationToken cancellation)
     {
@@ -104,7 +117,8 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
             return null;
         }
 
-        // The shortest matching name is the game itself rather than its demo, soundtrack or DLC.
+        // The shortest matching name is the game itself rather than its demo, soundtrack or DLC; an
+        // exact name, when there is one, is always the shortest.
         return items.EnumerateArray()
             .Select(i => (Id: i.TryGetProperty("id", out var id) ? id.ToString() : null,
                           Name: i.TryGetProperty("name", out var n) ? n.GetString() ?? "" : ""))

@@ -36,6 +36,30 @@ public class StorePosterFinderTests
         Assert.False(StorePosterFinder.Matches([], "Anything"));
     }
 
+    [Theory]
+    // What Steam's search really returns for these: one word must be the whole name.
+    [InlineData("Control", "CONTROL Resonant", false)]
+    [InlineData("Tools", "Tools Up!", false)]
+    [InlineData("Doom", "DOOM 3", false)]
+    [InlineData("Portal", "Portal", true)]
+    [InlineData("Prey", "PREY", true)]
+    public void AOneWordNameMustBeTheWholeName(string word, string candidate, bool expected)
+    {
+        Assert.Equal(expected, StorePosterFinder.Matches([word], candidate));
+    }
+
+    [Fact]
+    public void AOneWordFolderGetsNoCoverRatherThanAnotherGames()
+    {
+        using var fixture = new Fixture();
+        fixture.Responses["https://store.steampowered.com/api/storesearch/?l=english&cc=US&term=Control"] = new StringContent("""
+            {"total":2,"items":[{"id":3,"name":"CONTROL Resonant"},{"id":4,"name":"Airport Control 27"}]}
+            """);
+
+        Assert.Null(fixture.Find("folder:control", "Control"));
+        Assert.DoesNotContain(fixture.Requested, url => url.Contains("steamstatic", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void TheGameItselfIsChosenOverItsDemoAndKeptForNextTime()
     {
@@ -73,6 +97,20 @@ public class StorePosterFinderTests
     }
 
     [Fact]
+    public void OnceSteamCannotBeReachedTheRestOfTheRefreshDoesNotWaitOnIt()
+    {
+        using var fixture = new Fixture { Offline = true };
+
+        Assert.Null(fixture.Find("folder:a", "Hellraiser Revival"));
+        Assert.Single(fixture.Requested);
+
+        // Where Steam is blocked rather than offline, every one of these used to sit out its timeout.
+        Assert.Null(fixture.Find("folder:b", "Alan Wake 2"));
+        Assert.Null(fixture.Find("folder:c", "Cyberpunk 2077"));
+        Assert.Single(fixture.Requested);
+    }
+
+    [Fact]
     public void WhenSteamCannotBeReachedTheNextRefreshTriesAgain()
     {
         using var fixture = new Fixture { Offline = true };
@@ -81,6 +119,7 @@ public class StorePosterFinderTests
 
         fixture.Offline = false;
         fixture.Requested.Clear();
+        fixture.NextRefresh();
         fixture.Find("folder:x", "Hellraiser Revival");
         Assert.NotEmpty(fixture.Requested);
     }
@@ -89,7 +128,7 @@ public class StorePosterFinderTests
     {
         private readonly TemporaryDirectory _temp = new();
         private readonly HttpClient _http;
-        private readonly StorePosterFinder _finder;
+        private StorePosterFinder _finder;
 
         public Fixture()
         {
@@ -100,6 +139,9 @@ public class StorePosterFinderTests
         public Dictionary<string, HttpContent> Responses { get; } = [];
         public List<string> Requested { get; } = [];
         public bool Offline { get; set; }
+
+        /// <summary>Each refresh makes its own finder, as the view model does.</summary>
+        public void NextRefresh() => _finder = new StorePosterFinder(_http, Path.Combine(_temp.Root, "posters"));
 
         public string? Find(string id, string name) =>
             _finder.Find(id, name, steamAppId: null, TestContext.Current.CancellationToken);
