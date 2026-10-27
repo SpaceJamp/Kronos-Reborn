@@ -16,8 +16,7 @@ it replaces, so any change can be undone.
 
 1. **Refresh** finds your games and the runtime DLLs inside each one.
 2. Click a game. Its pane shows each runtime it carries, with the version it runs now.
-3. Pick a version, or tick several games and press **⬆ Newest** to choose the newest version you hold
-   for all of them.
+3. Pick a version, or press **⬆ Newest** to choose the newest version you hold for every game.
 4. Check the preview, then press **Apply**.
 5. Changed your mind? **Undo** puts the old files back. **Redo** reapplies.
 

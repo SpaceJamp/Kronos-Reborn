@@ -142,7 +142,7 @@ public static class DiagnosticsRunner
     /// <param name="catalog">The runtime collection.</param>
     /// <param name="histories">Every game's history.</param>
     /// <param name="problems">Problems already reported by loading and scanning.</param>
-    /// <param name="recentLog">Log entries held in memory; only errors are kept.</param>
+    /// <param name="recentLog">Log entries, such as <see cref="ReadLog"/> returns; only errors are kept.</param>
     /// <param name="appFacts">Facts only the app knows, such as its build version.</param>
     public static DiagnosticsReport Run(
         DataPaths paths,
@@ -177,7 +177,8 @@ public static class DiagnosticsRunner
         {
             checks.Add(new DiagnosticCheck(
                 "Log", DiagnosticSeverity.Warning,
-                $"{errors.Length} error(s) logged this session. The most recent: {errors[0].Message}"));
+                $"{errors.Length} error(s) or crash(es) in the log. The most recent: {errors[0].Message}",
+                $"{errors[0].Timestamp.ToLocalTime():g}"));
         }
 
         return new DiagnosticsReport(
@@ -216,7 +217,7 @@ public static class DiagnosticsRunner
                 AddFile(archive, paths.SettingsPath, "settings.json");
                 AddFile(archive, paths.CatalogPath, "catalog.json");
                 AddFolder(archive, paths.HistoryDirectory, "history");
-                AddFolder(archive, Path.Combine(paths.Root, "logs"), "logs");
+                AddFolder(archive, paths.LogsDirectory, "logs");
             }
 
             File.Move(partial, zipPath, overwrite: true);
@@ -228,6 +229,60 @@ public static class DiagnosticsRunner
                 File.Delete(partial);
             }
         }
+    }
+
+    /// <summary>
+    /// Every entry in the log and its rotated files, so errors and crashes from earlier runs are seen.
+    /// </summary>
+    /// <remarks>
+    /// The log was only held in memory for this, so an error was gone once the program closed, and a
+    /// crash, which ends the program, could never be shown. A line that cannot be read is skipped: it
+    /// is most likely the last one, cut short when the program ended.
+    /// </remarks>
+    public static IReadOnlyList<LogEntry> ReadLog(string logsFolder)
+    {
+        var entries = new List<LogEntry>();
+
+        string[] files;
+        try
+        {
+            files = Directory.Exists(logsFolder) ? Directory.GetFiles(logsFolder, "kronosreborn.log*") : [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return entries;
+        }
+
+        foreach (var file in files)
+        {
+            try
+            {
+                // Shared, because the running logger holds the current file open.
+                using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(stream);
+
+                while (reader.ReadLine() is { } line)
+                {
+                    try
+                    {
+                        if (System.Text.Json.JsonSerializer.Deserialize<LogEntry>(line) is { } entry)
+                        {
+                            entries.Add(entry);
+                        }
+                    }
+                    catch (System.Text.Json.JsonException)
+                    {
+                        // A torn or foreign line.
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // That file is skipped; the others still count.
+            }
+        }
+
+        return entries;
     }
 
     private static IEnumerable<DiagnosticFact> EnvironmentFacts(

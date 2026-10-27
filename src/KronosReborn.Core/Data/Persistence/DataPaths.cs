@@ -67,6 +67,12 @@ public sealed class DataPaths
     /// </remarks>
     public string BackupDirectory => Path.Combine(Root, "backups");
 
+    /// <summary>The log, with its older rotated files beside it.</summary>
+    public string LogsDirectory => Path.Combine(Root, "logs");
+
+    /// <summary>The current log file.</summary>
+    public string LogFilePath => Path.Combine(LogsDirectory, "kronosreborn.log");
+
     /// <summary>Covers fetched from Steam's store for games Steam's own cache has none for.</summary>
     public string PostersDirectory => Path.Combine(Root, "posters");
 

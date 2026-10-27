@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using KronosReborn.Data.Logging;
 using Xunit;
@@ -11,7 +12,7 @@ public class LoggerTests
     public void ASinkThatCannotWriteDoesNotFailTheCaller()
     {
         using var logger = new Logger();
-        var memory = new MemoryLogSink();
+        var memory = new ListSink();
         logger.AddSink(new BrokenSink());
         logger.AddSink(memory);
 
@@ -21,6 +22,14 @@ public class LoggerTests
 
         Assert.Equal(2, memory.Entries.Count);
         Assert.Equal("boom", memory.Entries[1].ExceptionMessage);
+    }
+
+    private sealed class ListSink : ILogSink
+    {
+        public List<LogEntry> Entries { get; } = [];
+        public LogLevel MinimumLevel => LogLevel.Trace;
+        public void Write(LogEntry entry) => Entries.Add(entry);
+        public void Flush() { }
     }
 
     private sealed class BrokenSink : ILogSink

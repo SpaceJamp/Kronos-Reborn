@@ -13,12 +13,11 @@ namespace KronosReborn.Tests;
 public class MainViewModelTests
 {
     [Fact]
-    public void ARefreshKeepsTheSelectedGameAndTheTicksOnTheNewRows()
+    public void ARefreshKeepsTheSelectedGameOnTheNewRow()
     {
         using var fixture = new Fixture();
         fixture.Vm.Games = Rows("a", "b");
         fixture.Vm.SelectedGame = fixture.Vm.Games[0];
-        fixture.Vm.Games[1].IsSelected = true;
 
         // A refresh builds every row again.
         var refreshed = Rows("a", "b");
@@ -26,8 +25,6 @@ public class MainViewModelTests
 
         // The pane used to keep the discarded row, so a version chosen there changed nothing.
         Assert.Same(refreshed[0], fixture.Vm.SelectedGame);
-        Assert.True(refreshed[1].IsSelected);
-        Assert.False(refreshed[0].IsSelected);
     }
 
     [Fact]
@@ -43,19 +40,21 @@ public class MainViewModelTests
     }
 
     [Fact]
-    public void TickingARefreshedRowUpdatesNewest()
+    public void NewestChoosesTheNewestVersionHeldForEveryGame()
     {
         using var fixture = new Fixture();
+        fixture.Catalog.AddImport(RuntimeKind.Dlss, "310.9.1", fixture.ImportFolder(), "test", RuntimeTrust.Trusted);
         fixture.Vm.Games = Rows("a", "b");
+        foreach (var row in fixture.Vm.Games)
+        {
+            row.RebuildChoices(fixture.Catalog.Entries);
+        }
 
-        var raised = 0;
-        fixture.Vm.ChooseNewestCommand.CanExecuteChanged += (_, _) => raised++;
+        // Nothing selected and nothing ticked: every game is brought up to the newest held.
+        fixture.Vm.ChooseNewestCommand.Execute(null);
 
-        // Rows arriving with a refresh never got their tick listener, so Newest stayed disabled.
-        fixture.Vm.Games[0].IsSelected = true;
-
-        Assert.True(raised > 0);
-        Assert.True(fixture.Vm.ChooseNewestCommand.CanExecute(null));
+        Assert.All(fixture.Vm.Games, g =>
+            Assert.Equal("310.9.1", g.Choices.Single(c => c.Kind == RuntimeKind.Dlss).Selected?.Version));
     }
 
     [Fact]
@@ -132,23 +131,33 @@ public class MainViewModelTests
     private sealed class Fixture : IDisposable
     {
         private readonly TemporaryDirectory _temp = new();
-        private readonly RuntimeCatalog _catalog;
+        private readonly DataPaths _paths;
         private readonly PersistenceService _persistence;
 
         public Fixture()
         {
-            var paths = new DataPaths(Path.Combine(_temp.Root, "data"));
-            _persistence = new PersistenceService(paths);
-            _catalog = new RuntimeCatalog(paths.CatalogPath);
-            Vm = new MainViewModel(_catalog, _persistence, Settings.Default, paths);
+            _paths = new DataPaths(Path.Combine(_temp.Root, "data"));
+            _persistence = new PersistenceService(_paths);
+            Catalog = new RuntimeCatalog(_paths.CatalogPath);
+            Vm = new MainViewModel(Catalog, _persistence, Settings.Default, _paths);
         }
 
         public MainViewModel Vm { get; }
+        public RuntimeCatalog Catalog { get; }
+
+        /// <summary>A folder holding a DLSS DLL, for importing into the collection.</summary>
+        public string ImportFolder()
+        {
+            var folder = Path.Combine(_temp.Root, "import");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "nvngx_dlss.dll"), "x");
+            return folder;
+        }
 
         public void Dispose()
         {
             Vm.Dispose();
-            _catalog.Dispose();
+            Catalog.Dispose();
             _persistence.Dispose();
             _temp.Dispose();
         }

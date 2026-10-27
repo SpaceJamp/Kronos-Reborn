@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -145,37 +144,6 @@ public sealed class FileLogSink : ILogSink, IDisposable
     private string GetFilePath(int index) => index == 0
         ? _filePath
         : $"{_filePath}.{index}";
-}
-
-/// <summary>
-/// Writes log entries to an in-memory collection for UI display.
-/// </summary>
-public sealed class MemoryLogSink : ILogSink
-{
-    private readonly int _maxEntries;
-    private readonly ConcurrentQueue<LogEntry> _entries = new();
-
-    public MemoryLogSink(int maxEntries = 5000)
-    {
-        _maxEntries = maxEntries;
-    }
-
-    public LogLevel MinimumLevel => LogLevel.Trace;
-
-    public IReadOnlyList<LogEntry> Entries => _entries.ToArray();
-
-    public void Write(LogEntry entry)
-    {
-        _entries.Enqueue(entry);
-        while (_entries.Count > _maxEntries)
-        {
-            _entries.TryDequeue(out _);
-        }
-    }
-
-    public void Flush() { }
-
-    public void Clear() => _entries.Clear();
 }
 
 /// <summary>

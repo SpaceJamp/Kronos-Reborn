@@ -19,7 +19,6 @@ namespace KronosReborn.UI;
 public sealed class GameRow : INotifyPropertyChanged
 {
     private GameRuntimeSnapshot? _snapshot;
-    private bool _isSelected;
 
     public string GameId { get; }
     public string GameName { get; }
@@ -171,16 +170,6 @@ public sealed class GameRow : INotifyPropertyChanged
                                     && VersionNumber.IsOlder(c.CurrentVersion, c.Options[0].Version))
                 ? "Newer version available"
                 : "Newest installed";
-        }
-    }
-
-    public bool IsSelected
-    {
-        get => _isSelected;
-        set
-        {
-            _isSelected = value;
-            OnPropertyChanged();
         }
     }
 
