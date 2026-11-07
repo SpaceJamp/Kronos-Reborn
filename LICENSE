@@ -1,201 +1,157 @@
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
+# Personal and Non-Commercial Use License (PNC-1.2)
 
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+Copyright (c) 2026 SpaceJamp
 
-   1. Definitions.
+All rights not expressly granted in this license are reserved by the Author.
 
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
+## 1. Definitions and Interpretation
 
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
+For purposes of this license:
 
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
+- "Software" means the original program in source or compiled form, together with its documentation, assets, and associated files, as distributed by the Author under this license, and any portion of any of them.
+- "Author" means SpaceJamp, the original copyright holder, and the Author's heirs, successors, and assigns.
+- "You" means the individual exercising rights under this license. You may not exercise these rights on behalf of, or for the benefit of, any employer, client, or organization.
+- "Modified Version" means any work that changes, adapts, translates, extends, or is derived from the Software, in whole or in part, to the extent that work would require the Author's permission under copyright law.
+- "Distribute" means to make the Software or a Modified Version available to any other person by any means, including hosting, uploading, publishing, streaming, or transferring copies. Use only on your own devices, with no copy made available to anyone else, is not distribution.
+- "Source Code" means the preferred form of a work for making modifications to it, including all files, scripts, assets, and build instructions needed to modify and run it.
+- "Personal Use" means use by an individual for private, hobby, self-study, or personal research purposes that is not Commercial Use.
+- "Commercial Use" means any use intended for or directed toward commercial advantage or monetary compensation, whether direct or indirect, including:
+  (a) selling, renting, leasing, licensing, or charging fees for the Software or any Modified Version;
+  (b) using the Software in, or to support, any product or service offered for payment;
+  (c) using the Software in the operations of any business, government body, or other organization;
+  (d) using the Software to generate revenue, including through paid access, subscriptions, advertising You control, sponsorships, donations or tips tied to access or features, in-app purchases, or the sale of any digital goods or services; and
+  (e) performing paid work, freelance work, or commissions that use or deliver the Software or any Modified Version.
+- "Written" or "in writing" means a document signed by the Author, or an email sent by the Author from the address listed in the Contact section, that expressly refers to this license and grants the permission in question. Silence, inaction, or informal comments are not written permission.
+- In this license, "including" means "including without limitation." Headings are for convenience only and do not affect interpretation.
 
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
+## 2. License Grant
 
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
+Subject to, and conditioned on, your full compliance with every term of this license, the Author grants You a worldwide, royalty-free, non-exclusive, non-transferable, non-sublicensable license, revocable only as stated in Section 8, to:
 
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
+- Download, install, and use the Software for Personal Use.
+- View, copy, and study the Source Code.
+- Modify the Software for Personal Use.
+- Distribute the Software and Modified Versions free of charge, subject to Sections 3 through 6.
 
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
+The terms of this license are conditions of the license grant, not only contractual promises. Any use, copying, modification, or distribution outside these conditions is outside the scope of the license and is copyright infringement.
 
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
+Each person who receives the Software or a Modified Version receives a license directly from the Author under these same terms. You may not grant sublicenses.
 
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
+## 3. Noncommercial Restrictions
 
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
+You may not:
 
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
+- Sell, rent, lease, or sublicense the Software or any Modified Version.
+- Charge any fee for access to, use of, or distribution of the Software or any Modified Version.
+- Use the Software for any Commercial Use.
+- Incorporate the Software, in whole or in part, into any commercial product or service.
+- Distribute the Software through any service or platform that requires payment for access to the Software.
+- Use the Software, the Source Code, or any Modified Version as training data for, or input to the development of, any machine learning or artificial intelligence model.
+- Remove, alter, or circumvent any license notice, copyright notice, or technical measure the Author includes in the Software.
 
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
+Hosting the Software on a free, publicly accessible platform (for example, a free code-hosting site) is not Commercial Use by You, even if that platform displays advertising You do not control or receive revenue from.
 
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
+If You are unsure whether a use is Commercial Use, it is treated as Commercial Use unless the Author confirms otherwise in writing.
 
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
+Any Commercial Use requires a separate written license from the Author. These restrictions apply to the Software in both original and modified form, and to any part of it.
 
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
+## 4. Source Code and Modified Versions
 
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
+If You Distribute a Modified Version, You must:
 
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
+- Make the complete Source Code of the Modified Version available to every recipient, free of charge, either together with the Modified Version or through a publicly accessible link that remains available for as long as You Distribute the Modified Version.
+- License the Modified Version under this same license, with no other or additional terms.
+- Include prominent notices in the modified files stating that You changed them and the date of each change.
+- Preserve all copyright notices, license notices, and attribution notices from the Software.
+- Not impose any further restriction on recipients' exercise of the rights granted here, including through technical measures that prevent modification or access to the Source Code.
 
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
+You are not required to publish or share modifications that You keep entirely private and do not Distribute.
 
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
+## 5. Attribution
 
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
+Any permitted distribution of the Software or a Modified Version must include:
 
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
+- The original copyright notice.
+- A complete copy of this license.
+- A credit to the Author in a reasonably visible location, such as a README file, credits screen, or "About" section, in substantially this form: "Based on software by SpaceJamp, licensed under PNC-1.2."
+- A clear statement identifying any modifications made.
 
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
+You may not claim authorship of the Software or remove or alter the Author's credit.
 
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
+## 6. Names, Trademarks, and Endorsement
 
-   END OF TERMS AND CONDITIONS
+This license does not grant You any right to use the Author's name, logos, or trademarks, except as needed to give the attribution required by Section 5. You may not state or imply that the Author endorses, sponsors, or is affiliated with You or any Modified Version.
 
-   APPENDIX: How to apply the Apache License to your work.
+## 7. Contributions to the Author
 
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
+If You voluntarily submit any code, content, or other material to the Author for inclusion in the Software (a "Contribution"), You grant the Author a perpetual, worldwide, irrevocable, royalty-free, non-exclusive license to use, copy, modify, distribute, sublicense, and commercialize that Contribution, including under licenses other than this one. You confirm that You have the right to grant this license for each Contribution You submit.
 
-   Copyright 2026 SpaceJamp
+## 8. Termination
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Your rights under this license terminate automatically, without notice, if You violate any of its terms.
 
-       http://www.apache.org/licenses/LICENSE-2.0
+If this is your first violation and You cure it within 30 days after You become aware of it or receive notice from the Author, whichever comes first, your rights are reinstated. Otherwise, reinstatement requires the Author's written permission.
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Upon termination, You must stop all use and distribution of the Software and all Modified Versions, and delete all copies in your possession or control. On the Author's request, You must confirm in writing that You have done so.
+
+Termination of your rights does not end the licenses of people who received copies from You, as long as they remain in full compliance.
+
+## 9. Remedies
+
+Because a breach of this license may cause the Author irreparable harm for which money damages are inadequate, the Author is entitled to seek injunctive relief, without posting bond where permitted by law, in addition to any other remedy available, including damages, statutory damages, and profits under copyright law.
+
+If the Author prevails in any action to enforce this license, the Author is entitled to recover reasonable attorneys' fees and costs to the extent permitted by law.
+
+Any revenue or other benefit You obtain through a use that violates this license is held for the benefit of the Author, to the extent permitted by law.
+
+## 10. Indemnification
+
+You agree to defend, indemnify, and hold harmless the Author from any claim, loss, liability, damage, or expense, including reasonable attorneys' fees, arising from your use, modification, or distribution of the Software or any Modified Version, or from your violation of this license.
+
+## 11. Disclaimer of Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. YOU ASSUME THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE.
+
+## 12. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF DATA, PROFITS, OR GOODWILL, ARISING OUT OF OR RELATED TO THE SOFTWARE OR THIS LICENSE, WHETHER IN CONTRACT, TORT, OR OTHERWISE, EVEN IF THE AUTHOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. IF ANY LIABILITY IS FOUND DESPITE THIS SECTION, THE AUTHOR'S TOTAL LIABILITY SHALL NOT EXCEED FIFTY U.S. DOLLARS (US $50).
+
+## 13. Ownership and No Implied Rights
+
+The Author retains all copyright and other intellectual property rights in the Software. This license does not transfer ownership of the Software to anyone. You own your own original modifications, subject to the Author's rights in the Software and the terms of this license.
+
+No rights are granted by implication, estoppel, course of dealing, or otherwise, except those expressly stated in this license.
+
+## 14. Changes to This License
+
+The Author may publish revised versions of this license. Each copy of the Software remains governed by the license version that accompanied it when You received it. You may choose to follow the terms of any later version published by the Author instead.
+
+The Author may also offer the Software under different terms, including commercial terms, at any time. Doing so does not withdraw licenses already granted under this license.
+
+## 15. Rights Under Applicable Law
+
+Nothing in this license limits any right You have under applicable law that cannot be restricted by license, including fair use or fair dealing.
+
+## 16. Notices
+
+The Author may give You notice under this license by email to any address You have used to contact the Author, by a message on the platform where You Distribute the Software, or by posting the notice where the Author publishes the Software. You must send notices to the Author at the email address listed in the Contact section.
+
+## 17. General Terms
+
+- Governing Law. This license is governed by the laws of the State of [STATE], United States, and applicable U.S. federal law, without regard to conflict-of-laws rules. Any dispute shall be brought exclusively in the state or federal courts located in [COUNTY, STATE], and You consent to the personal jurisdiction of those courts.
+- Severability. If any provision of this license is held unenforceable, it shall be modified to the minimum extent necessary to make it enforceable, and the remaining provisions remain in full effect.
+- No Waiver. The Author's failure or delay in enforcing any provision is not a waiver of the right to enforce it later, against You or anyone else.
+- Assignment. You may not assign or transfer this license. The Author may assign this license and any rights under it.
+- Entire Agreement. This license is the entire agreement between You and the Author regarding the Software, unless a separate written agreement from the Author states otherwise.
+- Survival. Sections 1, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, and 17 survive termination.
+
+## 18. Acceptance
+
+You are not required to accept this license. However, nothing else grants You permission to use, copy, modify, or distribute the Software. By doing any of those things, You indicate that You accept this license and agree to its terms.
+
+## Contact
+
+For commercial licensing, permission requests, and notices, contact:
+
+SpaceJamp
+Email: SpaceJampGithub@protonmail.me
