@@ -61,6 +61,10 @@ public sealed partial class MainWindow : Window, IFilePicker
             if (DataContext is MainViewModel vm)
             {
                 await vm.RefreshAsync();
+                if (vm.CheckForUpdates)
+                {
+                    await vm.Updates.CheckAsync(automatic: true);
+                }
             }
         };
 
@@ -195,9 +199,15 @@ public sealed partial class MainWindow : Window, IFilePicker
         }
     }
 
-    public Task OpenUrlAsync(Uri url) => throw new NotImplementedException();
+    public async Task OpenUrlAsync(Uri url) => await Launcher.LaunchUriAsync(url);
 
-    public void RunInstallerAndExit(string installerPath) => throw new NotImplementedException();
+    public void RunInstallerAndExit(string installerPath)
+    {
+        // /update=1 tells the installer to start the app again once it has finished.
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            installerPath, "/SILENT /SUPPRESSMSGBOXES /NORESTART /update=1") { UseShellExecute = true });
+        Close();
+    }
 
     public async Task<string?> AskForRuntimeFileAsync()
     {
