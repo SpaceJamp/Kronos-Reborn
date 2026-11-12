@@ -6,7 +6,7 @@
 #ifndef AppVersion
   ; Fallback for compiling this script by hand. Flagged because it is exactly the kind of literal
   ; that goes stale; a test checks it against Directory.Build.props and config.cmd.
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.1.1"
 #endif
 
 #define AppName "Kronos Reborn"
