@@ -46,6 +46,7 @@ straight from NVIDIA, AMD and Intel's own GitHub repositories.
 - **It remembers** your search, filter and the page you were on.
 - **It keeps itself up to date.** When a new release is out, the status bar offers it. An installed
   copy updates in one click; a portable one opens the release page. Turn the check off in Settings.
+  Updates are signed (see below), so a tampered one is refused.
 
 ## Where it finds games
 
@@ -86,6 +87,12 @@ overwrite it.
 Downloaded and imported DLLs count as trusted only if they're validly signed by NVIDIA, AMD or Intel.
 Anything else needs your OK, and is flagged again before it goes into a game. **⬆ Newest** only ever
 picks signed versions.
+
+**Can I trust the updates?**
+An update is installed only if all three checks pass. Every link must point at this repository on
+GitHub. The file must match the checksum GitHub publishes. And the installer must be signed with a
+release key that lives offline on the maintainer's PC and is never uploaded. Someone who took over the
+GitHub account still couldn't ship an update the app would run. A failed check deletes the download.
 
 **What does it send over the internet?**
 - A game's name to Steam's store, once, to find a cover when Steam doesn't have one cached.
@@ -133,7 +140,8 @@ installer (needs Inno Setup: `winget install JRSoftware.InnoSetup`). Both land i
 CI restores from the committed `packages.lock.json` files in locked mode. It also checks formatting,
 builds with warnings as errors, runs the tests and packages both. After changing a package reference,
 run `dotnet restore .\KronosReborn.sln --force-evaluate` and commit the lock files. Pushing a `v*`
-tag publishes a release.
+tag builds a **draft** release. `package\sign-release.ps1 v<version>` then signs its installer with the
+release key and publishes it (`-NewKey` creates the key once; back it up offline).
 
 ```
 src/KronosReborn/          the window (Avalonia)
