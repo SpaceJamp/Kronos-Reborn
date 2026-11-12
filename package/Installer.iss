@@ -49,7 +49,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 
-; No SetupIconFile yet. There is no artwork, and a placeholder icon tends to outlive its usefulness.
+SetupIconFile=..\src\KronosReborn\Assets\kronos.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

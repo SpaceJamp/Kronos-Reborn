@@ -25,6 +25,8 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
 
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Drawn by Assets/make_icon.py; run it again to change the artwork. -->
+    <ApplicationIcon>Assets\kronos.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
@@ -46,6 +48,7 @@
 
   <ItemGroup>
     <None Include="app.manifest" />
+    <AvaloniaResource Include="Assets\kronos.ico" />
   </ItemGroup>
 
 </Project>
