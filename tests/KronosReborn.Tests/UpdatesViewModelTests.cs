@@ -79,6 +79,47 @@ public class UpdatesViewModelTests
     }
 
     [Fact]
+    public async Task InstallIsRefusedIfASwapStartsDuringTheDownload()
+    {
+        var window = new FakeWindow();
+        var swapRunning = false;
+        var vm = Vm(new UpdateCheckResult(Installable, null), window,
+            download: (_, _, _) => { swapRunning = true; return Task.FromResult("setup.exe"); },
+            canClose: () => !swapRunning);
+        await vm.CheckAsync(automatic: true);
+
+        // Apply stays usable while the download runs; the installer would then kill the swap.
+        await vm.InstallAsync();
+
+        Assert.Null(window.RanInstaller);
+        Assert.Contains("swap", vm.StatusText);
+    }
+
+    [Fact]
+    public async Task AnInstallerThatWillNotStartIsReported()
+    {
+        var window = new FakeWindow { StartFails = true };
+        var vm = Vm(new UpdateCheckResult(Installable, null), window);
+        await vm.CheckAsync(automatic: true);
+
+        await vm.InstallAsync();
+
+        Assert.StartsWith("Could not start the installer", vm.StatusText);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Program Files\Kronos Reborn\", "/ALLUSERS")]
+    [InlineData(@"C:\Users\a\AppData\Local\Programs\Kronos Reborn\", "/CURRENTUSER")]
+    public void TheInstallerIsToldHowThisCopyWasInstalled(string appFolder, string mode)
+    {
+        var arguments = UpdatesViewModel.InstallerArguments(appFolder, @"C:\Program Files");
+
+        Assert.Contains(mode, arguments);
+        Assert.Contains("/update=1", arguments);
+        Assert.Contains("/SILENT", arguments);
+    }
+
+    [Fact]
     public async Task ABadDownloadIsReportedAndNothingRuns()
     {
         var window = new FakeWindow();
@@ -156,7 +197,18 @@ public class UpdatesViewModelTests
             return Task.CompletedTask;
         }
 
-        public void RunInstallerAndExit(string installerPath) => RanInstaller = installerPath;
+        public bool StartFails { get; init; }
+
+        public void RunInstallerAndExit(string installerPath)
+        {
+            if (StartFails)
+            {
+                // What Windows reports when antivirus quarantines an unsigned download.
+                throw new System.ComponentModel.Win32Exception(225);
+            }
+
+            RanInstaller = installerPath;
+        }
 
         public Task<string?> AskForRuntimeFileAsync() => throw new NotSupportedException();
         public Task<string?> AskWhereToSaveDiagnosticsAsync(string suggestedName) => throw new NotSupportedException();

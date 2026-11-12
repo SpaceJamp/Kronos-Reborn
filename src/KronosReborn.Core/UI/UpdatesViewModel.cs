@@ -57,6 +57,24 @@ public sealed class UpdatesViewModel : INotifyPropertyChanged
     /// <summary>Whether this copy was installed by the installer, which leaves an uninstaller beside it.</summary>
     public static bool IsInstalledCopy(string appFolder) => File.Exists(Path.Combine(appFolder, "unins000.exe"));
 
+    /// <summary>
+    /// The installer's command line for an update: silent, relaunching the app after, and in the same
+    /// mode as this copy was installed.
+    /// </summary>
+    /// <remarks>
+    /// The mode is passed rather than left to Inno to remember, because a copy in Program Files
+    /// upgraded per-user would leave the old one in place and be offered the update forever.
+    /// </remarks>
+    public static string InstallerArguments(string appFolder, string programFilesFolder)
+    {
+        var forEveryone = !string.IsNullOrEmpty(programFilesFolder)
+            && Path.GetFullPath(appFolder).StartsWith(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(programFilesFolder)) + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase);
+
+        return $"/SILENT /SUPPRESSMSGBOXES /NORESTART {(forEveryone ? "/ALLUSERS" : "/CURRENTUSER")} /update=1";
+    }
+
     public ICommand CheckCommand { get; }
     public ICommand InstallCommand { get; }
     public ICommand OpenPageCommand { get; }
@@ -197,10 +215,29 @@ public sealed class UpdatesViewModel : INotifyPropertyChanged
             IsBusy = false;
         }
 
-        if (installer is not null)
+        if (installer is null)
+        {
+            return;
+        }
+
+        // Asked again: Apply stays usable during the download, and the installer closes the app by
+        // force, so a swap started meanwhile would lose its undo record.
+        if (!_canClose())
+        {
+            StatusText = "The update is downloaded. Install it once the swap or undo has finished.";
+            return;
+        }
+
+        try
         {
             Log.Instance.Information($"Installing update {update.Version}", category: "Updates");
             _window.RunInstallerAndExit(installer);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or FileNotFoundException)
+        {
+            // Antivirus often quarantines an unsigned download just written to the temp folder.
+            StatusText = $"Could not start the installer: {ex.Message}";
+            Log.Instance.Error(ex, "Update installer could not start", category: "Updates");
         }
     }
 

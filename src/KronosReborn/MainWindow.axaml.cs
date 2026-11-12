@@ -203,10 +203,12 @@ public sealed partial class MainWindow : Window, IFilePicker
 
     public void RunInstallerAndExit(string installerPath)
     {
-        // /update=1 tells the installer to start the app again once it has finished.
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-            installerPath, "/SILENT /SUPPRESSMSGBOXES /NORESTART /update=1")
-        { UseShellExecute = true });
+        var arguments = UpdatesViewModel.InstallerArguments(
+            AppContext.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(installerPath, arguments)
+        {
+            UseShellExecute = true,
+        });
         Close();
     }
 
