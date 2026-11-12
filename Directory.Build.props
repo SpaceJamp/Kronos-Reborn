@@ -108,7 +108,7 @@
     <NoWarn>$(NoWarn);CA1859</NoWarn>
 
     <!-- One place for the version, so the app, the installer and the repository agree. -->
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
 
     <!--
     Build metadata injected into the assembly and read back at runtime.

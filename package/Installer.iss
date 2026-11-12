@@ -6,7 +6,7 @@
 #ifndef AppVersion
   ; Fallback for compiling this script by hand. Flagged because it is exactly the kind of literal
   ; that goes stale; a test checks it against Directory.Build.props and config.cmd.
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.1.1"
 #endif
 
 #define AppName "Kronos Reborn"
@@ -51,6 +51,12 @@ WizardStyle=modern
 
 SetupIconFile=..\src\KronosReborn\Assets\kronos.ico
 
+; An update runs this installer silently while the app may still be open. The app closes itself
+; straight after starting it; force closes it if it has not finished by the time files are copied.
+; The app is started again by the [Run] entry below, not by the Restart Manager.
+CloseApplications=force
+RestartApplications=no
+
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
@@ -73,14 +79,17 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; After an update the app started itself again, so the user is back where they were.
+Filename: "{app}\{#AppExeName}"; Flags: nowait runasoriginaluser; Check: IsUpdate
 
-; No [Code] section yet.
-;
-; Two things will want one, and neither is here yet because there is no behaviour to attach them to:
-;
-;   - Removing the data directory on uninstall. It is per-user data even for a machine-wide install,
-;     so deleting it during a machine-wide uninstall would throw away one user's games and settings
-;     while everyone else kept theirs. It should only ever be removed for a per-user install, which
-;     means asking the user first.
-;   - Refusing to install while the application is running, by detecting a running process and
-;     offering to close it.
+; Still to come: removing the data directory on uninstall. It is per-user data even for a
+; machine-wide install, so deleting it during a machine-wide uninstall would throw away one user's
+; games and settings while everyone else kept theirs. It should only ever be removed for a per-user
+; install, which means asking the user first.
+
+[Code]
+// Set by the app's update button, which runs this installer with /update=1.
+function IsUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:update|0}') = '1';
+end;

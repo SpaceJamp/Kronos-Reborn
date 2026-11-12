@@ -61,6 +61,10 @@ public sealed partial class MainWindow : Window, IFilePicker
             if (DataContext is MainViewModel vm)
             {
                 await vm.RefreshAsync();
+                if (vm.CheckForUpdates)
+                {
+                    await vm.Updates.CheckAsync(automatic: true);
+                }
             }
         };
 
@@ -193,6 +197,19 @@ public sealed partial class MainWindow : Window, IFilePicker
         {
             await Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(path));
         }
+    }
+
+    public async Task OpenUrlAsync(Uri url) => await Launcher.LaunchUriAsync(url);
+
+    public void RunInstallerAndExit(string installerPath)
+    {
+        var arguments = UpdatesViewModel.InstallerArguments(
+            AppContext.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(installerPath, arguments)
+        {
+            UseShellExecute = true,
+        });
+        Close();
     }
 
     public async Task<string?> AskForRuntimeFileAsync()

@@ -37,4 +37,10 @@ public interface IFilePicker
 
     /// <summary>Opens a folder in the system's file manager.</summary>
     Task OpenFolderAsync(string path);
+
+    /// <summary>Opens a web page in the user's browser.</summary>
+    Task OpenUrlAsync(Uri url);
+
+    /// <summary>Starts a downloaded installer to upgrade this copy, then closes the window.</summary>
+    void RunInstallerAndExit(string installerPath);
 }

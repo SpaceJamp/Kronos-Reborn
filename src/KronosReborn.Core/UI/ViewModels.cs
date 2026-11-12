@@ -15,6 +15,7 @@ using KronosReborn.Data.Libraries;
 using KronosReborn.Data.Logging;
 using KronosReborn.Data.Persistence;
 using KronosReborn.Data.Runtimes;
+using KronosReborn.Data.Updates;
 using KronosReborn.UI;
 
 namespace KronosReborn.UI;
@@ -75,6 +76,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         // A downloaded version is offered in every game's picker straight away.
         _downloads.CollectionChanged += (_, _) => RebuildAllChoices();
+
+        var updates = new UpdateChecker(_http, UpdateChecker.CurrentVersion());
+        Updates = new UpdatesViewModel(
+            updates.CheckAsync,
+            (update, progress, token) => updates.DownloadAsync(
+                update, System.IO.Path.Combine(System.IO.Path.GetTempPath(), "KronosReborn-update"), progress, token),
+            filePicker,
+            CanClose,
+            UpdatesViewModel.IsInstalledCopy(AppContext.BaseDirectory));
 
         // Problems from loading settings and history were reported by Load() and then dropped; the
         // diagnostics panel is where they are shown, alongside the latest scan's.
@@ -167,6 +177,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>The view model for the diagnostics panel.</summary>
     public DiagnosticsViewModel Diagnostics => _diagnostics;
+
+    /// <summary>Whether a newer release is out, and getting it.</summary>
+    public UpdatesViewModel Updates { get; }
 
     /// <summary>Whether the diagnostics page is showing. Showing it runs the checks.</summary>
     public bool IsDiagnosticsOpen
@@ -1271,6 +1284,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _settings = _settings.With(allowUntrustedRuntimes: value);
             _persistence.SaveSettings(_settings);
             OnPropertyChanged(nameof(AllowUntrustedRuntimes));
+        }
+    }
+
+    /// <summary>Whether to ask GitHub for a newer release when the app starts.</summary>
+    public bool CheckForUpdates
+    {
+        get => _settings.CheckForUpdates;
+        set
+        {
+            if (_settings.CheckForUpdates == value) return;
+            _settings = _settings.With(checkForUpdates: value);
+            _persistence.SaveSettings(_settings);
+            OnPropertyChanged(nameof(CheckForUpdates));
         }
     }
 

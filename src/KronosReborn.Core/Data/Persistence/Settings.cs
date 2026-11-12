@@ -24,6 +24,7 @@ namespace KronosReborn.Data.Persistence;
 /// <param name="SearchText">The game search last typed.</param>
 /// <param name="ShowOnlyUpdates">Whether the grid showed only games with a newer version held.</param>
 /// <param name="HiddenGames">Ids of games the user hid from the grid.</param>
+/// <param name="CheckForUpdates">Whether to ask GitHub for a newer release at startup.</param>
 public sealed record Settings(
     bool AllowUntrustedRuntimes = false,
     int MaxHistoryPerGame = 50,
@@ -33,7 +34,8 @@ public sealed record Settings(
     int SelectedTab = 0,
     string? SearchText = null,
     bool ShowOnlyUpdates = false,
-    IReadOnlyList<string>? HiddenGames = null)
+    IReadOnlyList<string>? HiddenGames = null,
+    bool CheckForUpdates = true)
 {
     /// <summary>Default settings for a fresh install.</summary>
     public static Settings Default { get; } = new();
@@ -48,7 +50,8 @@ public sealed record Settings(
         int? selectedTab = null,
         string? searchText = null,
         bool? showOnlyUpdates = null,
-        IReadOnlyList<string>? hiddenGames = null) =>
+        IReadOnlyList<string>? hiddenGames = null,
+        bool? checkForUpdates = null) =>
         new(
             allowUntrustedRuntimes ?? AllowUntrustedRuntimes,
             maxHistoryPerGame ?? MaxHistoryPerGame,
@@ -58,5 +61,6 @@ public sealed record Settings(
             selectedTab ?? SelectedTab,
             searchText ?? SearchText,
             showOnlyUpdates ?? ShowOnlyUpdates,
-            hiddenGames ?? HiddenGames);
+            hiddenGames ?? HiddenGames,
+            checkForUpdates ?? CheckForUpdates);
 }
