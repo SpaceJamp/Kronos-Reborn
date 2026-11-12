@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Styling;
 using KronosReborn.Data.Logging;
 using KronosReborn.Data.Persistence;
 using KronosReborn.UI;
@@ -91,6 +92,10 @@ public sealed partial class MainWindow : Window, IFilePicker
             persistence.Dispose();
         };
     }
+
+    /// <summary>Dark while the magic background is on, so text stays readable on it; the system's otherwise.</summary>
+    public static FuncValueConverter<bool, ThemeVariant> MagicTheme { get; } =
+        new(on => on ? ThemeVariant.Dark : ThemeVariant.Default);
 
     /// <summary>Covers already decoded, by path: the grid is rebuilt on every search keystroke.</summary>
     private static readonly Dictionary<string, Bitmap> Posters = new(StringComparer.OrdinalIgnoreCase);

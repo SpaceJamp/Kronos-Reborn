@@ -1300,6 +1300,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>Whether the window shows the moving magic-circle background.</summary>
+    public bool MagicBackground
+    {
+        get => _settings.MagicBackground;
+        set
+        {
+            if (_settings.MagicBackground == value) return;
+            _settings = _settings.With(magicBackground: value);
+            _persistence.SaveSettings(_settings);
+            OnPropertyChanged(nameof(MagicBackground));
+        }
+    }
+
     public int MaxHistoryPerGame
     {
         get => _settings.MaxHistoryPerGame;
