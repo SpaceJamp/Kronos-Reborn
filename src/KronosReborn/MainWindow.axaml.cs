@@ -4,11 +4,11 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Rendering.Composition;
+using Avalonia.Rendering.Composition.Animations;
 using Avalonia.Styling;
-using Avalonia.Threading;
 using KronosReborn.Data.Logging;
 using KronosReborn.Data.Persistence;
 using KronosReborn.UI;
@@ -46,17 +46,6 @@ public sealed partial class MainWindow : Window, IFilePicker
             WindowState = WindowState.Maximized;
         }
 
-        // The magic background's rings turn from here rather than from a style animation: Avalonia's
-        // style animator cannot animate a RenderTransform, and ten small steps a second redraw the window
-        // a sixth as often as an animation would, for movement no one could tell apart.
-        SpinRing.RenderTransform = _spin;
-        SpinBackRing.RenderTransform = _spinBack;
-        _motion = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) =>
-        {
-            _spin.Angle = (_spin.Angle + 0.15) % 360;          // one turn in four minutes
-            _spinBack.Angle = (_spinBack.Angle - 0.24) % 360;  // and back in two and a half
-        });
-        _motion.Stop();
         DataContextChanged += (_, _) =>
         {
             if (DataContext is MainViewModel vm)
@@ -118,15 +107,82 @@ public sealed partial class MainWindow : Window, IFilePicker
                 searchText: (DataContext as MainViewModel)?.SearchText,
                 showOnlyUpdates: (DataContext as MainViewModel)?.ShowOnlyUpdates));
 
-            _motion.Stop();
+            _moving = SetSpinning(false);
             (DataContext as MainViewModel)?.Dispose();
             persistence.Dispose();
         };
     }
 
-    private readonly RotateTransform _spin = new();
-    private readonly RotateTransform _spinBack = new();
-    private readonly DispatcherTimer _motion = new();
+    private const double SecondsPerTurn = 240;      // the outer ring: one turn in four minutes
+    private const double SecondsPerTurnBack = 150;  // the inner one, the other way, in two and a half
+    private readonly System.Diagnostics.Stopwatch _clock = new();
+    private double _spinAngle;      // radians, where each ring stood when it last stopped
+    private double _spinBackAngle;
+    private bool _moving;
+
+    /// <summary>
+    /// Starts or stops the rings. They turn as composition animations, on the render thread: a UI-thread
+    /// timer moved them in visible steps, and froze then jumped them whenever the app was busy.
+    /// </summary>
+    /// <returns>Whether they are now turning; false if a ring has no composition visual to animate.</returns>
+    private bool SetSpinning(bool on)
+    {
+        if (on)
+        {
+            // Both or neither, so a stop never leaves one ring turning.
+            if (ElementComposition.GetElementVisual(SpinRing) is null || ElementComposition.GetElementVisual(SpinBackRing) is null)
+            {
+                return false;
+            }
+
+            Spin(SpinRing, _spinAngle, SecondsPerTurn, 1);
+            Spin(SpinBackRing, _spinBackAngle, SecondsPerTurnBack, -1);
+
+            _clock.Restart();
+            return true;
+        }
+
+        if (_moving)
+        {
+            // Worked out here rather than read back, so a restart carries on from exactly where it stopped.
+            var seconds = _clock.Elapsed.TotalSeconds;
+            _spinAngle = (_spinAngle + (Math.Tau * seconds / SecondsPerTurn)) % Math.Tau;
+            _spinBackAngle = (_spinBackAngle - (Math.Tau * seconds / SecondsPerTurnBack)) % Math.Tau;
+            Hold(SpinRing, _spinAngle);
+            Hold(SpinBackRing, _spinBackAngle);
+        }
+
+        return false;
+    }
+
+    private static void Spin(Visual ring, double from, double secondsPerTurn, int direction)
+    {
+        if (ElementComposition.GetElementVisual(ring) is not { } visual)
+        {
+            return;
+        }
+
+        visual.CenterPoint = new Vector3D(500, 500, 0);  // the middle of the 1000x1000 canvas
+        var turn = visual.Compositor.CreateScalarKeyFrameAnimation();
+        // Linear, or every turn would speed up and slow down; the angle is in radians.
+        turn.InsertKeyFrame(0f, (float)from, new Avalonia.Animation.Easings.LinearEasing());
+        turn.InsertKeyFrame(1f, (float)(from + (direction * Math.Tau)), new Avalonia.Animation.Easings.LinearEasing());
+        turn.Duration = TimeSpan.FromSeconds(secondsPerTurn);
+        turn.IterationBehavior = AnimationIterationBehavior.Forever;
+        visual.StartAnimation("RotationAngle", turn);
+    }
+
+    private static void Hold(Visual ring, double angle)
+    {
+        if (ElementComposition.GetElementVisual(ring) is { } visual)
+        {
+            // Setting the value stops the animation on the render thread, in the next batch.
+            // StopAnimation is not used: it changes the render thread's state from this thread.
+            // A value equal to the last one set would send nothing and leave the ring turning.
+            var value = (float)angle;
+            visual.RotationAngle = value == visual.RotationAngle ? MathF.BitIncrement(value) : value;
+        }
+    }
 
     /// <summary>
     /// Starts or stops the background's motion: it moves only while switched on, while this window is
@@ -140,7 +196,12 @@ public sealed partial class MainWindow : Window, IFilePicker
                      && WindowsShowsAnimations();
 
         MagicLayer.Classes.Set("on", moving);
-        _motion.IsEnabled = moving;
+
+        if (moving != _moving)
+        {
+            // Stays false if the rings cannot be animated yet; the next change tries again.
+            _moving = SetSpinning(moving);
+        }
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
