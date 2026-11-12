@@ -57,7 +57,8 @@ one never touches its files.
 
 Covers come from Steam's artwork cache. A game with none there, such as a repack or an Epic game, is
 looked up by name in Steam's store and its cover downloaded once. That sends the game's name to
-Steam; delete the `posters` folder to have covers looked up again.
+Steam; delete the `posters` folder to have covers looked up again. The update check contacts
+`api.github.com` and sends nothing about you or your games.
 
 ## Runtimes it handles
 
@@ -83,6 +84,9 @@ found too. If a game has several copies of a DLL, all of them are replaced.
 - **Downgrades** and mismatched DLSS parts are pointed out in the preview before anything changes.
 - **Diagnostics** checks the collection, backups and undo history, and can export a zip of the logs
   and data for a bug report.
+- **Updates** are checked against GitHub's latest release when the app starts (turn this off in
+  Settings). An installed copy downloads the new installer, checks it against the SHA-256 GitHub
+  publishes, and runs it; a portable copy opens the release page.
 
 ## Where your data is kept
 
