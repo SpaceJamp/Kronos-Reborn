@@ -2,8 +2,11 @@
 <p align="center">Change the DLSS, FSR and XeSS version a game runs, without waiting for the game to update.</p>
 
 > [!WARNING]
-> **Early version (0.1.0).** It works, but builds are unsigned and no release has been published yet.
-> Windows only for now; Linux is planned.
+> **Early version (0.1.0).** It works, but builds are unsigned, so Windows SmartScreen warns about an
+> unknown publisher the first time it runs. Windows only for now; Linux is planned.
+
+**[Download the latest release](https://github.com/SpaceJamp/Kronos-Reborn/releases/latest)**: the
+installer (`KronosReborn-<version>-installer.exe`), or the portable zip, which runs without installing.
 
 ## What it does
 
