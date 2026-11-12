@@ -8,6 +8,8 @@
         x:DataType="vm:MainViewModel"
         Title="Kronos Reborn"
         Icon="/Assets/kronos.ico"
+        Classes.magic="{Binding MagicBackground}"
+        RequestedThemeVariant="{Binding MagicBackground, Converter={x:Static local:MainWindow.MagicTheme}}"
         Width="1320" Height="820" MinWidth="960" MinHeight="600">
 
     <Window.Styles>
@@ -28,11 +30,61 @@
             <Setter Property="Margin" Value="0,0,8,8" />
             <Setter Property="CornerRadius" Value="8" />
         </Style>
+        <!-- The magic background: the rings are turned from code (MainWindow.UpdateMotion), which also
+             gates this pulse with the "on" class, so nothing moves while it is off, minimised or in the
+             background, or when Windows animations are turned off. -->
+        <Style Selector="Panel.magic.on :is(Control).pulse">
+            <Style.Animations>
+                <Animation Duration="0:0:6" IterationCount="INFINITE" Delay="0" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.6" /></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <!-- While it is on, the detail pane and status bar get an opaque backing so text stays readable. -->
+        <Style Selector="Border.pane">
+            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundBaseLowBrush}" />
+        </Style>
+        <Style Selector="Window.magic Border.pane">
+            <Setter Property="Background" Value="#F0201440" />
+        </Style>
+        <Style Selector="Window.magic Border.statusbar">
+            <Setter Property="Background" Value="#E60C0624" />
+        </Style>
     </Window.Styles>
+
+    <Panel>
+        <!-- The magic background: the icon's circle, large and faint, turning slowly behind everything. -->
+        <Panel x:Name="MagicLayer" Classes="magic" IsVisible="{Binding MagicBackground}"
+               IsHitTestVisible="False" ClipToBounds="True">
+            <Panel.Background>
+                <RadialGradientBrush Center="50%,45%" GradientOrigin="50%,45%" RadiusX="85%" RadiusY="85%">
+                    <GradientStop Offset="0" Color="#3A1C78" />
+                    <GradientStop Offset="1" Color="#0C0624" />
+                </RadialGradientBrush>
+            </Panel.Background>
+            <Viewbox Stretch="Uniform" Margin="-60">
+                <Panel Width="1000" Height="1000">
+                    <Canvas x:Name="SpinRing" Width="1000" Height="1000">
+                        <Path Stroke="#9670FF" StrokeThickness="18" Opacity="0.05" Data="M 30,500 A 470,470 0 1 1 970,500 A 470,470 0 1 1 30,500 Z M 80,500 A 420,420 0 1 1 920,500 A 420,420 0 1 1 80,500 Z M 500,75 L 500,34 M 717.5,123.3 L 733,96.4 M 876.7,282.5 L 903.6,267 M 925,500 L 966,500 M 876.7,717.5 L 903.6,733 M 717.5,876.7 L 733,903.6 M 500,925 L 500,966 M 282.5,876.7 L 267,903.6 M 123.3,717.5 L 96.4,733 M 75,500 L 34,500 M 123.3,282.5 L 96.4,267 M 282.5,123.3 L 267,96.4" />
+                        <Path Stroke="#BEE1FF" StrokeThickness="3" Opacity="0.08" Data="M 30,500 A 470,470 0 1 1 970,500 A 470,470 0 1 1 30,500 Z M 80,500 A 420,420 0 1 1 920,500 A 420,420 0 1 1 80,500 Z M 500,75 L 500,34 M 717.5,123.3 L 733,96.4 M 876.7,282.5 L 903.6,267 M 925,500 L 966,500 M 876.7,717.5 L 903.6,733 M 717.5,876.7 L 733,903.6 M 500,925 L 500,966 M 282.5,876.7 L 267,903.6 M 123.3,717.5 L 96.4,733 M 75,500 L 34,500 M 123.3,282.5 L 96.4,267 M 282.5,123.3 L 267,96.4" />
+                        <Path Fill="#BEE1FF" Opacity="0.08" Data="M 615.2,58.2 L 624.2,70.2 L 615.2,82.2 L 606.2,70.2 Z M 808.7,185.3 A 6,6 0 1 1 820.7,185.3 A 6,6 0 1 1 808.7,185.3 Z M 929.8,372.8 L 938.8,384.8 L 929.8,396.8 L 920.8,384.8 Z M 923.8,615.2 A 6,6 0 1 1 935.8,615.2 A 6,6 0 1 1 923.8,615.2 Z M 814.7,802.7 L 823.7,814.7 L 814.7,826.7 L 805.7,814.7 Z M 609.2,929.8 A 6,6 0 1 1 621.2,929.8 A 6,6 0 1 1 609.2,929.8 Z M 384.8,917.8 L 393.8,929.8 L 384.8,941.8 L 375.8,929.8 Z M 179.3,814.7 A 6,6 0 1 1 191.3,814.7 A 6,6 0 1 1 179.3,814.7 Z M 70.2,603.2 L 79.2,615.2 L 70.2,627.2 L 61.2,615.2 Z M 64.2,384.8 A 6,6 0 1 1 76.2,384.8 A 6,6 0 1 1 64.2,384.8 Z M 185.3,173.3 L 194.3,185.3 L 185.3,197.3 L 176.3,185.3 Z M 378.8,70.2 A 6,6 0 1 1 390.8,70.2 A 6,6 0 1 1 378.8,70.2 Z" />
+                    </Canvas>
+                    <Canvas x:Name="SpinBackRing" Width="1000" Height="1000">
+                        <Path Stroke="#9670FF" StrokeThickness="16" Opacity="0.05" Data="M 500,110 L 837.7,695 L 162.3,695 Z M 837.7,305 L 500,890 L 162.3,305 Z M 305,500 A 195,195 0 1 1 695,500 A 195,195 0 1 1 305,500 Z" />
+                        <Path Stroke="#BEE1FF" StrokeThickness="3" Opacity="0.08" Data="M 500,110 L 837.7,695 L 162.3,695 Z M 837.7,305 L 500,890 L 162.3,305 Z M 305,500 A 195,195 0 1 1 695,500 A 195,195 0 1 1 305,500 Z" />
+                        <Path Fill="#BEE1FF" Opacity="0.08" Data="M 484,110 A 16,16 0 1 1 516,110 A 16,16 0 1 1 484,110 Z M 821.7,305 A 16,16 0 1 1 853.7,305 A 16,16 0 1 1 821.7,305 Z M 821.7,695 A 16,16 0 1 1 853.7,695 A 16,16 0 1 1 821.7,695 Z M 484,890 A 16,16 0 1 1 516,890 A 16,16 0 1 1 484,890 Z M 146.3,695 A 16,16 0 1 1 178.3,695 A 16,16 0 1 1 146.3,695 Z M 146.3,305 A 16,16 0 1 1 178.3,305 A 16,16 0 1 1 146.3,305 Z" />
+                    </Canvas>
+                    <Canvas Width="1000" Height="1000" Opacity="0.12">
+                        <Path Classes="pulse" Fill="#FFECAA" Data="M 500,350 L 524,476 L 650,500 L 524,524 L 500,650 L 476,524 L 350,500 L 476,476 Z" />
+                    </Canvas>
+                </Panel>
+            </Viewbox>
+        </Panel>
 
     <DockPanel>
         <!-- Status bar -->
-        <Border DockPanel.Dock="Bottom" Padding="12,6" BorderThickness="0,1,0,0"
+        <Border Classes="statusbar" DockPanel.Dock="Bottom" Padding="12,6" BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                 <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
@@ -154,8 +206,7 @@
                     </ScrollViewer>
 
                     <!-- The selected game -->
-                    <Border Grid.Row="1" Grid.Column="1" Margin="16,0,0,0" Padding="16" CornerRadius="8"
-                            Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+                    <Border Classes="pane" Grid.Row="1" Grid.Column="1" Margin="16,0,0,0" Padding="16" CornerRadius="8">
                         <ScrollViewer>
                             <StackPanel Margin="0,0,14,0">
                                 <TextBlock Classes="muted" IsVisible="{Binding !HasDetailPanel}"
@@ -364,6 +415,10 @@
             <TabItem Header="Settings">
                 <StackPanel MaxWidth="560" HorizontalAlignment="Left">
                     <TextBlock Text="Settings" Classes="heading" />
+                    <CheckBox Content="Magic background" IsChecked="{Binding MagicBackground}" Margin="0,0,0,4"
+                              ToolTip.Tip="A slowly turning magic circle behind the window, in the icon's colours" />
+                    <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,12"
+                               Text="Turn off for a plain window that follows your Windows light or dark setting." />
                     <CheckBox Content="Allow untrusted runtimes" IsChecked="{Binding AllowUntrustedRuntimes}" Margin="0,0,0,4" />
                     <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,12"
                                Text="Import files that are not signed by NVIDIA, AMD or Intel without asking each time. A warning is still shown before one goes into a game." />
@@ -421,4 +476,5 @@
             </TabItem>
         </TabControl>
     </DockPanel>
+    </Panel>
 </Window>

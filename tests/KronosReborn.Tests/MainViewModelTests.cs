@@ -158,6 +158,21 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public void TheMagicBackgroundIsOnByDefaultAndTurningItOffIsSaved()
+    {
+        using var fixture = new Fixture();
+        Assert.True(fixture.Vm.MagicBackground);
+
+        var changed = new System.Collections.Generic.List<string?>();
+        fixture.Vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        fixture.Vm.MagicBackground = false;
+
+        Assert.Contains(nameof(MainViewModel.MagicBackground), changed);
+        using var reloaded = new PersistenceService(fixture.Paths);
+        Assert.False(reloaded.Load().Settings.MagicBackground);
+    }
+
+    [Fact]
     public void TheStatusBarSaysWhichBuildThisIs()
     {
         using var fixture = new Fixture();
@@ -195,6 +210,7 @@ public class MainViewModelTests
 
         public MainViewModel Vm { get; }
         public RuntimeCatalog Catalog { get; }
+        public DataPaths Paths => _paths;
 
         /// <summary>A folder holding a DLSS DLL, for importing into the collection.</summary>
         public string ImportFolder()

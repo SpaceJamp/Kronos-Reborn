@@ -25,6 +25,7 @@ namespace KronosReborn.Data.Persistence;
 /// <param name="ShowOnlyUpdates">Whether the grid showed only games with a newer version held.</param>
 /// <param name="HiddenGames">Ids of games the user hid from the grid.</param>
 /// <param name="CheckForUpdates">Whether to ask GitHub for a newer release at startup.</param>
+/// <param name="MagicBackground">Whether the window shows the moving magic-circle background.</param>
 public sealed record Settings(
     bool AllowUntrustedRuntimes = false,
     int MaxHistoryPerGame = 50,
@@ -35,7 +36,8 @@ public sealed record Settings(
     string? SearchText = null,
     bool ShowOnlyUpdates = false,
     IReadOnlyList<string>? HiddenGames = null,
-    bool CheckForUpdates = true)
+    bool CheckForUpdates = true,
+    bool MagicBackground = true)
 {
     /// <summary>Default settings for a fresh install.</summary>
     public static Settings Default { get; } = new();
@@ -51,7 +53,8 @@ public sealed record Settings(
         string? searchText = null,
         bool? showOnlyUpdates = null,
         IReadOnlyList<string>? hiddenGames = null,
-        bool? checkForUpdates = null) =>
+        bool? checkForUpdates = null,
+        bool? magicBackground = null) =>
         new(
             allowUntrustedRuntimes ?? AllowUntrustedRuntimes,
             maxHistoryPerGame ?? MaxHistoryPerGame,
@@ -62,5 +65,6 @@ public sealed record Settings(
             searchText ?? SearchText,
             showOnlyUpdates ?? ShowOnlyUpdates,
             hiddenGames ?? HiddenGames,
-            checkForUpdates ?? CheckForUpdates);
+            checkForUpdates ?? CheckForUpdates,
+            magicBackground ?? MagicBackground);
 }
