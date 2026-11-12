@@ -204,8 +204,9 @@ public sealed class UpdatesViewModel : INotifyPropertyChanged
             StatusText = $"The update failed a security check, so it was deleted and not run: {ex.Message}";
             Log.Instance.Error(ex, "Update failed a security check", category: "Updates");
         }
+        // Disposed and cancelled: the window was closed under the download.
         catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException
-                                       or TaskCanceledException)
+                                       or OperationCanceledException or ObjectDisposedException)
         {
             StatusText = $"Could not download the update: {ex.Message}";
             Log.Instance.Error(ex, "Update download failed", category: "Updates");

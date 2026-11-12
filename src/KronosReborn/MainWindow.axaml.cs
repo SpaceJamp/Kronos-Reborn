@@ -42,8 +42,6 @@ public sealed partial class MainWindow : Window, IFilePicker
             WindowState = WindowState.Maximized;
         }
 
-        Tabs.SelectedIndex = Math.Clamp(settings.SelectedTab, 0, Tabs.ItemCount - 1);
-
         // A runtime file dropped anywhere on the window is offered for import, as Import… does.
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DragOverEvent, (_, e) => e.DragEffects = DroppedFile(e) is null ? DragDropEffects.None : DragDropEffects.Copy);
@@ -58,6 +56,10 @@ public sealed partial class MainWindow : Window, IFilePicker
 
         Opened += async (_, _) =>
         {
+            // Restored here, not in the constructor: attaching the view model resets the Diagnostics
+            // tab's binding, which sent a saved Diagnostics page back to Games.
+            Tabs.SelectedIndex = Math.Clamp(settings.SelectedTab, 0, Tabs.ItemCount - 1);
+
             if (DataContext is MainViewModel vm)
             {
                 await vm.RefreshAsync();

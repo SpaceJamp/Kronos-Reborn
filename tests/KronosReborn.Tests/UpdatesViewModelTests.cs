@@ -135,6 +135,25 @@ public class UpdatesViewModelTests
         Assert.False(vm.IsBusy);
     }
 
+    [Theory]
+    [InlineData("disposed")]
+    [InlineData("cancelled")]
+    public async Task ClosingTheWindowMidDownloadIsNotACrash(string how)
+    {
+        // Closing the window disposes the HTTP client under a running download.
+        var window = new FakeWindow();
+        var vm = Vm(new UpdateCheckResult(Installable, null), window,
+            download: (_, _, _) => how == "disposed"
+                ? throw new ObjectDisposedException("HttpClient")
+                : throw new OperationCanceledException());
+        await vm.CheckAsync(automatic: true);
+
+        await vm.InstallAsync();
+
+        Assert.Null(window.RanInstaller);
+        Assert.False(vm.IsBusy);
+    }
+
     [Fact]
     public async Task APortableCopyIsOnlyOfferedThePage()
     {
