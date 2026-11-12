@@ -1,147 +1,143 @@
+<p align="center"><img src="docs/icon.png" width="128" alt="Kronos Reborn icon: a glowing magic circle"></p>
 <h2 align="center">Kronos Reborn</h2>
-<p align="center">Change the DLSS, FSR and XeSS version a game runs, without waiting for the game to update.</p>
+<p align="center">Swap the DLSS, FSR and XeSS version any game runs, in a couple of clicks, and undo it just as easily.</p>
+<p align="center"><a href="https://github.com/SpaceJamp/Kronos-Reborn/releases/latest"><b>Download</b></a> · Windows 10 and 11, 64-bit</p>
 
-> [!WARNING]
-> **Early version (0.1.1).** It works, but builds are unsigned, so Windows SmartScreen warns about an
-> unknown publisher the first time it runs. Windows only for now; Linux is planned.
+---
 
-**[Download the latest release](https://github.com/SpaceJamp/Kronos-Reborn/releases/latest)**: the
-installer (`KronosReborn-<version>-installer.exe`), or the portable zip, which runs without installing.
+Games ship with whatever version of NVIDIA DLSS, AMD FSR or Intel XeSS was current when they were
+made, as DLL files in the game's folder. Newer versions often look sharper, ghost less or run faster,
+but a game rarely updates them. Kronos Reborn finds your games, shows what each one runs, and puts in
+the version you choose. Every file it replaces is backed up first, so nothing is ever lost.
 
-## What it does
+## Getting started
 
-Games ship with a fixed version of NVIDIA DLSS, AMD FSR or Intel XeSS, as DLL files in the game's
-folder. Newer versions of those DLLs often look better or run faster. Kronos Reborn finds your games,
-shows which versions they carry, and swaps in the version you choose. It keeps a backup of every file
-it replaces, so any change can be undone.
+1. **Download** the [latest release](https://github.com/SpaceJamp/Kronos-Reborn/releases/latest).
+   Take the installer (`KronosReborn-<version>-installer.exe`), or the portable zip if you'd rather
+   not install anything.
+2. **Run it.** The builds aren't code-signed yet, so Windows SmartScreen may say the publisher is
+   unknown. Choose **More info**, then **Run anyway**.
+3. **Press Refresh.** Your games appear as covers, each listing the version of every runtime it has.
 
-## Using it
+Nothing else needs installing: .NET comes built in.
 
-1. **Refresh** finds your games and the runtime DLLs inside each one. Each cover lists the version
-   of every runtime the game runs now.
-2. Click a game. Its pane shows each runtime it carries, with the versions you can switch to.
-3. Pick a version, or press **⬆ Newest** to choose the newest signed version you hold for every game.
-4. Check the preview, then press **Apply**.
-5. Changed your mind? **Undo last apply** in the status bar puts back everything that Apply changed.
-   **Undo** and **Redo** step one game back and forward, and **Restore original** puts back the
-   files the game shipped with.
+## Swapping a version
 
-**Needs update** shows only the games you hold a newer version for. Right-click a cover to open
-its folder, undo, restore or hide it; hidden games can be shown again from **Settings**. Drop a
-`.dll` on the window to import it. The search, filter and page you were on are kept for next time.
+1. **Pick a game**, then pick a version for each runtime in the pane on the right. Or press
+   **⬆ Newest** to choose the newest signed version you hold for every game at once.
+2. **Check the preview.** It lists every file that will change, and warns about downgrades and
+   mismatched DLSS parts.
+3. **Press Apply.**
 
-| Key | Does |
-| --- | --- |
-| F5 | Refresh |
-| Ctrl+F | Search |
-| Ctrl+Z / Ctrl+Y | Undo / Redo on the selected game |
-| Ctrl+Enter | Apply |
+Changed your mind? **Undo last apply** in the status bar puts back everything that Apply changed.
+**Undo** and **Redo** step one game back and forth, and **Restore original** returns a game to the
+files it shipped with.
 
-To get versions you don't have yet, open **Download** and press **Get newest for my games**, or pick
-any runtime and release.
+Don't have a newer version yet? Open **Download** and press **Get newest for my games**. Files come
+straight from NVIDIA, AMD and Intel's own GitHub repositories.
 
-## Where games are found
+## Handy extras
 
-| Source | How |
-| --- | --- |
-| Steam | Every library folder, with covers from Steam's own artwork cache |
-| GOG, Ubisoft Connect | Their install records in the registry |
-| Epic | The launcher's manifest for each game |
-| Battle.net, EA app | Windows' list of installed apps, by publisher |
-| Xbox app | Each drive's `.GamingRoot` file |
-| **+ Add Folder** | A folder where every subfolder is a game, such as `C:\Games` for repacks or DRM-free installs. New games in it appear on the next refresh. |
-| **+ Add Game** | One game, by choosing its folder |
+- **Needs update** shows only the games you hold a newer version for.
+- **Right-click a cover** to open its folder, undo, restore or hide it. Hidden games come back from
+  **Settings**.
+- **Drop a `.dll`** on the window to add it to your collection.
+- **Keys:** F5 refresh · Ctrl+F search · Ctrl+Z / Ctrl+Y undo and redo · Ctrl+Enter apply.
+- **It remembers** your search, filter and the page you were on.
+- **It keeps itself up to date.** When a new release is out, the status bar offers it. An installed
+  copy updates in one click; a portable one opens the release page. Turn the check off in Settings.
 
-Folders and hand-added games are listed on the **Settings** page and can be removed there. Removing
-one never touches its files.
+## Where it finds games
 
-Covers come from Steam's artwork cache. A game with none there, such as a repack or an Epic game, is
-looked up by name in Steam's store and its cover downloaded once. That sends the game's name to
-Steam; delete the `posters` folder to have covers looked up again. The update check contacts
-`api.github.com` and sends nothing about you or your games.
+Steam, GOG, Epic, Ubisoft Connect, Battle.net, the EA app and the Xbox app are found automatically.
+For anything else, such as repacks or DRM-free games:
+
+- **+ Add Folder** adds a folder where every subfolder is a game, such as `C:\Games`. New games in it
+  show up on the next refresh.
+- **+ Add Game** adds one game by its folder.
+
+Removing either from **Settings** never touches the game's files.
 
 ## Runtimes it handles
 
-| Runtime | File |
+| Runtime | Files |
 | --- | --- |
 | DLSS, Frame Generation, Ray Reconstruction | `nvngx_dlss.dll`, `nvngx_dlssg.dll`, `nvngx_dlssd.dll` |
 | FSR 3.1 (DirectX 12, Vulkan) | `amd_fidelityfx_dx12.dll`, `amd_fidelityfx_vk.dll` |
 | FSR upscaler and frame generation (FidelityFX SDK 2) | `amd_fidelityfx_upscaler_dx12.dll`, `amd_fidelityfx_framegeneration_dx12.dll` |
 | XeSS, XeSS Frame Generation, XeSS DX11, XeLL | `libxess.dll`, `libxess_fg.dll`, `libxess_dx11.dll`, `libxell.dll` |
 
-DLLs are found up to ten folders deep, so Unreal Engine games, which keep DLSS eight levels down, are
-found too. If a game has several copies of a DLL, all of them are replaced.
+DLLs are found up to ten folders deep, which covers Unreal Engine games. If a game has several copies
+of a DLL, all of them are swapped.
 
-## Safety
+## Questions
 
-- **Backups and undo.** Every replaced file is copied first. Undo checks the game still holds what
-  was put there before restoring, so it never overwrites a change something else made.
-- **Signatures.** A downloaded or imported file is added as trusted only if it is validly signed by
-  NVIDIA, AMD or Intel, with revocation checked when the network allows. Anything else needs your
-  explicit OK, and is flagged with a warning before it goes into a game.
-- **Downloads** come only from the vendors' own GitHub repositories: `NVIDIA/DLSS`,
-  `GPUOpen-LibrariesAndSDKs/FidelityFX-SDK` and `intel/xess`.
-- **Downgrades** and mismatched DLSS parts are pointed out in the preview before anything changes.
-- **Diagnostics** checks the collection, backups and undo history, and can export a zip of the logs
-  and data for a bug report.
-- **Updates** are checked against GitHub's latest release when the app starts (turn this off in
-  Settings). An installed copy downloads the new installer, checks it against the SHA-256 GitHub
-  publishes, and runs it; a portable copy opens the release page.
+**Is it safe for my games?**
+Every file is backed up before it's replaced, and undo checks the game still holds what Kronos Reborn
+put there before restoring. If a game update changed the file since, undo leaves it alone rather than
+overwrite it.
 
-## Where your data is kept
+> [!WARNING]
+> **Online games with anti-cheat.** Some anti-cheat systems flag changed game files. Swapping a DLL in
+> an online multiplayer game can get you kicked or banned. Use it on single-player games, or check the
+> game's rules first.
 
-Everything lives in `%LOCALAPPDATA%\KronosReborn`, as plain JSON you can read:
+**Can I trust the files?**
+Downloaded and imported DLLs count as trusted only if they're validly signed by NVIDIA, AMD or Intel.
+Anything else needs your OK, and is flagged again before it goes into a game. **⬆ Newest** only ever
+picks signed versions.
+
+**What does it send over the internet?**
+- A game's name to Steam's store, once, to find a cover when Steam doesn't have one cached.
+- A request to GitHub to check for app updates, and to the vendors' repositories when you download.
+
+Nothing about you is sent.
+
+**Something went wrong. How do I report it?**
+Open **Diagnostics**. It checks your collection, backups and undo history, and shows recent errors
+and crashes. **Export…** saves a zip of the logs and data that you can attach to an
+[issue](https://github.com/SpaceJamp/Kronos-Reborn/issues).
+
+**Linux?**
+Planned. Windows comes first.
+
+## Your data
+
+Everything lives in `%LOCALAPPDATA%\KronosReborn` as plain files you can read:
 
 | | |
 | --- | --- |
 | `settings.json` | Your settings |
 | `catalog.json` | The versions you hold |
-| `history\` | Undo history, one file per game |
-| `backups\` | Copies of every file a swap replaced |
 | `runtimes\` | Imported and downloaded DLLs |
-| `posters\` | Covers fetched from Steam's store |
+| `backups\`, `history\` | Copies of replaced files, and the undo history for each game |
 | `manual-games.json`, `game-folders.json` | Games and folders you added |
+| `posters\` | Covers fetched from Steam's store. Delete it to look them up again |
 | `logs\` | The log |
 
-A file that can't be read is set aside as `*.unreadable-*` rather than overwritten, so it can still
-be recovered.
+A file that can't be read is set aside as `*.unreadable-*`, never overwritten, so it can still be
+recovered.
 
-## Requirements
-
-Windows 10 (build 19041) or newer, 64-bit. The portable build carries its own .NET, so nothing else
-needs installing.
-
-## Building
+## Building from source
 
 Needs the .NET 10 SDK.
 
 ```powershell
 dotnet build .\KronosReborn.sln -c Release
+dotnet run --project .\tests\KronosReborn.Tests -c Release   # not dotnet test, which finds no tests
 ```
 
-Run the tests with `dotnet run`, not `dotnet test` (which reports zero tests with this SDK and xUnit):
+To package it, run `package\build.cmd` for the portable zip, then `package\package.cmd` for the
+installer (needs Inno Setup: `winget install JRSoftware.InnoSetup`). Both land in `package\Output\`.
 
-```powershell
-dotnet run --project .\tests\KronosReborn.Tests -c Release
-```
-
-Package with the scripts in `package\`. The installer needs Inno Setup
-(`winget install JRSoftware.InnoSetup`):
-
-```powershell
-.\build.cmd     # Output\KronosReborn-<version>-portable.zip
-.\package.cmd   # Output\KronosReborn-<version>-installer.exe
-```
-
-CI restores with the committed `packages.lock.json` in locked mode, checks formatting, builds with
-warnings as errors, runs the tests and packages both. After changing a package reference, regenerate
-the lock files with `dotnet restore .\KronosReborn.sln --force-evaluate` and commit them.
-
-## Project layout
+CI restores from the committed `packages.lock.json` files in locked mode. It also checks formatting,
+builds with warnings as errors, runs the tests and packages both. After changing a package reference,
+run `dotnet restore .\KronosReborn.sln --force-evaluate` and commit the lock files. Pushing a `v*`
+tag publishes a release.
 
 ```
 src/KronosReborn/          the window (Avalonia)
-src/KronosReborn.Core/     everything else: discovery, swapping, undo, downloads, view models
+src/KronosReborn.Core/     everything else: discovery, swapping, undo, downloads, updates
 tests/KronosReborn.Tests/  tests
 package/                   build and installer scripts
 docs/spec.md               the specification; requirements are cited by number in the code
@@ -149,11 +145,10 @@ docs/spec.md               the specification; requirements are cited by number i
 
 ## Licence
 
-Personal and Non-Commercial Use License (PNC-1.2). See [LICENSE](LICENSE) for the full terms.
-
-In short: you may use, study and change Kronos Reborn for personal, non-commercial use, and share it
-or your changed version free of charge. A changed version you share must come with its full source,
-under this same licence. Commercial use of any kind needs the author's written permission.
+[Personal and Non-Commercial Use License (PNC-1.2)](LICENSE). In short, you may use, study and change
+Kronos Reborn for personal, non-commercial use. You may share it, or your changed version, free of
+charge. A changed version you share must come with its full source, under the same licence.
+Commercial use of any kind needs the author's written permission.
 
 DLSS, FSR, FidelityFX and XeSS are trademarks of their owners. This project is not affiliated with
 NVIDIA, AMD or Intel.
