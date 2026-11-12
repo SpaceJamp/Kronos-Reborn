@@ -897,6 +897,40 @@ public sealed class UndoEngine
             : Revert(gameId, entry, HistoryAction.Undo, "undo");
     }
 
+    /// <summary>
+    /// Undoes every swap on a game still undoable, putting back the files it shipped with.
+    /// </summary>
+    /// <returns>How many steps were undone, and why it stopped early, if it did.</returns>
+    public (int Undone, string? Error) RestoreOriginal(string gameId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gameId);
+
+        var undone = 0;
+        var kinds = _persistence.GetHistory(gameId).Entries.Select(e => e.RuntimeKind).Distinct().ToArray();
+
+        foreach (var kind in kinds)
+        {
+            // Bounded by the history's length, so a step that never moves the history cannot loop.
+            for (var steps = _persistence.GetHistory(gameId).Entries.Count; steps > 0; steps--)
+            {
+                if (_persistence.GetHistory(gameId).NextToUndo(kind) is null)
+                {
+                    break;
+                }
+
+                var result = Undo(gameId, kind);
+                if (!result.Succeeded)
+                {
+                    return (undone, result.ErrorMessage ?? "Undo did not report a reason.");
+                }
+
+                undone++;
+            }
+        }
+
+        return (undone, null);
+    }
+
     /// <summary>Reverses the most recent undo for a specific game and runtime kind.</summary>
     public SwapResult Redo(string gameId, RuntimeKind runtimeKind)
     {

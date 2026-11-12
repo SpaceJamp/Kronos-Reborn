@@ -156,9 +156,25 @@ public sealed class SteamInstallLocator(ISteamRegistry registry)
         }
 
         var trimmed = candidate.Trim();
-
-        if (found.Any(existing => Same(existing, trimmed)))
+        try
         {
+            // Steam writes "c:/program files (x86)/steam", which read badly as every game's path.
+            trimmed = Path.GetFullPath(trimmed);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // Kept as written, so the problem it causes is reported against what the registry said.
+        }
+
+        var index = found.FindIndex(existing => Same(existing, trimmed));
+        if (index >= 0)
+        {
+            // The same folder recorded again with its real capitals, such as the machine-wide value.
+            if (!found[index].Any(char.IsUpper) && trimmed.Any(char.IsUpper))
+            {
+                found[index] = trimmed;
+            }
+
             return;
         }
 

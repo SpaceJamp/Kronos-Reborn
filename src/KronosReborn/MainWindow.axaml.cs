@@ -1,5 +1,8 @@
+using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Data.Converters;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using KronosReborn.Data.Logging;
@@ -39,6 +42,20 @@ public sealed partial class MainWindow : Window, IFilePicker
             WindowState = WindowState.Maximized;
         }
 
+        Tabs.SelectedIndex = Math.Clamp(settings.SelectedTab, 0, Tabs.ItemCount - 1);
+
+        // A runtime file dropped anywhere on the window is offered for import, as Import… does.
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, (_, e) => e.DragEffects = DroppedFile(e) is null ? DragDropEffects.None : DragDropEffects.Copy);
+        AddHandler(DragDrop.DropEvent, (_, e) =>
+        {
+            if (DroppedFile(e) is { } file && DataContext is MainViewModel vm)
+            {
+                Tabs.SelectedIndex = 0;
+                vm.BeginImport(file);
+            }
+        });
+
         Opened += async (_, _) =>
         {
             if (DataContext is MainViewModel vm)
@@ -59,7 +76,10 @@ public sealed partial class MainWindow : Window, IFilePicker
             persistence.SaveSettings(persistence.Settings.With(
                 windowWidth: Width,
                 windowHeight: Height,
-                windowMaximized: WindowState == WindowState.Maximized));
+                windowMaximized: WindowState == WindowState.Maximized,
+                selectedTab: Tabs.SelectedIndex,
+                searchText: (DataContext as MainViewModel)?.SearchText,
+                showOnlyUpdates: (DataContext as MainViewModel)?.ShowOnlyUpdates));
 
             (DataContext as MainViewModel)?.Dispose();
             persistence.Dispose();
@@ -112,6 +132,67 @@ public sealed partial class MainWindow : Window, IFilePicker
 
         _selectedIn = list;
         vm.SelectedGame = game;
+    }
+
+    private static string? DroppedFile(DragEventArgs e) =>
+        e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => p is not null);
+
+    /// <summary>Keys for the common actions. Keys a text box uses, such as Ctrl+Z in search, stay its own.</summary>
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.Handled || DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+
+        if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
+        {
+            Tabs.SelectedIndex = 0;
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        ICommand? command = (e.Key, e.KeyModifiers) switch
+        {
+            (Key.F5, KeyModifiers.None) => vm.RefreshCommand,
+            (Key.Z, KeyModifiers.Control) => vm.UndoCommand,
+            (Key.Y, KeyModifiers.Control) => vm.RedoCommand,
+            (Key.Enter, KeyModifiers.Control) => vm.ApplySwapCommand,
+            _ => null,
+        };
+
+        if (command?.CanExecute(null) == true)
+        {
+            command.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Runs a command for the game whose card the menu was opened on.</summary>
+    private void ForCard(object? sender, Func<MainViewModel, ICommand> command)
+    {
+        if ((sender as MenuItem)?.DataContext is GameRow game && DataContext is MainViewModel vm
+            && command(vm) is { } c && c.CanExecute(game))
+        {
+            c.Execute(game);
+        }
+    }
+
+    private void OnOpenFolder(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.OpenFolderCommand);
+    private void OnUndoGame(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.UndoCommand);
+    private void OnRestoreGame(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.RestoreOriginalCommand);
+    private void OnHideGame(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.HideGameCommand);
+    private void OnRemoveGame(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.RemoveGameCommand);
+
+    public async Task OpenFolderAsync(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            await Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(path));
+        }
     }
 
     public async Task<string?> AskForRuntimeFileAsync()

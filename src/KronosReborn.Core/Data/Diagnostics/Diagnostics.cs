@@ -263,6 +263,13 @@ public static class DiagnosticsRunner
 
                 while (reader.ReadLine() is { } line)
                 {
+                    // Only errors are wanted, and parsing every line of 50 MB of log took seconds.
+                    if (!line.Contains("\"Level\":4", StringComparison.Ordinal)
+                        && !line.Contains("\"Level\":5", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
                     try
                     {
                         if (System.Text.Json.JsonSerializer.Deserialize<LogEntry>(line) is { } entry)

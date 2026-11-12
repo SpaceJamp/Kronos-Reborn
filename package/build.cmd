@@ -19,7 +19,6 @@ set "git_tag="
 for /f "usebackq delims=" %%i in (`git rev-parse --abbrev-ref HEAD 2^>nul`) do set "git_branch=%%i"
 for /f "usebackq delims=" %%i in (`git describe --tags --exact-match 2^>nul`) do set "git_tag=%%i"
 
-if "%git_branch%"=="" set "git_branch=unknown"
 
 echo.
 echo ################################

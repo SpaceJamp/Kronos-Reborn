@@ -34,4 +34,7 @@ public interface IFilePicker
 
     /// <summary>Puts text on the clipboard, which like a dialog belongs to the window.</summary>
     Task SetClipboardTextAsync(string text);
+
+    /// <summary>Opens a folder in the system's file manager.</summary>
+    Task OpenFolderAsync(string path);
 }

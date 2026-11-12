@@ -33,13 +33,17 @@
         <!-- Status bar -->
         <Border DockPanel.Dock="Bottom" Padding="12,6" BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
-            <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="{Binding BuildInfoText}" Classes="muted" Margin="12,0,0,0" />
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                           ToolTip.Tip="{Binding StatusText}" />
+                <Button Grid.Column="1" Content="Undo last apply" Command="{Binding UndoLastApplyCommand}"
+                        IsVisible="{Binding HasLastApply}" Margin="12,0,0,0" Padding="8,2"
+                        ToolTip.Tip="Put back every file the last Apply replaced" />
+                <TextBlock Grid.Column="2" Text="{Binding BuildInfoText}" Classes="muted" Margin="12,0,0,0" VerticalAlignment="Center" />
             </Grid>
         </Border>
 
-        <TabControl TabStripPlacement="Left" Padding="16,12">
+        <TabControl x:Name="Tabs" TabStripPlacement="Left" Padding="16,12">
 
             <!-- ============================================================ Games -->
             <TabItem Header="Games">
@@ -48,7 +52,7 @@
                     <!-- Toolbar -->
                     <WrapPanel Grid.ColumnSpan="2" Margin="0,0,0,12">
                         <Button Content="Refresh" Command="{Binding RefreshCommand}" Classes="accent" Margin="0,0,6,6"
-                                ToolTip.Tip="Look for games and the runtimes they carry" />
+                                ToolTip.Tip="Look for games and the runtimes they carry (F5)" />
                         <Button Content="+ Add Game" Command="{Binding AddGameCommand}" Margin="0,0,6,6"
                                 ToolTip.Tip="Add a game by choosing the folder it is installed in" />
                         <Button Content="+ Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,6,6"
@@ -56,13 +60,18 @@
                         <Button Content="⬆ Newest" Command="{Binding ChooseNewestCommand}" Margin="0,0,6,6"
                                 ToolTip.Tip="Choose the newest version you hold of every runtime in every game. Nothing changes until Apply." />
                         <Button Content="Import…" Command="{Binding BeginImportCommand}" Margin="0,0,6,6"
-                                ToolTip.Tip="Add a runtime file you got elsewhere to the collection" />
-                        <Button Content="Undo" Command="{Binding UndoCommand}" Margin="0,0,6,6" />
-                        <Button Content="Redo" Command="{Binding RedoCommand}" Margin="0,0,6,6" />
+                                ToolTip.Tip="Add a runtime file you got elsewhere to the collection. You can also drop a .dll on the window." />
+                        <Button Content="Undo" Command="{Binding UndoCommand}" Margin="0,0,6,6"
+                                ToolTip.Tip="Undo the last change to the selected game (Ctrl+Z)" />
+                        <Button Content="Redo" Command="{Binding RedoCommand}" Margin="0,0,6,6"
+                                ToolTip.Tip="Redo the last undo on the selected game (Ctrl+Y)" />
                         <Button Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,6,6"
                                 IsVisible="{Binding IsBusy}" />
-                        <TextBox Text="{Binding SearchText}" Watermark="Search games" Width="240" Margin="12,0,0,6"
+                        <TextBox x:Name="SearchBox" Text="{Binding SearchText}" Watermark="Search games (Ctrl+F)" Width="240" Margin="12,0,6,6"
                                  AutomationProperties.Name="Search games" />
+                        <ToggleButton IsChecked="{Binding ShowOnlyUpdates}" Margin="0,0,6,6"
+                                      Content="{Binding UpdatableCount, StringFormat='Needs update ({0})'}"
+                                      ToolTip.Tip="Show only games you hold a newer version for" />
                     </WrapPanel>
 
                     <!-- Cover grid, one section per library -->
@@ -71,7 +80,7 @@
                             <TextBlock Classes="muted" Margin="0,24" IsVisible="{Binding !HasGames}"
                                        Text="No games yet. Press Refresh to look for them, or + Add Game to add one by its folder." />
                             <TextBlock Classes="muted" Margin="0,24" IsVisible="{Binding IsSearchMissingEverything}"
-                                       Text="No game matches that search." />
+                                       Text="No game matches the search or filter." />
 
                             <ItemsControl ItemsSource="{Binding GameGroups}">
                                 <ItemsControl.ItemTemplate>
@@ -88,7 +97,18 @@
                                                 </ListBox.ItemsPanel>
                                                 <ListBox.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:GameRow">
-                                                        <StackPanel Width="140" ToolTip.Tip="{Binding InstallPath}">
+                                                        <StackPanel Width="140" ToolTip.Tip="{Binding InstallPath}" Background="Transparent">
+                                                            <StackPanel.ContextMenu>
+                                                                <ContextMenu>
+                                                                    <MenuItem Header="Open game folder" Click="OnOpenFolder" />
+                                                                    <MenuItem Header="Undo last change" Click="OnUndoGame" />
+                                                                    <MenuItem Header="Restore original files" Click="OnRestoreGame" />
+                                                                    <Separator />
+                                                                    <MenuItem Header="Hide" Click="OnHideGame" />
+                                                                    <MenuItem Header="Remove from list" Click="OnRemoveGame"
+                                                                              IsVisible="{Binding IsAddedByHand}" />
+                                                                </ContextMenu>
+                                                            </StackPanel.ContextMenu>
                                                             <Panel Height="210">
                                                                 <Border CornerRadius="6" ClipToBounds="True"
                                                                         Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
@@ -103,6 +123,13 @@
                                                                 </Border>
                                                             </Panel>
                                                             <TextBlock Text="{Binding GameName}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0" />
+                                                            <ItemsControl ItemsSource="{Binding RuntimeVersions}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate x:DataType="x:String">
+                                                                        <TextBlock Text="{Binding}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
                                                             <TextBlock Text="{Binding StatusText}" Classes="muted" FontSize="12" />
                                                         </StackPanel>
                                                     </DataTemplate>
@@ -128,9 +155,16 @@
                                     <TextBlock Text="{Binding SelectedGame.LibraryName, FallbackValue=''}" Classes="muted" />
                                     <TextBlock Text="{Binding SelectedGame.InstallPath, FallbackValue=''}" Classes="muted" FontSize="12" Margin="0,2,0,12" />
 
-                                    <Button Content="Remove from list" Command="{Binding RemoveGameCommand}" Margin="0,0,0,12"
-                                            IsVisible="{Binding SelectedGame.IsAddedByHand, FallbackValue=False}"
-                                            ToolTip.Tip="Take this hand-added game off the list. Its files are not touched." />
+                                    <WrapPanel Margin="0,0,0,12">
+                                        <Button Content="Open folder" Command="{Binding OpenFolderCommand}" Margin="0,0,6,6" />
+                                        <Button Content="Restore original" Command="{Binding RestoreOriginalCommand}" Margin="0,0,6,6"
+                                                ToolTip.Tip="Undo every change made to this game, putting back the files it shipped with" />
+                                        <Button Content="Hide" Command="{Binding HideGameCommand}" Margin="0,0,6,6"
+                                                ToolTip.Tip="Take this game out of the grid and out of ⬆ Newest. Bring it back from Settings." />
+                                        <Button Content="Remove from list" Command="{Binding RemoveGameCommand}" Margin="0,0,6,6"
+                                                IsVisible="{Binding SelectedGame.IsAddedByHand, FallbackValue=False}"
+                                                ToolTip.Tip="Take this hand-added game off the list. Its files are not touched." />
+                                    </WrapPanel>
 
                                     <ItemsControl ItemsSource="{Binding SelectedGame.Choices, FallbackValue={x:Null}}">
                                         <ItemsControl.ItemTemplate>
@@ -177,7 +211,8 @@
                         </ItemsControl>
 
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0" IsVisible="{Binding HasPreview}">
-                            <Button Content="Apply" Command="{Binding ApplySwapCommand}" Classes="accent" />
+                            <Button Content="Apply" Command="{Binding ApplySwapCommand}" Classes="accent"
+                                    ToolTip.Tip="Replace the files listed above (Ctrl+Enter)" />
                             <TextBlock Text="{Binding PendingChangeCount, StringFormat='{}{0} version(s) chosen'}"
                                        Classes="muted" VerticalAlignment="Center" Margin="12,0,0,0" />
                         </StackPanel>
@@ -343,6 +378,20 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <Button Content="+ Add Folder" Command="{Binding AddFolderCommand}" Margin="0,4,0,0" />
+
+                    <TextBlock Text="Hidden games" FontWeight="SemiBold" Margin="0,24,0,4" IsVisible="{Binding HasHiddenGames}" />
+                    <ItemsControl ItemsSource="{Binding HiddenGames}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:GameRow">
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                                    <TextBlock Text="{Binding GameName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="1" Content="Show" Margin="8,0,0,0"
+                                            Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).UnhideGameCommand}"
+                                            CommandParameter="{Binding}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
             </TabItem>
         </TabControl>
