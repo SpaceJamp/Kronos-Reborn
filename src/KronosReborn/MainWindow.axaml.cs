@@ -1,11 +1,14 @@
 using System.Windows.Input;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using KronosReborn.Data.Logging;
 using KronosReborn.Data.Persistence;
 using KronosReborn.UI;
@@ -42,6 +45,33 @@ public sealed partial class MainWindow : Window, IFilePicker
         {
             WindowState = WindowState.Maximized;
         }
+
+        // The magic background's rings turn from here rather than from a style animation: Avalonia's
+        // style animator cannot animate a RenderTransform, and ten small steps a second redraw the window
+        // a sixth as often as an animation would, for movement no one could tell apart.
+        SpinRing.RenderTransform = _spin;
+        SpinBackRing.RenderTransform = _spinBack;
+        _motion = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) =>
+        {
+            _spin.Angle = (_spin.Angle + 0.15) % 360;          // one turn in four minutes
+            _spinBack.Angle = (_spinBack.Angle - 0.24) % 360;  // and back in two and a half
+        });
+        _motion.Stop();
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is MainViewModel vm)
+            {
+                vm.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(MainViewModel.MagicBackground))
+                    {
+                        UpdateMotion();
+                    }
+                };
+            }
+
+            UpdateMotion();
+        };
 
         // A runtime file dropped anywhere on the window is offered for import, as Import… does.
         DragDrop.SetAllowDrop(this, true);
@@ -88,9 +118,60 @@ public sealed partial class MainWindow : Window, IFilePicker
                 searchText: (DataContext as MainViewModel)?.SearchText,
                 showOnlyUpdates: (DataContext as MainViewModel)?.ShowOnlyUpdates));
 
+            _motion.Stop();
             (DataContext as MainViewModel)?.Dispose();
             persistence.Dispose();
         };
+    }
+
+    private readonly RotateTransform _spin = new();
+    private readonly RotateTransform _spinBack = new();
+    private readonly DispatcherTimer _motion = new();
+
+    /// <summary>
+    /// Starts or stops the background's motion: it moves only while switched on, while this window is
+    /// the active one and not minimised, and while Windows itself shows animations.
+    /// </summary>
+    private void UpdateMotion()
+    {
+        var moving = DataContext is MainViewModel { MagicBackground: true }
+                     && IsActive
+                     && WindowState != WindowState.Minimized
+                     && WindowsShowsAnimations();
+
+        MagicLayer.Classes.Set("on", moving);
+        _motion.IsEnabled = moving;
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        // The properties, not the Activated events: IsActive could already be true when the event ran.
+        if (change.Property == WindowStateProperty || change.Property == IsActiveProperty)
+        {
+            UpdateMotion();
+        }
+    }
+
+    /// <summary>Windows' "Show animations in Windows" setting; true where there is no such setting.</summary>
+    private static bool WindowsShowsAnimations()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return true;
+        }
+
+        var enabled = 1;
+        return !NativeMethods.SystemParametersInfo(NativeMethods.GetClientAreaAnimation, 0, ref enabled, 0) || enabled != 0;
+    }
+
+    private static class NativeMethods
+    {
+        public const uint GetClientAreaAnimation = 0x1042;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        public static extern bool SystemParametersInfo(uint action, uint param, ref int value, uint winIni);
     }
 
     /// <summary>Dark while the magic background is on, so text stays readable on it; the system's otherwise.</summary>
