@@ -52,12 +52,15 @@ jobs:
 
       # C5: nothing ships that CI has not built and tested. The test step above is what makes this
       # publish rather than an upload of something unverified.
-      - name: Publish the release
+      # A draft, so the app never sees a release before package/sign-release.ps1 has signed its
+      # installer with the key that lives only on the maintainer's PC. That script publishes it.
+      - name: Publish the release as a draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           gh release create "${{ github.ref_name }}"
           --title "${{ github.ref_name }}"
+          --draft
           --generate-notes
           "${{ steps.package.outputs.portable }}"
           "${{ steps.installer.outputs.installer }}"

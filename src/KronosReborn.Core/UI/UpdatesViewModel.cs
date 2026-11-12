@@ -201,8 +201,8 @@ public sealed class UpdatesViewModel : INotifyPropertyChanged
         }
         catch (InvalidDataException ex)
         {
-            StatusText = "The download did not match what GitHub published, so it was deleted and not run.";
-            Log.Instance.Error(ex, "Update download did not match its digest", category: "Updates");
+            StatusText = $"The update failed a security check, so it was deleted and not run: {ex.Message}";
+            Log.Instance.Error(ex, "Update failed a security check", category: "Updates");
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException
                                        or TaskCanceledException)

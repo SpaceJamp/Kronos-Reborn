@@ -13,7 +13,8 @@ public class UpdatesViewModelTests
 {
     private static readonly AvailableUpdate Installable = new(
         "0.2.0", new Uri("https://github.com/x/y/releases/tag/v0.2.0"),
-        new Uri("https://github.com/x/y/releases/download/v0.2.0/setup.exe"), "setup.exe", new string('a', 64));
+        new Uri("https://github.com/x/y/releases/download/v0.2.0/setup.exe"), "setup.exe", new string('a', 64),
+        new Uri("https://github.com/x/y/releases/download/v0.2.0/setup.exe.sig"));
 
     [Fact]
     public async Task AManualCheckSaysWhenUpToDate()
@@ -130,7 +131,7 @@ public class UpdatesViewModelTests
         await vm.InstallAsync();
 
         Assert.Null(window.RanInstaller);
-        Assert.Contains("did not match", vm.StatusText);
+        Assert.Equal("The update failed a security check, so it was deleted and not run: digest", vm.StatusText);
         Assert.False(vm.IsBusy);
     }
 
