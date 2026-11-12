@@ -142,8 +142,13 @@ docs/spec.md               the specification; requirements are cited by number i
 
 ## Licence
 
-Apache-2.0. See [LICENSE](LICENSE). Kronos Reborn is written from scratch and contains no code from
-Kronos or DLSS Swapper.
+Personal and Non-Commercial Use License (PNC-1.2). See [LICENSE](LICENSE) for the full terms.
+
+In short: you may use, study and change Kronos Reborn for personal, non-commercial use, and share it
+or your changed version free of charge. A changed version you share must come with its full source,
+under this same licence. Commercial use of any kind needs the author's written permission.
+
+Kronos Reborn is written from scratch and contains no code from Kronos or DLSS Swapper.
 
 DLSS, FSR, FidelityFX and XeSS are trademarks of their owners. This project is not affiliated with
 NVIDIA, AMD or Intel.
