@@ -112,7 +112,7 @@
     numbered 4, 5, 6 and so on (after 0.1.0 to 0.1.2), each tagged vN. Whole numbers so copies on
     0.1.x, which compare tags as dotted numbers, still see each new build as newer.
     -->
-    <Version>4</Version>
+    <Version>5</Version>
 
     <!--
     Build metadata injected into the assembly and read back at runtime.
