@@ -116,6 +116,47 @@ public class MainViewModelTests
         Assert.False(fixture.Vm.ApplySwapCommand.CanExecute(null));
     }
 
+    [Fact]
+    public void NeedsUpdateShowsOnlyGamesWithANewerVersionHeld()
+    {
+        using var fixture = new Fixture();
+        fixture.Vm.Games = [QualityOfLifeTests.Row("old", "310.2.1"), QualityOfLifeTests.Row("new", "310.9.1")];
+        foreach (var row in fixture.Vm.Games)
+        {
+            row.RebuildChoices([QualityOfLifeTests.Entry("310.2.1"), QualityOfLifeTests.Entry("310.9.1")]);
+        }
+
+        fixture.Vm.ShowOnlyUpdates = true;
+
+        Assert.Equal(1, fixture.Vm.UpdatableCount);
+        Assert.Equal("old", Assert.Single(fixture.Vm.GameGroups.SelectMany(g => g.Games)).GameId);
+    }
+
+    [Fact]
+    public void AHiddenGameLeavesTheGridAndNewestUntilShownAgain()
+    {
+        using var fixture = new Fixture();
+        fixture.Catalog.AddImport(RuntimeKind.Dlss, "310.9.1", fixture.ImportFolder(), "test", RuntimeTrust.Trusted);
+        fixture.Vm.Games = Rows("a", "b");
+        foreach (var row in fixture.Vm.Games)
+        {
+            row.RebuildChoices(fixture.Catalog.Entries);
+        }
+
+        var hidden = fixture.Vm.Games[0];
+        fixture.Vm.HideGameCommand.Execute(hidden);
+        fixture.Vm.ChooseNewestCommand.Execute(null);
+
+        Assert.DoesNotContain(hidden, fixture.Vm.GameGroups.SelectMany(g => g.Games));
+        Assert.Same(hidden, Assert.Single(fixture.Vm.HiddenGames));
+        Assert.Null(hidden.Choices.Single(c => c.Kind == RuntimeKind.Dlss).Selected);
+
+        fixture.Vm.UnhideGameCommand.Execute(hidden);
+
+        Assert.Contains(hidden, fixture.Vm.GameGroups.SelectMany(g => g.Games));
+        Assert.Empty(fixture.Vm.HiddenGames);
+    }
+
     private static ObservableCollection<GameRow> Rows(params string[] ids) =>
         [.. ids.Select(id => new GameRow(
             new GameRecord("Steam", id, $"Game {id}", Path.Combine("C:", id), true),

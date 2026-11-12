@@ -96,6 +96,7 @@ public sealed class GameRow : INotifyPropertyChanged
         }
 
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(HasNewerVersion));
     }
 
     /// <summary>Raised when any version in this row is chosen or cleared.</summary>
@@ -149,8 +150,25 @@ public sealed class GameRow : INotifyPropertyChanged
             OnPropertyChanged(nameof(HasAnyRuntime));
             OnPropertyChanged(nameof(HasUnknownVersions));
             OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(RuntimeVersions));
         }
     }
+
+    /// <summary>What the game runs now, one line per runtime, such as "DLSS 310.2.1", for its card.</summary>
+    public IReadOnlyList<string> RuntimeVersions =>
+    [
+        .. (Snapshot?.Runtimes ?? [])
+            .Where(r => r.Exists)
+            .GroupBy(r => r.Kind)
+            .Select(g => $"{RuntimeKindNames.Display(g.Key)} {g.First().Version ?? "unknown"}")
+            .Order(StringComparer.OrdinalIgnoreCase),
+    ];
+
+    /// <summary>Whether the collection holds a newer version of something this game runs.</summary>
+    public bool HasNewerVersion =>
+        !IsMissing && !HasUnknownVersions
+        && Choices.Any(c => c.IsAvailable && c.Options.Count > 0
+                            && VersionNumber.IsOlder(c.CurrentVersion, c.Options[0].Version));
 
 
     public bool HasAnyRuntime => Snapshot?.HasAnyRuntime == true;
@@ -166,10 +184,7 @@ public sealed class GameRow : INotifyPropertyChanged
             if (HasUnknownVersions) return "Unknown version";
 
             // Against the versions held, newest first in each picker.
-            return Choices.Any(c => c.IsAvailable && c.Options.Count > 0
-                                    && VersionNumber.IsOlder(c.CurrentVersion, c.Options[0].Version))
-                ? "Newer version available"
-                : "Newest installed";
+            return HasNewerVersion ? "Newer version available" : "Newest installed";
         }
     }
 
@@ -332,17 +347,17 @@ public sealed class RuntimeChoice : INotifyPropertyChanged
     /// </summary>
     /// <remarks>
     /// Never a downgrade, and quiet: the caller choosing for many games rebuilds the preview once
-    /// at the end rather than once per choice.
+    /// at the end rather than once per choice. Only a signed version: one click across every game
+    /// must not spread a file nobody vouched for.
     /// </remarks>
     /// <returns>Whether a version was chosen.</returns>
     public bool ChooseNewest()
     {
-        if (!IsAvailable || Options.Count == 0)
+        if (!IsAvailable || Options.FirstOrDefault(o => o.Trust == RuntimeTrust.Trusted) is not { } newest)
         {
             return false;
         }
 
-        var newest = Options[0];
         if (CurrentVersion is not null && !VersionNumber.IsOlder(CurrentVersion, newest.Version))
         {
             return false;

@@ -64,6 +64,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _settings = settings;
         _paths = paths;
         _filePicker = filePicker;
+        _searchText = settings.SearchText ?? string.Empty;
+        _showOnlyUpdates = settings.ShowOnlyUpdates;
 
         _executor = new SwapExecutor(persistence, catalog, paths);
         _undo = new UndoEngine(persistence, paths);
@@ -83,14 +85,29 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
         ChooseNewestCommand = new RelayCommand(_ => ChooseNewest(), _ => !IsBusy && HasGames);
         ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsBusy);
-        UndoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: false), _ => SelectedGame is not null && !IsBusy);
+        // Each takes the game it is for, from a card's menu, or acts on the selected game without one.
+        UndoCommand = new RelayCommand(async g => await RevertAsync(GameFor(g), redo: false), g => GameFor(g) is not null && !IsBusy);
         AddGameCommand = new RelayCommand(async _ => await AddGameAsync(), _ => !IsBusy && _filePicker is not null);
         AddFolderCommand = new RelayCommand(async _ => await AddFolderAsync(), _ => !IsBusy && _filePicker is not null);
         RemoveFolderCommand = new RelayCommand(
             async folder => await RemoveFolderAsync(folder as string), _ => !IsBusy);
         RemoveGameCommand = new RelayCommand(
-            async _ => await RemoveGameAsync(), _ => !IsBusy && SelectedGame?.IsAddedByHand == true);
-        RedoCommand = new RelayCommand(async _ => await RevertSelectedAsync(redo: true), _ => SelectedGame is not null && !IsBusy);
+            async g => await RemoveGameAsync(GameFor(g)), g => !IsBusy && GameFor(g)?.IsAddedByHand == true);
+        RedoCommand = new RelayCommand(async g => await RevertAsync(GameFor(g), redo: true), g => GameFor(g) is not null && !IsBusy);
+        RestoreOriginalCommand = new RelayCommand(
+            async g => await RestoreOriginalAsync(GameFor(g)), g => GameFor(g) is not null && !IsBusy);
+        UndoLastApplyCommand = new RelayCommand(async _ => await UndoLastApplyAsync(), _ => HasLastApply && !IsBusy);
+        OpenFolderCommand = new RelayCommand(
+            async g =>
+            {
+                if (GameFor(g) is { } game && _filePicker is not null)
+                {
+                    await _filePicker.OpenFolderAsync(game.InstallPath);
+                }
+            },
+            g => GameFor(g)?.ExistsOnDisk == true && _filePicker is not null);
+        HideGameCommand = new RelayCommand(g => SetHidden(GameFor(g), hide: true), g => GameFor(g) is not null);
+        UnhideGameCommand = new RelayCommand(g => SetHidden(g as GameRow, hide: false), g => g is GameRow);
         CancelCommand = new RelayCommand(
             _ => _operationCancellation.Cancel(), _ => IsBusy);
 
@@ -192,10 +209,71 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    /// <summary>Whether the search found nothing, so an empty library reads as a bad search.</summary>
-    public bool IsSearchMissingEverything => _searchText.Length > 0 && GameGroups.Count == 0;
+    /// <summary>Whether the search or filter left nothing, so an empty grid reads as a bad search.</summary>
+    public bool IsSearchMissingEverything => (_searchText.Length > 0 || _showOnlyUpdates) && HasGames && GameGroups.Count == 0;
 
     private string _searchText = string.Empty;
+    private bool _showOnlyUpdates;
+    private IReadOnlyList<(string GameId, RuntimeKind Kind)> _lastApplied = [];
+
+    /// <summary>Whether the grid shows only games the collection holds a newer version for.</summary>
+    public bool ShowOnlyUpdates
+    {
+        get => _showOnlyUpdates;
+        set
+        {
+            if (_showOnlyUpdates == value) return;
+            _showOnlyUpdates = value;
+            OnPropertyChanged();
+            ApplyFilter();
+        }
+    }
+
+    /// <summary>How many shown games could be updated, for the filter's label.</summary>
+    public int UpdatableCount => _games.Count(g => g.HasNewerVersion && !IsHidden(g));
+
+    /// <summary>The games the user hid, for the settings page to bring back.</summary>
+    public IReadOnlyList<GameRow> HiddenGames =>
+        [.. _games.Where(IsHidden).OrderBy(g => g.GameName, StringComparer.OrdinalIgnoreCase)];
+
+    public bool HasHiddenGames => HiddenGames.Count > 0;
+
+    private bool IsHidden(GameRow game) =>
+        _settings.HiddenGames?.Contains(game.GameId, StringComparer.OrdinalIgnoreCase) == true;
+
+    private GameRow? GameFor(object? parameter) => parameter as GameRow ?? SelectedGame;
+
+    /// <summary>Hides a game from the grid and from ⬆ Newest, or brings it back. Its files are not touched.</summary>
+    private void SetHidden(GameRow? game, bool hide)
+    {
+        if (game is null)
+        {
+            return;
+        }
+
+        var others = (_settings.HiddenGames ?? [])
+            .Where(id => !string.Equals(id, game.GameId, StringComparison.OrdinalIgnoreCase));
+        _settings = _settings.With(hiddenGames: hide ? [.. others, game.GameId] : [.. others]);
+        _persistence.SaveSettings(_settings);
+
+        if (hide && ReferenceEquals(SelectedGame, game))
+        {
+            SelectedGame = null;
+        }
+
+        ApplyFilter();
+        StatusText = hide ? $"Hid {game.GameName}. Bring it back from Settings." : $"{game.GameName} is shown again.";
+    }
+
+    /// <summary>Whether the last Apply can be undone in one step.</summary>
+    public bool HasLastApply => _lastApplied.Count > 0;
+
+    private void SetLastApplied(IReadOnlyList<(string GameId, RuntimeKind Kind)> applied)
+    {
+        _lastApplied = applied;
+        OnPropertyChanged(nameof(HasLastApply));
+        ((RelayCommand)UndoLastApplyCommand).RaiseCanExecuteChanged();
+    }
 
     /// <summary>Which runtime the library is filtered to.</summary>
     public LibraryKindOption LibraryKind
@@ -291,6 +369,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         GameGroups =
         [
             .. _games
+                .Where(g => !IsHidden(g))
+                .Where(g => !_showOnlyUpdates || g.HasNewerVersion)
                 .Where(g => text.Length == 0 || g.GameName.Contains(text, StringComparison.OrdinalIgnoreCase))
                 .GroupBy(g => g.LibraryName, StringComparer.OrdinalIgnoreCase)
                 .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
@@ -299,6 +379,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         OnPropertyChanged(nameof(GameGroups));
         OnPropertyChanged(nameof(IsSearchMissingEverything));
+        OnPropertyChanged(nameof(UpdatableCount));
+        OnPropertyChanged(nameof(HiddenGames));
+        OnPropertyChanged(nameof(HasHiddenGames));
     }
 
     public bool IsScanning
@@ -344,6 +427,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ((RelayCommand)ApplySwapCommand).RaiseCanExecuteChanged();
         ((RelayCommand)UndoCommand).RaiseCanExecuteChanged();
         ((RelayCommand)RedoCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)RestoreOriginalCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)UndoLastApplyCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)OpenFolderCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)HideGameCommand).RaiseCanExecuteChanged();
         ((RelayCommand)BeginImportCommand).RaiseCanExecuteChanged();
         ((RelayCommand)ConfirmImportCommand).RaiseCanExecuteChanged();
         ((RelayCommand)DiscardImportCommand).RaiseCanExecuteChanged();
@@ -374,17 +461,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         get
         {
-            var commit = BuildInfo.GitCommitShort ?? "unknown";
-            var branch = BuildInfo.GitBranch;
+            // What is not known is left out: a build without git read "Build unknown, unknown, date unknown".
+            string?[] parts =
+            [
+                BuildInfo.GitCommitShort,
+                BuildInfo.BuildDateTime?.ToString("g", System.Globalization.CultureInfo.CurrentCulture),
+                BuildInfo.GitBranch,
+            ];
+            var known = parts.Where(p => p is not null).ToArray();
 
-            if (BuildInfo.HasBuildTimestamp == false)
-            {
-                return $"Build {commit}{(branch is null ? string.Empty : $", {branch}")}, date unknown";
-            }
-
-            var date = BuildInfo.BuildDateTime!.Value.ToString("g", System.Globalization.CultureInfo.CurrentCulture);
-
-            return $"Build {commit}, {date}{(branch is null ? string.Empty : $", {branch}")}";
+            return known.Length == 0 ? "Development build" : $"Build {string.Join(", ", known)}";
         }
     }
 
@@ -400,6 +486,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand ApplySwapCommand { get; }
     public ICommand UndoCommand { get; }
     public ICommand RedoCommand { get; }
+    public ICommand RestoreOriginalCommand { get; }
+    public ICommand UndoLastApplyCommand { get; }
+    public ICommand OpenFolderCommand { get; }
+    public ICommand HideGameCommand { get; }
+    public ICommand UnhideGameCommand { get; }
     public ICommand CancelCommand { get; }
     public ICommand BeginImportCommand { get; }
     public ICommand ConfirmImportCommand { get; }
@@ -776,6 +867,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             game.WatchChoices(OnGameChoiceChanged, subscribe: true);
         }
 
+        // Which games have a newer version held may have changed with the collection.
+        if (_showOnlyUpdates)
+        {
+            ApplyFilter();
+        }
+
+        OnPropertyChanged(nameof(UpdatableCount));
         PreviewSwap();
         OnPropertyChanged(nameof(PendingChangeCount));
         OnPropertyChanged(nameof(HasPendingChanges));
@@ -855,9 +953,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>Takes a hand-added game off the list. The game's files are not touched.</summary>
-    private async System.Threading.Tasks.Task RemoveGameAsync()
+    private async System.Threading.Tasks.Task RemoveGameAsync(GameRow? row)
     {
-        if (SelectedGame is not { IsAddedByHand: true } game)
+        if (row is not { IsAddedByHand: true } game)
         {
             return;
         }
@@ -876,10 +974,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// </remarks>
     private void ChooseNewest()
     {
-        var chosen = _games
-            .Where(r => r.ExistsOnDisk)
+        var choices = _games
+            .Where(r => r.ExistsOnDisk && !IsHidden(r))
             .SelectMany(r => r.Choices)
-            .Count(c => c.ChooseNewest());
+            .ToArray();
+        var chosen = choices.Count(c => c.ChooseNewest());
+
+        // Newer, but not signed by its vendor: left for the user to choose by hand.
+        var unsigned = choices.Count(c => !c.HasChange && c.IsAvailable && c.Options.Count > 0
+                                          && c.Options[0].Trust != RuntimeTrust.Trusted
+                                          && VersionNumber.IsOlder(c.CurrentVersion, c.Options[0].Version));
 
         PreviewSwap();
         OnPropertyChanged(nameof(PendingChangeCount));
@@ -888,7 +992,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         if (chosen == 0)
         {
-            StatusText = "Every game already runs the newest versions you hold.";
+            StatusText = "Every game already runs the newest signed versions you hold.";
+        }
+
+        if (unsigned > 0)
+        {
+            StatusText += $" {unsigned} newer unsigned version(s) were left out; choose them by hand if you want them.";
         }
     }
 
@@ -940,7 +1049,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         StatusText = _pendingPlans.Count == 0
             ? "Nothing to do: every version chosen is the one already installed."
-            : $"{_pendingPlans.Count} change(s) across {games} game(s). Review, then apply.";
+            : $"{_pendingPlans.Count} change(s) across {games} game(s)"
+              + (_pendingPlans.Count(p => p.HasWarning) is > 0 and var warned ? $", {warned} with a warning" : string.Empty)
+              + ". Review, then apply (Ctrl+Enter).";
     }
     /// <summary>
     /// Applies the previewed swap.
@@ -967,12 +1078,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var batch = await System.Threading.Tasks.Task.Run(
                 () => _executor.Execute(plans, cancellation.Token));
 
-            StatusText = Describe(batch);
             ClearPreview();
+            SetLastApplied([.. batch.Results
+                .Where(r => r.Succeeded && r.HistoryEntry is not null)
+                .Select(r => (r.GameId, r.HistoryEntry!.RuntimeKind))]);
 
-            // Re-read what the games now run, so the list reflects what was just done.
+            // Re-read what the games now run, so the list reflects what was just done. The summary is
+            // set after, since the refresh writes its own and the Apply's result used to be lost.
             IsWorking = false;
             await RefreshAsync();
+            StatusText = Describe(batch) + (HasLastApply ? ". Undo last apply puts it all back." : string.Empty);
         }
         catch (Exception ex)
         {
@@ -1024,18 +1139,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             : summary;
     }
 
-    /// <summary>Undoes the most recent swap on the selected game, or redoes the most recent undo.</summary>
-    private async System.Threading.Tasks.Task RevertSelectedAsync(bool redo)
+    /// <summary>Undoes the most recent swap on a game, or redoes the most recent undo.</summary>
+    private async System.Threading.Tasks.Task RevertAsync(GameRow? game, bool redo)
     {
-        if (SelectedGame is not { } game)
+        if (game is null)
         {
             return;
         }
 
-        IsWorking = true;
-        var succeeded = false;
-
-        try
+        await RevertingAsync(redo ? "Redo" : "Undo", () =>
         {
             var history = _persistence.GetHistory(game.GameId);
 
@@ -1050,33 +1162,90 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
             if (next.Entry is null)
             {
-                StatusText = redo ? "Nothing to redo." : "Nothing to undo.";
-                return;
+                return (false, redo ? "Nothing to redo." : "Nothing to undo.");
             }
 
-            var result = await System.Threading.Tasks.Task.Run(() => redo
-                ? _undo.Redo(game.GameId, next.Kind)
-                : _undo.Undo(game.GameId, next.Kind));
+            var result = redo ? _undo.Redo(game.GameId, next.Kind) : _undo.Undo(game.GameId, next.Kind);
 
-            succeeded = result.Succeeded;
-            StatusText = result.Succeeded
-                ? $"{(redo ? "Redid" : "Undid")} {RuntimeKindNames.Display(next.Kind)} in {game.GameName}."
-                : result.ErrorMessage ?? $"{(redo ? "Redo" : "Undo")} did not report a reason.";
+            return result.Succeeded
+                ? (true, $"{(redo ? "Redid" : "Undid")} {RuntimeKindNames.Display(next.Kind)} in {game.GameName}.")
+                : (false, result.ErrorMessage ?? $"{(redo ? "Redo" : "Undo")} did not report a reason.");
+        });
+    }
 
+    /// <summary>Undoes every swap still undoable on a game, putting back the files it shipped with.</summary>
+    private async System.Threading.Tasks.Task RestoreOriginalAsync(GameRow? game)
+    {
+        if (game is null)
+        {
+            return;
+        }
+
+        await RevertingAsync("Restore", () =>
+        {
+            var (undone, error) = _undo.RestoreOriginal(game.GameId);
+
+            return error is not null
+                ? (undone > 0, $"Restored {undone} step(s) in {game.GameName}, then: {error}")
+                : undone == 0
+                    ? (false, $"{game.GameName} already runs the files it shipped with.")
+                    : (true, $"Restored {game.GameName} to its original files ({undone} step(s) undone).");
+        });
+    }
+
+    /// <summary>Undoes everything the last Apply changed, in every game it touched.</summary>
+    private async System.Threading.Tasks.Task UndoLastApplyAsync()
+    {
+        var applied = _lastApplied;
+        if (applied.Count == 0)
+        {
+            return;
+        }
+
+        await RevertingAsync("Undo", () =>
+        {
+            var failures = applied
+                .Reverse()
+                .Select(step => (step, result: _undo.Undo(step.GameId, step.Kind)))
+                .Where(x => !x.result.Succeeded)
+                .Select(x => x.result.ErrorMessage ?? x.step.GameId)
+                .ToArray();
+
+            return failures.Length == 0
+                ? (true, $"Undid the last apply ({applied.Count} change(s)).")
+                : (applied.Count > failures.Length,
+                   $"Undid {applied.Count - failures.Length} of {applied.Count}. {string.Join(" | ", failures)}");
+        });
+    }
+
+    /// <summary>Runs an undo-style step off the UI thread, then re-reads the games if it changed any.</summary>
+    private async System.Threading.Tasks.Task RevertingAsync(string verb, Func<(bool Changed, string Status)> work)
+    {
+        IsWorking = true;
+        var changed = false;
+
+        try
+        {
+            var (didChange, status) = await System.Threading.Tasks.Task.Run(work);
+            changed = didChange;
+            StatusText = status;
+
+            // Undoing anything makes the last Apply's record stale.
+            SetLastApplied([]);
             ClearPreview();
             RebuildAllChoices();
         }
         catch (Exception ex)
         {
-            StatusText = $"{(redo ? "Redo" : "Undo")} failed: {ex.Message}";
-            Log.Instance.Error(ex, "Undo or redo failed", category: "Undo");
+            StatusText = $"{verb} failed: {ex.Message}";
+            Log.Instance.Error(ex, $"{verb} failed", category: "Undo");
         }
         finally
         {
             IsWorking = false;
         }
 
-        if (succeeded)
+        if (changed)
         {
             // The rows still show what the game ran before; plans made from them would be wrong.
             var status = StatusText;

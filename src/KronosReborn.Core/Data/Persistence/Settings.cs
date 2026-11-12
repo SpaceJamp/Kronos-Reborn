@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace KronosReborn.Data.Persistence;
 
 /// <summary>
@@ -18,12 +20,20 @@ namespace KronosReborn.Data.Persistence;
 /// <param name="WindowWidth">Window width, restored on startup.</param>
 /// <param name="WindowHeight">Window height, restored on startup.</param>
 /// <param name="WindowMaximized">Whether the window was maximised.</param>
+/// <param name="SelectedTab">The page last shown, restored on startup.</param>
+/// <param name="SearchText">The game search last typed.</param>
+/// <param name="ShowOnlyUpdates">Whether the grid showed only games with a newer version held.</param>
+/// <param name="HiddenGames">Ids of games the user hid from the grid.</param>
 public sealed record Settings(
     bool AllowUntrustedRuntimes = false,
     int MaxHistoryPerGame = 50,
     double? WindowWidth = 1600,
     double? WindowHeight = 960,
-    bool WindowMaximized = false)
+    bool WindowMaximized = false,
+    int SelectedTab = 0,
+    string? SearchText = null,
+    bool ShowOnlyUpdates = false,
+    IReadOnlyList<string>? HiddenGames = null)
 {
     /// <summary>Default settings for a fresh install.</summary>
     public static Settings Default { get; } = new();
@@ -34,11 +44,19 @@ public sealed record Settings(
         int? maxHistoryPerGame = null,
         double? windowWidth = null,
         double? windowHeight = null,
-        bool? windowMaximized = null) =>
+        bool? windowMaximized = null,
+        int? selectedTab = null,
+        string? searchText = null,
+        bool? showOnlyUpdates = null,
+        IReadOnlyList<string>? hiddenGames = null) =>
         new(
             allowUntrustedRuntimes ?? AllowUntrustedRuntimes,
             maxHistoryPerGame ?? MaxHistoryPerGame,
             windowWidth ?? WindowWidth,
             windowHeight ?? WindowHeight,
-            windowMaximized ?? WindowMaximized);
+            windowMaximized ?? WindowMaximized,
+            selectedTab ?? SelectedTab,
+            searchText ?? SearchText,
+            showOnlyUpdates ?? ShowOnlyUpdates,
+            hiddenGames ?? HiddenGames);
 }

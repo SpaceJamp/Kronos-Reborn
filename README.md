@@ -14,11 +14,25 @@ it replaces, so any change can be undone.
 
 ## Using it
 
-1. **Refresh** finds your games and the runtime DLLs inside each one.
-2. Click a game. Its pane shows each runtime it carries, with the version it runs now.
-3. Pick a version, or press **⬆ Newest** to choose the newest version you hold for every game.
+1. **Refresh** finds your games and the runtime DLLs inside each one. Each cover lists the version
+   of every runtime the game runs now.
+2. Click a game. Its pane shows each runtime it carries, with the versions you can switch to.
+3. Pick a version, or press **⬆ Newest** to choose the newest signed version you hold for every game.
 4. Check the preview, then press **Apply**.
-5. Changed your mind? **Undo** puts the old files back. **Redo** reapplies.
+5. Changed your mind? **Undo last apply** in the status bar puts back everything that Apply changed.
+   **Undo** and **Redo** step one game back and forward, and **Restore original** puts back the
+   files the game shipped with.
+
+**Needs update** shows only the games you hold a newer version for. Right-click a cover to open
+its folder, undo, restore or hide it; hidden games can be shown again from **Settings**. Drop a
+`.dll` on the window to import it. The search, filter and page you were on are kept for next time.
+
+| Key | Does |
+| --- | --- |
+| F5 | Refresh |
+| Ctrl+F | Search |
+| Ctrl+Z / Ctrl+Y | Undo / Redo on the selected game |
+| Ctrl+Enter | Apply |
 
 To get versions you don't have yet, open **Download** and press **Get newest for my games**, or pick
 any runtime and release.
