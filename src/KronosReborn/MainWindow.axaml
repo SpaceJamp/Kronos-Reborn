@@ -7,6 +7,7 @@
         x:Class="KronosReborn.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="Kronos Reborn"
+        Icon="/Assets/kronos.ico"
         Width="1320" Height="820" MinWidth="960" MinHeight="600">
 
     <Window.Styles>
