@@ -129,7 +129,7 @@ public sealed class DiagnosticsViewModel : INotifyPropertyChanged
             _problems(),
             DiagnosticsRunner.ReadLog(_paths.LogsDirectory),
             [
-                new DiagnosticFact("App version", BuildInfo.InformationalVersion),
+                new DiagnosticFact("Build", Data.Updates.UpdateChecker.CurrentVersion()),
                 new DiagnosticFact("Commit", BuildInfo.GitCommitShort ?? "unknown"),
             ]);
 

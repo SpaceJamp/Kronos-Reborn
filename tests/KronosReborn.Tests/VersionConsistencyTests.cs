@@ -89,12 +89,19 @@ public class VersionConsistencyTests
     }
 
     [Fact]
-    public void TheVersionLooksLikeAVersion()
+    public void TheVersionIsAWholeBuildNumber()
     {
-        // Catches a half-finished edit such as an empty value or a stray character, which the
-        // equality tests above would happily agree on if it happened in all three places at once.
-        var version = PropsVersion();
+        // Releases are numbered by build: 4, 5, 6. Also catches a half-finished edit, such as an
+        // empty value or a stray character, that the equality tests above would agree on if it
+        // happened in all three places at once.
+        Assert.Matches(@"^[1-9][0-9]*$", PropsVersion());
+    }
 
-        Assert.Matches(@"^\d+\.\d+\.\d+", version);
+    [Fact]
+    public void CopiesOnTheOldDottedVersionsSeeTheBuildNumberAsNewer()
+    {
+        // 0.1.0 to 0.1.2 compare release tags as dotted numbers, so build 4 must read as newer than
+        // all of them, or those copies would never be offered another update.
+        Assert.True(KronosReborn.Data.Runtimes.VersionNumber.IsOlder("0.1.2", PropsVersion()));
     }
 }

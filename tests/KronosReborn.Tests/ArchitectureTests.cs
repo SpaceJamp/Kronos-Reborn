@@ -428,4 +428,16 @@ public class ArchitectureTests
                 "so it cannot be reached by the user.");
         }
     }
+
+    [Fact]
+    public void UpdateButtonsAndTipsNameTheBuild()
+    {
+        var window = File.ReadAllText(Path.Combine(RepositoryRoot, "src", "KronosReborn", "MainWindow.axaml"));
+
+        Assert.Contains("StringFormat='Update to build {0}'", window, StringComparison.Ordinal);
+        Assert.Contains("StringFormat='Get build {0}'", window, StringComparison.Ordinal);
+        Assert.Contains("StringFormat='Install build {0}'", window, StringComparison.Ordinal);
+        // The app's own releases are builds now; runtime DLLs still have versions, so only these go.
+        Assert.DoesNotContain("new version", window, StringComparison.OrdinalIgnoreCase);
+    }
 }

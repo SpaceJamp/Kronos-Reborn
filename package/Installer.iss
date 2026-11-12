@@ -6,7 +6,7 @@
 #ifndef AppVersion
   ; Fallback for compiling this script by hand. Flagged because it is exactly the kind of literal
   ; that goes stale; a test checks it against Directory.Build.props and config.cmd.
-  #define AppVersion "0.1.2"
+  #define AppVersion "4"
 #endif
 
 #define AppName "Kronos Reborn"
@@ -18,6 +18,8 @@
 AppId={#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
+; Shown in Windows' installed-apps list as "Kronos Reborn build 4" rather than "version 4".
+AppVerName={#AppName} build {#AppVersion}
 AppPublisher={#AppPublisher}
 VersionInfoVersion={#AppVersion}.0
 VersionInfoProductVersion={#AppVersion}
@@ -44,7 +46,7 @@ DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#AppExeName}
 OutputDir=Output
-OutputBaseFilename=KronosReborn-{#AppVersion}-installer
+OutputBaseFilename=KronosReborn-build-{#AppVersion}-installer
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

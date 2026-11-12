@@ -9,14 +9,14 @@ REM agree, and a test checks that they do. Handing the real value to ISCC rather
 REM the .iss is what stops the installer's name drifting from the project's.
 REM
 
-set app_version=0.1.2
+set app_version=4
 
 set project_name=Kronos Reborn
 set project_id=KronosReborn
 
 set output_dir=%~dp0Output
-set output_installer=%output_dir%\%project_id%-%app_version%-installer.exe
-set output_zip=%output_dir%\%project_id%-%app_version%-portable.zip
+set output_installer=%output_dir%\%project_id%-build-%app_version%-installer.exe
+set output_zip=%output_dir%\%project_id%-build-%app_version%-portable.zip
 set csproj_file=%~dp0..\src\%project_id%\%project_id%.csproj
 
 REM PublishDir is resolved by MSBuild relative to the project, not to the current directory, so the
