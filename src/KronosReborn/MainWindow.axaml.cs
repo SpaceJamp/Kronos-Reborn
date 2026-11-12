@@ -195,6 +195,10 @@ public sealed partial class MainWindow : Window, IFilePicker
         }
     }
 
+    public Task OpenUrlAsync(Uri url) => throw new NotImplementedException();
+
+    public void RunInstallerAndExit(string installerPath) => throw new NotImplementedException();
+
     public async Task<string?> AskForRuntimeFileAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
