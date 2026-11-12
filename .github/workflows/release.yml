@@ -25,6 +25,15 @@ jobs:
         with:
           global-json-file: global.json
 
+      # The tag decides what the app is offered and what gets signed; the build number decides what
+      # the installed app reports. If they differ, every copy is offered the same build forever, or
+      # never offered it at all.
+      - name: Check the tag matches the build number
+        run: |
+          $build = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ('${{ github.ref_name }}' -ne "v$build") { throw "Tag ${{ github.ref_name }} does not match <Version>$build</Version> in Directory.Build.props." }
+          "Releasing build $build"
+
       - name: Restore with the committed dependency lock
         run: dotnet restore KronosReborn.sln --locked-mode
 
@@ -59,7 +68,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           gh release create "${{ github.ref_name }}"
-          --title "${{ github.ref_name }}"
+          --title "Build $('${{ github.ref_name }}'.TrimStart('v'))"
           --draft
           --generate-notes
           "${{ steps.package.outputs.portable }}"

@@ -152,6 +152,7 @@ public class DiagnosticsTests
         await vm.RunAsync(rescan: true);
         Assert.Equal(1, scans);
         Assert.Contains("Checked at", vm.StatusText);
+        Assert.Matches("^[1-9][0-9]*$", Assert.Single(vm.Environment, f => f.Name == "Build").Value);
     }
 
     private static DiagnosticsReport Run(SwapFixture fixture) =>

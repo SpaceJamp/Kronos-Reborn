@@ -474,7 +474,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         get
         {
-            // What is not known is left out: a build without git read "Build unknown, unknown, date unknown".
+            // The build number first; what is not known is left out rather than shown as "unknown".
             string?[] parts =
             [
                 BuildInfo.GitCommitShort,
@@ -482,8 +482,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 BuildInfo.GitBranch,
             ];
             var known = parts.Where(p => p is not null).ToArray();
+            var build = $"Build {Data.Updates.UpdateChecker.CurrentVersion()}";
 
-            return known.Length == 0 ? "Development build" : $"Build {string.Join(", ", known)}";
+            return known.Length == 0 ? build : $"{build} · {string.Join(", ", known)}";
         }
     }
 

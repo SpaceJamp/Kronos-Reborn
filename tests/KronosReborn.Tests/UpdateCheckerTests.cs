@@ -164,10 +164,48 @@ public sealed class UpdateCheckerTests : IDisposable
             UpdateChecker.SignedMessage("0.2.0", Sha256Hex("malware")), HashAlgorithmName.SHA256));
         using var http = Client(null, "malware", forged);
 
-        await Assert.ThrowsAsync<InvalidDataException>(() =>
+        var refused = await Assert.ThrowsAsync<InvalidDataException>(() =>
             Checker(http).DownloadAsync(Update("malware"), temp.Root, null, CancellationToken.None));
 
+        Assert.Contains("for build 0.2.0", refused.Message, StringComparison.Ordinal);
         Assert.Empty(Directory.GetFiles(temp.Root));
+    }
+
+    [Fact]
+    public async Task ACopyOn012FindsAndVerifiesBuild4()
+    {
+        // The real migration: 0.1.2 is installed, and the first build-numbered release is tagged v4.
+        const string name = "KronosReborn-build-4-installer.exe";
+        const string installerUrl = "https://github.com/SpaceJamp/Kronos-Reborn/releases/download/v4/" + name;
+        var sha = Sha256Hex("build 4");
+        var json = JsonSerializer.Serialize(new
+        {
+            tag_name = "v4",
+            html_url = "https://github.com/SpaceJamp/Kronos-Reborn/releases/tag/v4",
+            assets = new object[]
+            {
+                new { name, browser_download_url = installerUrl, digest = "sha256:" + sha },
+                new { name = name + ".sig", browser_download_url = installerUrl + ".sig", digest = (string?)null },
+                new { name = "KronosReborn-build-4-portable.zip", browser_download_url = installerUrl.Replace("installer.exe", "portable.zip"), digest = (string?)null },
+            },
+        });
+        var signature = Convert.ToBase64String(_key.SignData(UpdateChecker.SignedMessage("4", sha), HashAlgorithmName.SHA256));
+        using var http = new HttpClient(new Fake(r => r.RequestUri!.ToString() switch
+        {
+            UpdateChecker.LatestReleaseUrl => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) },
+            installerUrl => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("build 4") },
+            installerUrl + ".sig" => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(signature) },
+            _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+        }));
+        var checker = new UpdateChecker(http, "0.1.2", PublicKey);
+
+        var update = Assert.IsType<AvailableUpdate>((await checker.CheckAsync(CancellationToken.None)).Update);
+        Assert.Equal("4", update.Version);
+        Assert.True(update.CanInstall);
+
+        using var temp = new TemporaryDirectory();
+        var path = await checker.DownloadAsync(update, temp.Root, null, CancellationToken.None);
+        Assert.Equal(name, Path.GetFileName(path));
     }
 
     [Fact]

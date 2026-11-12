@@ -159,10 +159,10 @@ public sealed class UpdatesViewModel : INotifyPropertyChanged
 
             StatusText = result switch
             {
-                { Update: { } u } => $"Version {u.Version} is available.",
+                { Update: { } u } => $"Build {u.Version} is available.",
                 { Error: { } e } when !automatic => $"Could not check for updates: {e}",
                 { Error: { } } => string.Empty,
-                _ when !automatic => "You have the newest version.",
+                _ when !automatic => "You have the newest build.",
                 _ => string.Empty,
             };
 

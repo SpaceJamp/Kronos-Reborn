@@ -11,7 +11,7 @@ namespace KronosReborn.Tests;
 /// <remarks>
 /// This is the first code in the project, so it is worth being explicit about why it is here at all.
 ///
-/// BuildInfo exists so a bug report can be tied to a specific binary. "Version 0.1.0" identifies
+/// BuildInfo exists so a bug report can be tied to a specific binary. "Build 4" identifies
 /// nothing on its own once more than one build exists; a commit hash does. That only works if the
 /// metadata is actually present and parsed correctly, and there is no way to check that by running the
 /// application and looking at a window.

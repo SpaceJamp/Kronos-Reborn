@@ -20,8 +20,8 @@
     Creates the key once and prints the public key to put in UpdateChecker.ReleasePublicKey.
 
 .EXAMPLE
-    .\sign-release.ps1 v0.1.2
-    Signs and publishes the v0.1.2 draft.
+    .\sign-release.ps1 v4
+    Signs and publishes the build 4 draft.
 #>
 param(
     [Parameter(Position = 0)][string]$Tag,
@@ -51,7 +51,7 @@ if ($NewKey) {
     return
 }
 
-if (-not $Tag) { throw 'Give the release tag to sign, such as v0.1.2, or -NewKey to create the key.' }
+if (-not $Tag) { throw 'Give the release tag to sign, such as v4, or -NewKey to create the key.' }
 if (-not (Test-Path $KeyPath)) { throw "No release key at $KeyPath. Create one with -NewKey." }
 
 $release = gh release view $Tag --repo $Repo --json isDraft,assets | ConvertFrom-Json
@@ -88,7 +88,7 @@ try {
     $sigFile = "$file.sig"
     Set-Content -Path $sigFile -Value ([Convert]::ToBase64String($signature)) -NoNewline
     gh release upload $Tag $sigFile --repo $Repo --clobber
-    gh release edit $Tag --repo $Repo --draft=false | Out-Null
+    gh release edit $Tag --repo $Repo --draft=false --latest | Out-Null
 
     Write-Host "Signed $name ($version, $sha) and published $Tag."
 }

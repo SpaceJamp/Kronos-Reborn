@@ -13,7 +13,7 @@ the version you choose. Every file it replaces is backed up first, so nothing is
 ## Getting started
 
 1. **Download** the [latest release](https://github.com/SpaceJamp/Kronos-Reborn/releases/latest).
-   Take the installer (`KronosReborn-<version>-installer.exe`), or the portable zip if you'd rather
+   Take the installer (`KronosReborn-build-<N>-installer.exe`), or the portable zip if you'd rather
    not install anything.
 2. **Run it.** The builds aren't code-signed yet, so Windows SmartScreen may say the publisher is
    unknown. Choose **More info**, then **Run anyway**.
@@ -140,7 +140,7 @@ installer (needs Inno Setup: `winget install JRSoftware.InnoSetup`). Both land i
 CI restores from the committed `packages.lock.json` files in locked mode. It also checks formatting,
 builds with warnings as errors, runs the tests and packages both. After changing a package reference,
 run `dotnet restore .\KronosReborn.sln --force-evaluate` and commit the lock files. Pushing a `v*`
-tag builds a **draft** release. `package\sign-release.ps1 v<version>` then signs its installer with the
+tag builds a **draft** release. `package\sign-release.ps1 v<build>` (for example `v4`) then signs its installer with the
 release key and publishes it (`-NewKey` creates the key once; back it up offline).
 
 ```

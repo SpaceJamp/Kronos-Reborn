@@ -17,7 +17,7 @@ namespace KronosReborn;
 /// value here is therefore nullable, and absence is shown as absence.
 ///
 /// The second is that two builds of the same version are otherwise indistinguishable. When a user
-/// reports a problem, "1.2.3" tells you nothing about which binary they are running; a commit hash
+/// reports a problem, "build 4" tells you nothing about which binary they are running; a commit hash
 /// does. <see cref="GitCommitShort"/> exists for that.
 ///
 /// Branch and tag are absent unless the packaging script passes them, because MSBuild cannot run git

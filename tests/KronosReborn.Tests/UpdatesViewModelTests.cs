@@ -12,9 +12,9 @@ namespace KronosReborn.Tests;
 public class UpdatesViewModelTests
 {
     private static readonly AvailableUpdate Installable = new(
-        "0.2.0", new Uri("https://github.com/x/y/releases/tag/v0.2.0"),
-        new Uri("https://github.com/x/y/releases/download/v0.2.0/setup.exe"), "setup.exe", new string('a', 64),
-        new Uri("https://github.com/x/y/releases/download/v0.2.0/setup.exe.sig"));
+        "5", new Uri("https://github.com/x/y/releases/tag/v5"),
+        new Uri("https://github.com/x/y/releases/download/v5/setup.exe"), "setup.exe", new string('a', 64),
+        new Uri("https://github.com/x/y/releases/download/v5/setup.exe.sig"));
 
     [Fact]
     public async Task AManualCheckSaysWhenUpToDate()
@@ -24,7 +24,7 @@ public class UpdatesViewModelTests
         await vm.CheckAsync(automatic: false);
 
         Assert.False(vm.HasUpdate);
-        Assert.Equal("You have the newest version.", vm.StatusText);
+        Assert.Equal("You have the newest build.", vm.StatusText);
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public class UpdatesViewModelTests
         await vm.CheckAsync(automatic: true);
 
         Assert.True(vm.HasUpdate);
-        Assert.Contains("0.2.0", vm.StatusText);
+        Assert.Equal("Build 5 is available.", vm.StatusText);
     }
 
     [Fact]

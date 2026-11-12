@@ -157,6 +157,16 @@ public class MainViewModelTests
         Assert.Empty(fixture.Vm.HiddenGames);
     }
 
+    [Fact]
+    public void TheStatusBarSaysWhichBuildThisIs()
+    {
+        using var fixture = new Fixture();
+
+        // Exact, so a commit hash that happens to start with the build's digits cannot pass for it.
+        var build = System.Text.RegularExpressions.Regex.Escape(KronosReborn.Data.Updates.UpdateChecker.CurrentVersion());
+        Assert.Matches($"^Build {build}( · |$)", fixture.Vm.BuildInfoText);
+    }
+
     private static ObservableCollection<GameRow> Rows(params string[] ids) =>
         [.. ids.Select(id => new GameRow(
             new GameRecord("Steam", id, $"Game {id}", Path.Combine("C:", id), true),

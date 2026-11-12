@@ -82,7 +82,7 @@ jobs:
       # filename itself.
       #
       # It used to glob package\Output\Kronos-*-portable.zip, which cannot match
-      # KronosReborn-0.1.0-portable.zip, and it also asked for an installer that only package.cmd
+      # KronosReborn-build-4-portable.zip, and it also asked for an installer that only package.cmd
       # builds, so the upload step failed on both counts. The name was duplicated here even though
       # config.cmd is documented as the single source for it, and a rename broke the one place that
       # could not see config.cmd. Reading the paths back out removes that duplication rather than

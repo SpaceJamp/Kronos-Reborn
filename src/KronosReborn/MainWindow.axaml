@@ -38,14 +38,14 @@
                 <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                            ToolTip.Tip="{Binding StatusText}" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button Content="{Binding Updates.Update.Version, StringFormat='Update to {0}', FallbackValue=''}"
+                    <Button Content="{Binding Updates.Update.Version, StringFormat='Update to build {0}', FallbackValue=''}"
                             Command="{Binding Updates.InstallCommand}" IsVisible="{Binding Updates.CanInstall}"
                             Classes="accent" Margin="12,0,0,0" Padding="8,2"
-                            ToolTip.Tip="Download the new version, then close and install it" />
-                    <Button Content="{Binding Updates.Update.Version, StringFormat='Get {0}', FallbackValue=''}"
+                            ToolTip.Tip="Download the new build, then close and install it" />
+                    <Button Content="{Binding Updates.Update.Version, StringFormat='Get build {0}', FallbackValue=''}"
                             Command="{Binding Updates.OpenPageCommand}" IsVisible="{Binding Updates.CanOnlyOpenPage}"
                             Margin="12,0,0,0" Padding="8,2"
-                            ToolTip.Tip="Open the new version's page on GitHub" />
+                            ToolTip.Tip="Open the new build's page on GitHub" />
                 </StackPanel>
                 <Button Grid.Column="2" Content="Undo last apply" Command="{Binding UndoLastApplyCommand}"
                         IsVisible="{Binding HasLastApply}" Margin="12,0,0,0" Padding="8,2"
@@ -408,7 +408,7 @@
                     <CheckBox Content="Check for updates when Kronos Reborn starts" IsChecked="{Binding CheckForUpdates}" />
                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                         <Button Content="Check now" Command="{Binding Updates.CheckCommand}" />
-                        <Button Content="{Binding Updates.Update.Version, StringFormat='Install {0}', FallbackValue=''}"
+                        <Button Content="{Binding Updates.Update.Version, StringFormat='Install build {0}', FallbackValue=''}"
                                 Command="{Binding Updates.InstallCommand}" IsVisible="{Binding Updates.CanInstall}"
                                 Classes="accent" Margin="6,0,0,0" />
                         <Button Content="Open release page" Command="{Binding Updates.OpenPageCommand}"

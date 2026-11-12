@@ -14,7 +14,7 @@ using KronosReborn.Data.Runtimes;
 namespace KronosReborn.Data.Updates;
 
 /// <summary>A release newer than the one running.</summary>
-/// <param name="Version">Its version, such as "0.2.0".</param>
+/// <param name="Version">Its build number, such as "5".</param>
 /// <param name="PageUrl">The release's page on GitHub.</param>
 /// <param name="InstallerUrl">Where its installer downloads from, or null when it has none.</param>
 /// <param name="InstallerName">The installer's file name.</param>
@@ -67,7 +67,7 @@ public sealed partial class UpdateChecker(HttpClient http, string currentVersion
     private readonly HttpClient _http = http ?? throw new ArgumentNullException(nameof(http));
     private readonly string _publicKey = publicKey;
 
-    /// <summary>The running version without build metadata: "0.1.0+abc1234" gives "0.1.0".</summary>
+    /// <summary>The running build number without build metadata: "4+abc1234" gives "4".</summary>
     public static string CurrentVersion() => BuildInfo.InformationalVersion.Split('+')[0];
 
     /// <summary>The exact bytes a release signature covers. package/sign-release.ps1 builds the same text.</summary>
@@ -197,7 +197,7 @@ public sealed partial class UpdateChecker(HttpClient http, string currentVersion
             if (!IsSignedByMaintainer(update.Version, actual, signature))
             {
                 throw new InvalidDataException(
-                    $"The installer for {update.Version} is not signed with Kronos Reborn's release key.");
+                    $"The installer for build {update.Version} is not signed with Kronos Reborn's release key.");
             }
 
             File.Move(partial, target, overwrite: true);

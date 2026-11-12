@@ -107,8 +107,12 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <NoWarn>$(NoWarn);CA1859</NoWarn>
 
-    <!-- One place for the version, so the app, the installer and the repository agree. -->
-    <Version>0.1.2</Version>
+    <!--
+    The build number, in one place so the app, the installer and the repository agree. Releases are
+    numbered 4, 5, 6 and so on (after 0.1.0 to 0.1.2), each tagged vN. Whole numbers so copies on
+    0.1.x, which compare tags as dotted numbers, still see each new build as newer.
+    -->
+    <Version>4</Version>
 
     <!--
     Build metadata injected into the assembly and read back at runtime.
