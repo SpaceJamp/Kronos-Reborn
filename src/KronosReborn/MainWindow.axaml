@@ -30,13 +30,13 @@
             <Setter Property="Margin" Value="0,0,8,8" />
             <Setter Property="CornerRadius" Value="8" />
         </Style>
-        <!-- The magic background: the rings are turned from code (MainWindow.UpdateMotion), which also
-             gates this pulse with the "on" class, so nothing moves while it is off, minimised or in the
-             background, or when Windows animations are turned off. -->
+        <!-- The magic background: the rings turn and the star swells from code (MainWindow.UpdateMotion),
+             which also gates this brightening with the "on" class, so nothing moves while it is off,
+             minimised or in the background, or when Windows animations are turned off. -->
         <Style Selector="Panel.magic.on :is(Control).pulse">
             <Style.Animations>
-                <Animation Duration="0:0:6" IterationCount="INFINITE" Delay="0" PlaybackDirection="Alternate" Easing="SineEaseInOut">
-                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.6" /></KeyFrame>
+                <Animation Duration="0:0:2.5" IterationCount="INFINITE" Delay="0" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.4" /></KeyFrame>
                     <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1" /></KeyFrame>
                 </Animation>
             </Style.Animations>
@@ -75,8 +75,10 @@
                         <Path Stroke="#BEE1FF" StrokeThickness="3" Opacity="0.08" Data="M 500,110 L 837.7,695 L 162.3,695 Z M 837.7,305 L 500,890 L 162.3,305 Z M 305,500 A 195,195 0 1 1 695,500 A 195,195 0 1 1 305,500 Z" />
                         <Path Fill="#BEE1FF" Opacity="0.08" Data="M 484,110 A 16,16 0 1 1 516,110 A 16,16 0 1 1 484,110 Z M 821.7,305 A 16,16 0 1 1 853.7,305 A 16,16 0 1 1 821.7,305 Z M 821.7,695 A 16,16 0 1 1 853.7,695 A 16,16 0 1 1 821.7,695 Z M 484,890 A 16,16 0 1 1 516,890 A 16,16 0 1 1 484,890 Z M 146.3,695 A 16,16 0 1 1 178.3,695 A 16,16 0 1 1 146.3,695 Z M 146.3,305 A 16,16 0 1 1 178.3,305 A 16,16 0 1 1 146.3,305 Z" />
                     </Canvas>
-                    <Canvas Width="1000" Height="1000" Opacity="0.12">
-                        <Path Classes="pulse" Fill="#FFECAA" Data="M 500,350 L 524,476 L 650,500 L 524,524 L 500,650 L 476,524 L 350,500 L 476,476 Z" />
+                    <!-- The star pulses every five seconds: brighter (12% to 30%) and larger (90% to 110%).
+                         At rest it sits where a pulse starts, dim and small, so pausing and resuming never jump. -->
+                    <Canvas x:Name="StarGlow" Width="1000" Height="1000" Opacity="0.3">
+                        <Path Classes="pulse" Opacity="0.4" Fill="#FFECAA" Data="M 500,350 L 524,476 L 650,500 L 524,524 L 500,650 L 476,524 L 350,500 L 476,476 Z" />
                     </Canvas>
                 </Panel>
             </Viewbox>

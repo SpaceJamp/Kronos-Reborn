@@ -115,28 +115,34 @@ public sealed partial class MainWindow : Window, IFilePicker
 
     private const double SecondsPerTurn = 240;      // the outer ring: one turn in four minutes
     private const double SecondsPerTurnBack = 150;  // the inner one, the other way, in two and a half
+    private const double SecondsPerPulse = 5;       // the star: swells and shrinks back, matching its brightening
+    private const double StarSmallest = 0.9;
+    private const double StarLargest = 1.1;
     private readonly System.Diagnostics.Stopwatch _clock = new();
     private double _spinAngle;      // radians, where each ring stood when it last stopped
     private double _spinBackAngle;
     private bool _moving;
 
     /// <summary>
-    /// Starts or stops the rings. They turn as composition animations, on the render thread: a UI-thread
+    /// Starts or stops the rings and the star's swell. They run as composition animations, on the render thread: a UI-thread
     /// timer moved them in visible steps, and froze then jumped them whenever the app was busy.
     /// </summary>
-    /// <returns>Whether they are now turning; false if a ring has no composition visual to animate.</returns>
+    /// <returns>Whether they are now moving; false if any of them has no composition visual yet.</returns>
     private bool SetSpinning(bool on)
     {
         if (on)
         {
-            // Both or neither, so a stop never leaves one ring turning.
-            if (ElementComposition.GetElementVisual(SpinRing) is null || ElementComposition.GetElementVisual(SpinBackRing) is null)
+            // All or none, so a stop never leaves anything moving.
+            if (ElementComposition.GetElementVisual(SpinRing) is null
+                || ElementComposition.GetElementVisual(SpinBackRing) is null
+                || ElementComposition.GetElementVisual(StarGlow) is not { } star)
             {
                 return false;
             }
 
             Spin(SpinRing, _spinAngle, SecondsPerTurn, 1);
             Spin(SpinBackRing, _spinBackAngle, SecondsPerTurnBack, -1);
+            Pulse(star);
 
             _clock.Restart();
             return true;
@@ -150,6 +156,13 @@ public sealed partial class MainWindow : Window, IFilePicker
             _spinBackAngle = (_spinBackAngle - (Math.Tau * seconds / SecondsPerTurnBack)) % Math.Tau;
             Hold(SpinRing, _spinAngle);
             Hold(SpinBackRing, _spinBackAngle);
+            if (ElementComposition.GetElementVisual(StarGlow) is { } star)
+            {
+                // Rests at the size a pulse starts from, so resuming is seamless. As with the rings, an
+                // unchanged value would send nothing and leave it pulsing.
+                var rest = new Vector3D(StarSmallest, StarSmallest, 1);
+                star.Scale = star.Scale == rest ? new Vector3D(StarSmallest + 0.0000001, StarSmallest, 1) : rest;
+            }
         }
 
         return false;
@@ -170,6 +183,20 @@ public sealed partial class MainWindow : Window, IFilePicker
         turn.Duration = TimeSpan.FromSeconds(secondsPerTurn);
         turn.IterationBehavior = AnimationIterationBehavior.Forever;
         visual.StartAnimation("RotationAngle", turn);
+    }
+
+    /// <summary>Swells the star and shrinks it back, forever, on the render thread like the rings.</summary>
+    private static void Pulse(CompositionVisual star)
+    {
+        star.CenterPoint = new Vector3D(500, 500, 0);
+        var pulse = star.Compositor.CreateVector3DKeyFrameAnimation();
+        var ease = new Avalonia.Animation.Easings.SineEaseInOut();
+        pulse.InsertKeyFrame(0f, new Vector3D(StarSmallest, StarSmallest, 1), ease);
+        pulse.InsertKeyFrame(0.5f, new Vector3D(StarLargest, StarLargest, 1), ease);
+        pulse.InsertKeyFrame(1f, new Vector3D(StarSmallest, StarSmallest, 1), ease);
+        pulse.Duration = TimeSpan.FromSeconds(SecondsPerPulse);
+        pulse.IterationBehavior = AnimationIterationBehavior.Forever;
+        star.StartAnimation("Scale", pulse);
     }
 
     private static void Hold(Visual ring, double angle)
@@ -195,13 +222,14 @@ public sealed partial class MainWindow : Window, IFilePicker
                      && WindowState != WindowState.Minimized
                      && WindowsShowsAnimations();
 
-        MagicLayer.Classes.Set("on", moving);
-
         if (moving != _moving)
         {
             // Stays false if the rings cannot be animated yet; the next change tries again.
             _moving = SetSpinning(moving);
         }
+
+        // After the rings and swell have started, so the star's brightening starts in step with them.
+        MagicLayer.Classes.Set("on", _moving);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
