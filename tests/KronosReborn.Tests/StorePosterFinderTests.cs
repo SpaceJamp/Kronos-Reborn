@@ -26,6 +26,71 @@ public class StorePosterFinderTests
         Assert.Equal(expected, string.Join(' ', StorePosterFinder.SearchWords(name)));
     }
 
+    [Theory]
+    // A possessive is part of the name; only an initialism's ("CB's") is a note to drop.
+    [InlineData("Assassin's Creed Unity", "Assassin's Creed Unity")]
+    [InlineData("Tom Clancy's Rainbow Six Siege", "Tom Clancy's Rainbow Six Siege")]
+    [InlineData("Assassin’s Creed Origins", "Assassin's Creed Origins")]
+    [InlineData("CB's Hellraiser - Revival", "Hellraiser Revival")]
+    public void PossessivesInAGameNameAreKept(string name, string expected)
+    {
+        Assert.Equal(expected, string.Join(' ', StorePosterFinder.SearchWords(name)));
+    }
+
+    [Theory]
+    [InlineData("Assassin's Creed", "Assassin’s Creed® Origins")]
+    [InlineData("Assassin's Creed Unity", "Assassin's Creed® Unity")]
+    [InlineData("Tom Clancy's Rainbow Six Siege", "Tom Clancy’s Rainbow Six® Siege")]
+    public void EitherApostropheMatches(string name, string candidate)
+    {
+        Assert.True(StorePosterFinder.Matches(StorePosterFinder.SearchWords(name), candidate));
+    }
+
+    [Theory]
+    // A sequel's cover is worse than none: a title holding the words plus a number is another game.
+    [InlineData("Baldur's Gate", "Baldur's Gate 3", false)]
+    [InlineData("Tomb Raider", "Tomb Raider II", false)]
+    [InlineData("Hellraiser Revival", "Clive Barker's Hellraiser: Revival", true)]
+    [InlineData("Cyberpunk 2077", "Cyberpunk 2077", true)]
+    // Repack folders often drop the apostrophe.
+    [InlineData("Baldurs Gate 3", "Baldur's Gate 3", true)]
+    public void ANumberedSequelIsNotTakenForTheGame(string name, string candidate, bool expected)
+    {
+        Assert.Equal(expected, StorePosterFinder.Matches(StorePosterFinder.SearchWords(name), candidate));
+    }
+
+    [Fact]
+    public void AnAllCapitalsContractionIsKept()
+    {
+        Assert.Equal("DON'T STARVE", string.Join(' ', StorePosterFinder.SearchWords("DON'T STARVE")));
+    }
+
+    [Fact]
+    public void ASteamDetailsAnswerWithoutAnImageIsNotRememberedAsAMiss()
+    {
+        // Steam answers like this when it is rate limiting or the game is not sold in a region.
+        using var fixture = new Fixture();
+        fixture.Responses[NewSearch] = new StringContent("""{"items":[{"id":4078430,"name":"STAR WARS: Galactic Racer™"}]}""");
+        fixture.Responses[NewDetails] = new StringContent("""{"4078430":{"success":false}}""");
+
+        Assert.Null(fixture.Find("folder:sw", "STAR WARS - Galactic Racer"));
+        Assert.Empty(Directory.Exists(fixture.Posters) ? Directory.GetFiles(fixture.Posters, "*.miss") : []);
+    }
+
+    [Fact]
+    public void AFailedSteamDetailsCallDoesNotStopSteamForTheRest()
+    {
+        using var fixture = new Fixture();
+        fixture.OfflineHosts.Add("never.used");
+        fixture.Responses[NewSearch] = new StringContent("""{"items":[{"id":4078430,"name":"STAR WARS: Galactic Racer™"}]}""");
+        fixture.FailingUrls.Add(NewDetails);
+        fixture.Responses[Search] = new StringContent("""{"items":[{"id":1551980,"name":"Clive Barker's Hellraiser: Revival"}]}""");
+        fixture.Responses[Cover] = Image(1);
+
+        Assert.Null(fixture.Find("folder:sw", "STAR WARS - Galactic Racer"));
+        Assert.NotNull(fixture.Find("folder:hellraiser", "CB's Hellraiser - Revival"));
+    }
+
     [Fact]
     public void AResultCountsOnlyWhenItHasEveryWord()
     {
@@ -317,7 +382,7 @@ public class StorePosterFinderTests
         fixture.Responses[Cover] = new StringContent("<html>sign in</html>", System.Text.Encoding.UTF8, "text/html");
 
         Assert.Null(fixture.Find("folder:hellraiser", "CB's Hellraiser - Revival"));
-        Assert.Empty(Directory.GetFiles(fixture.Posters, "*.jpg"));
+        Assert.Empty(Directory.Exists(fixture.Posters) ? Directory.GetFiles(fixture.Posters, "*.jpg") : []);
     }
 
     [Fact]
@@ -362,6 +427,37 @@ public class StorePosterFinderTests
         Assert.Null(StorePosterFinder.Chosen(fixture.Posters, "folder:x"));
     }
 
+    private const string NewSearch = "https://store.steampowered.com/api/storesearch/?l=english&cc=US&term=STAR%20WARS%20Galactic%20Racer";
+    private const string NewDetails = "https://store.steampowered.com/api/appdetails?appids=4078430&filters=basic";
+
+    [Fact]
+    public void ANewerSteamGameGetsTheImageSteamNamesForIt()
+    {
+        // Newer games' images sit at addresses that change with each upload, so the fixed one is a 404.
+        using var fixture = new Fixture();
+        fixture.Responses[NewSearch] = new StringContent("""{"items":[{"id":4078430,"name":"STAR WARS: Galactic Racer™"}]}""");
+        fixture.Responses[NewDetails] = new StringContent("""
+            {"4078430":{"success":true,"data":{"header_image":"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/4078430/97215eb6/header.jpg?t=1791388584"}}}
+            """);
+        fixture.Responses["https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/4078430/97215eb6/header.jpg?t=1791388584"] = Image(4, 2);
+
+        var found = fixture.Find("folder:sw", "STAR WARS - Galactic Racer");
+
+        Assert.NotNull(found);
+        Assert.Equal([4, 2], File.ReadAllBytes(found));
+    }
+
+    [Fact]
+    public void AnImageSteamNamesOnAnotherHostIsNotDownloaded()
+    {
+        using var fixture = new Fixture();
+        fixture.Responses[NewSearch] = new StringContent("""{"items":[{"id":4078430,"name":"STAR WARS: Galactic Racer™"}]}""");
+        fixture.Responses[NewDetails] = new StringContent("""{"4078430":{"success":true,"data":{"header_image":"https://steamstatic.com.evil.example/header.jpg"}}}""");
+
+        Assert.Null(fixture.Find("folder:sw", "STAR WARS - Galactic Racer"));
+        Assert.DoesNotContain(fixture.Requested, url => url.Contains("evil.example", StringComparison.Ordinal));
+    }
+
     private static ByteArrayContent Image(params byte[] bytes)
     {
         var content = new ByteArrayContent(bytes);
@@ -385,6 +481,7 @@ public class StorePosterFinderTests
         public string Posters => Path.Combine(_temp.Root, "posters");
         public Dictionary<string, HttpContent> Responses { get; } = [];
         public HashSet<string> OfflineHosts { get; } = [];
+        public HashSet<string> FailingUrls { get; } = [];
         public List<string> Requested { get; } = [];
         public bool Offline { get; set; }
 
@@ -408,7 +505,7 @@ public class StorePosterFinderTests
             var url = request.RequestUri!.AbsoluteUri;
             fixture.Requested.Add(url);
 
-            if (fixture.Offline || fixture.OfflineHosts.Contains(request.RequestUri.Host))
+            if (fixture.Offline || fixture.OfflineHosts.Contains(request.RequestUri.Host) || fixture.FailingUrls.Contains(url))
             {
                 throw new HttpRequestException("offline");
             }

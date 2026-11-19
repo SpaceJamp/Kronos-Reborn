@@ -75,9 +75,17 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
             // stops the other: where a store is blocked rather than offline, each attempt would sit out
             // its whole timeout.
             var unanswered = false;
+            string? appId = null;
             var image = Ask(ref _steamDown, ref unanswered, name, () =>
-                (steamAppId ?? Search(name, cancellation)) is { } appId ? Download(appId, cancellation) : null, cancellation);
+                (appId = steamAppId ?? Search(name, cancellation)) is { } id ? Download(id, cancellation) : null, cancellation);
             image ??= Ask(ref _microsoftDown, ref unanswered, name, () => MicrosoftStorePoster(name, cancellation), cancellation);
+
+            // Last, Steam's landscape header at the address its store names: newer games' images are
+            // not at the fixed address, and a portrait poster from Microsoft is the better fit first.
+            if (image is null && appId is not null)
+            {
+                image = Ask(ref _steamDetailsDown, ref unanswered, name, () => NamedHeader(appId, cancellation), cancellation);
+            }
 
             if (image is null)
             {
@@ -196,34 +204,73 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
 
     private bool _microsoftDown;
 
+    /// <summary>Steam's details call on its own: it is rate limited more tightly than search and images.</summary>
+    private bool _steamDetailsDown;
+
     /// <summary>The largest cover kept; a store's posters are a few megabytes at most.</summary>
     private const long MaxImageBytes = 20 * 1024 * 1024;
 
     /// <summary>The words of a name worth searching for.</summary>
     /// <remarks>
-    /// Bracketed notes ("[FitGirl Repack]"), version numbers ("v1.2.3") and possessive abbreviations
-    /// ("CB's") are dropped, and punctuation becomes spaces.
+    /// Bracketed notes ("[FitGirl Repack]"), version numbers ("v1.2.3") and an initialism's
+    /// possessive ("CB's") are dropped, and punctuation becomes spaces. Other possessives are part of
+    /// the name ("Assassin's Creed"), and both apostrophes count as the same one.
     /// </remarks>
     internal static string[] SearchWords(string name) =>
     [
-        .. Words().Matches(Version().Replace(Brackets().Replace(name, " "), " "))
-            .Select(m => m.Value)
-            .Where(w => !w.Contains('\'') && !w.Contains('’')),
+        .. Tokens(Version().Replace(Brackets().Replace(name, " "), " "))
+            .Where(w => !IsInitialismPossessive(w)),
     ];
+
+    /// <summary>The words of a name, with the curly apostrophe written as the straight one.</summary>
+    private static IEnumerable<string> Tokens(string text) =>
+        Words().Matches(text).Select(m => m.Value.Replace('’', '\''));
+
+    /// <summary>"CB's": a short all-capitals word with a possessive, a repacker's or author's initials.</summary>
+    /// <remarks>Only a possessive: "DON'T" is a word of the name.</remarks>
+    private static bool IsInitialismPossessive(string word) =>
+        word.EndsWith("'s", StringComparison.OrdinalIgnoreCase)
+        && word.Length - 2 is > 0 and <= 4
+        && word[..^2].All(char.IsUpper);
+
+    /// <summary>A word as compared: without apostrophes, so a "Baldurs Gate" folder matches "Baldur's Gate".</summary>
+    private static string Key(string word) => word.Replace("'", "", StringComparison.Ordinal);
+
+    /// <summary>A number or Roman numeral, as a sequel adds to a name.</summary>
+    private static bool IsSequelNumber(string word) =>
+        word.All(char.IsAsciiDigit) || RomanNumeral().IsMatch(word);
 
     /// <summary>Whether a store result can be the game: its name is the searched words, or holds them all.</summary>
     /// <remarks>
     /// A single word must be the whole name. Containing it is far too loose: "Control" matched
     /// "CONTROL Resonant" and "Tools" matched "Tools Up!", which is worse than no cover.
     /// </remarks>
-    internal static bool Matches(IReadOnlyCollection<string> words, string candidate) =>
-        words.Count > 0 && (IsExactly(words, candidate)
-            || (words.Count > 1 && words.All(Words().Matches(candidate).Select(m => m.Value)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase).Contains)));
+    /// <remarks>
+    /// A title holding all the words plus a number the name lacks is a sequel, not the game: "Baldur's
+    /// Gate" must not take "Baldur's Gate 3"'s cover.
+    /// </remarks>
+    internal static bool Matches(IReadOnlyCollection<string> words, string candidate)
+    {
+        if (words.Count == 0)
+        {
+            return false;
+        }
+
+        if (IsExactly(words, candidate))
+        {
+            return true;
+        }
+
+        var wanted = words.Select(Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var title = Tokens(candidate).Select(Key).ToList();
+        return words.Count > 1
+               && wanted.All(w => title.Contains(w, StringComparer.OrdinalIgnoreCase))
+               && !title.Any(t => !wanted.Contains(t) && IsSequelNumber(t));
+    }
 
     /// <summary>Whether a name is exactly the searched words, ignoring case and punctuation.</summary>
     private static bool IsExactly(IReadOnlyCollection<string> words, string candidate) =>
-        Words().Matches(candidate).Select(m => m.Value).SequenceEqual(words, StringComparer.OrdinalIgnoreCase);
+        Tokens(candidate).Select(Key).SequenceEqual(words.Select(Key), StringComparer.OrdinalIgnoreCase);
 
     private string? Search(string name, CancellationToken cancellation)
     {
@@ -311,6 +358,34 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
             ? value.GetString()
             : null;
 
+    /// <summary>The header image Steam's store names for a game, from Steam's own image servers only.</summary>
+    private byte[]? NamedHeader(string appId, CancellationToken cancellation)
+    {
+        var details = $"https://store.steampowered.com/api/appdetails?appids={Uri.EscapeDataString(appId)}&filters=basic";
+        using var json = JsonDocument.Parse(Get(details, cancellation) ?? "{}"u8.ToArray());
+
+        var header = json.RootElement.ValueKind == JsonValueKind.Object
+                     && json.RootElement.TryGetProperty(appId, out var app)
+                     && app.ValueKind == JsonValueKind.Object
+                     && app.TryGetProperty("data", out var data)
+            ? Text(data, "header_image")
+            : null;
+
+        // No details (rate limiting, or a game not sold in the region) says nothing about whether
+        // the game has art, so it is not remembered as a miss.
+        if (header is null)
+        {
+            throw new InvalidOperationException($"Steam gave no details for app {appId}.");
+        }
+
+        return header is not null
+               && Uri.TryCreate(header, UriKind.Absolute, out var uri)
+               && uri.Scheme == Uri.UriSchemeHttps
+               && (uri.Host == "steamstatic.com" || uri.Host.EndsWith(".steamstatic.com", StringComparison.OrdinalIgnoreCase))
+            ? Get(uri.AbsoluteUri, cancellation, image: true)
+            : null;
+    }
+
     private byte[]? Download(string appId, CancellationToken cancellation) =>
         Get($"https://shared.steamstatic.com/store_item_assets/steam/apps/{appId}/library_600x900.jpg", cancellation, image: true)
         ?? Get($"https://shared.steamstatic.com/store_item_assets/steam/apps/{appId}/header.jpg", cancellation, image: true);
@@ -348,6 +423,9 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
 
     [GeneratedRegex(@"[\p{L}\p{N}'’]+")]
     private static partial Regex Words();
+
+    [GeneratedRegex("^(II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)$", RegexOptions.IgnoreCase)]
+    private static partial Regex RomanNumeral();
 
     [GeneratedRegex(@"\bv?\d+(\.\d+)+\b", RegexOptions.IgnoreCase)]
     private static partial Regex Version();

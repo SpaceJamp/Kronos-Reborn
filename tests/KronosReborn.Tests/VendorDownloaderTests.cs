@@ -85,6 +85,92 @@ public class VendorDownloaderTests
         Assert.False(Directory.Exists(Path.Combine(paths.Root, "downloads")));
     }
 
+    private const string DlssTags = "https://api.github.com/repos/NVIDIA/DLSS/tags?per_page=100";
+
+    private static string DlssRaw(string tag, string file) =>
+        $"https://raw.githubusercontent.com/NVIDIA/DLSS/{tag}/lib/Windows_x86_64/rel/{file}";
+
+    [Fact]
+    public async Task ANewerDlssThanAnyHeldIsReported()
+    {
+        using var fixture = new Fixture();
+        fixture.Responses[DlssTags] = Json("""[{"name":"v310.2.1"},{"name":"v310.5.0"}]""");
+        fixture.Responses[DlssRaw("v310.5.0", "nvngx_dlss.dll")] = Json("x");
+        fixture.Responses[DlssRaw("v310.5.0", "nvngx_dlssg.dll")] = Json("x");
+        Hold(fixture, RuntimeKind.Dlss, "310.2.1");
+
+        var newer = await fixture.Downloader.NewerAvailableAsync([RuntimeKind.Dlss, RuntimeKind.DlssG], TestContext.Current.CancellationToken);
+
+        // Frame Generation is released with the same number, and none of it is held.
+        Assert.Equal([RuntimeKind.Dlss, RuntimeKind.DlssG], newer);
+    }
+
+    [Fact]
+    public async Task ANewestReleaseWithoutTheDllIsNotReported()
+    {
+        // Get newest would fall back to an older release already held, so the notice would never go.
+        using var fixture = new Fixture();
+        fixture.Responses[DlssTags] = Json("""[{"name":"v310.5.0"}]""");
+        Hold(fixture, RuntimeKind.DlssR, "310.2.1");
+
+        Assert.Empty(await fixture.Downloader.NewerAvailableAsync([RuntimeKind.DlssR], TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AHeldVersionWhoseFileIsGoneDoesNotHideANewerOne()
+    {
+        using var fixture = new Fixture();
+        fixture.Responses[DlssTags] = Json("""[{"name":"v310.5.0"}]""");
+        fixture.Responses[DlssRaw("v310.5.0", "nvngx_dlss.dll")] = Json("x");
+        var held = Hold(fixture, RuntimeKind.Dlss, "310.5.0");
+        File.Delete(held);
+
+        Assert.Equal([RuntimeKind.Dlss], await fixture.Downloader.NewerAvailableAsync([RuntimeKind.Dlss], TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task NothingIsReportedWhenTheNewestIsHeld()
+    {
+        using var fixture = new Fixture();
+        fixture.Responses[DlssTags] = Json("""[{"name":"v310.5.0"},{"name":"v310.2.1"}]""");
+        Hold(fixture, RuntimeKind.Dlss, "310.5.0");
+
+        Assert.Empty(await fixture.Downloader.NewerAvailableAsync([RuntimeKind.Dlss], TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RuntimesWhoseTagsAreNotTheirVersionAreNeverReported()
+    {
+        // AMD's tags name the SDK, and XeSS Frame Generation and XeLL have their own numbers, so a
+        // newer one cannot be told from the tags alone; guessing would be a false alarm.
+        using var fixture = new Fixture();
+
+        Assert.Empty(await fixture.Downloader.NewerAvailableAsync(
+            [RuntimeKind.Fsr, RuntimeKind.FsrUpscaler, RuntimeKind.XessFg, RuntimeKind.Xell], TestContext.Current.CancellationToken));
+        Assert.Empty(fixture.Requested);
+    }
+
+    [Fact]
+    public async Task NothingIsReportedWhenGitHubCannotBeReached()
+    {
+        using var fixture = new Fixture();
+
+        var ex = await Record.ExceptionAsync(() =>
+            fixture.Downloader.NewerAvailableAsync([RuntimeKind.Dlss, RuntimeKind.Xess], TestContext.Current.CancellationToken));
+
+        Assert.Null(ex);
+    }
+
+    private static string Hold(Fixture fixture, RuntimeKind kind, string version)
+    {
+        var folder = Path.Combine(fixture.Paths.Root, "held-" + version);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, RuntimeDlls.ByKind[kind][0]), "x");
+        var entry = fixture.Catalog.AddImport(kind, version, folder, "x", RuntimeTrust.Trusted);
+        Assert.NotNull(entry);
+        return entry.FilePath;
+    }
+
     private static string Raw(string tag, string path) =>
         $"https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/{tag}/{path}";
 

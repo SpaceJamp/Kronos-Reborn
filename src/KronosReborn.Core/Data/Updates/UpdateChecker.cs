@@ -51,8 +51,15 @@ public sealed partial class UpdateChecker(HttpClient http, string currentVersion
     /// <summary>The latest published release; GitHub leaves out drafts and pre-releases.</summary>
     public const string LatestReleaseUrl = "https://api.github.com/repos/SpaceJamp/Kronos-Reborn/releases/latest";
 
-    /// <summary>The only place a release page, installer or signature may come from.</summary>
-    private const string RepositoryUrl = "https://github.com/SpaceJamp/Kronos-Reborn/";
+    /// <summary>How long a check waits for GitHub before giving up for this time.</summary>
+    public TimeSpan CheckTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// The only places a release page, installer or signature may come from: this repository, and its
+    /// planned new name, so renaming it never leaves installed copies unable to update.
+    /// </summary>
+    private static readonly string[] RepositoryUrls =
+        ["https://github.com/SpaceJamp/Kronos-Reborn/", "https://github.com/SpaceJamp/Spellweaver/"];
 
     /// <summary>
     /// The public half of the release signing key, P-256, as base64 SubjectPublicKeyInfo.
@@ -77,16 +84,22 @@ public sealed partial class UpdateChecker(HttpClient http, string currentVersion
     /// <summary>Asks GitHub whether a newer release is out. Never throws for network or GitHub failures.</summary>
     public async Task<UpdateCheckResult> CheckAsync(CancellationToken token)
     {
+        // Its own time limit: on a network that drops requests silently, the client's default left
+        // "Check now" greyed out for minutes.
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(token);
+        limit.CancelAfter(CheckTimeout);
+        var cancellation = limit.Token;
+
         try
         {
-            using var response = await _http.GetAsync(LatestReleaseUrl, token).ConfigureAwait(false);
+            using var response = await _http.GetAsync(LatestReleaseUrl, cancellation).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 return new(null, $"GitHub answered {(int)response.StatusCode}");
             }
 
-            await using var body = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
-            using var json = await JsonDocument.ParseAsync(body, cancellationToken: token).ConfigureAwait(false);
+            await using var body = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
+            using var json = await JsonDocument.ParseAsync(body, cancellationToken: cancellation).ConfigureAwait(false);
             var release = json.RootElement;
 
             var version = Text(release, "tag_name").TrimStart('v', 'V');
@@ -127,9 +140,12 @@ public sealed partial class UpdateChecker(HttpClient http, string currentVersion
                 sha,
                 signature.ValueKind == JsonValueKind.Object ? InRepository(Text(signature, "browser_download_url")) : null), null);
         }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            return new(null, $"GitHub did not answer within {CheckTimeout.TotalSeconds:0} seconds");
+        }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or KeyNotFoundException
-                                       or InvalidOperationException or UriFormatException
-                                   || (ex is TaskCanceledException && !token.IsCancellationRequested))
+                                       or InvalidOperationException or UriFormatException)
         {
             return new(null, ex.Message);
         }
@@ -152,6 +168,21 @@ public sealed partial class UpdateChecker(HttpClient http, string currentVersion
         }
 
         Directory.CreateDirectory(folder);
+
+        // The folder holds only update downloads: earlier installers, and any part-file a closed
+        // window left behind, are cleared so they do not pile up.
+        foreach (var old in Directory.GetFiles(folder))
+        {
+            try
+            {
+                File.Delete(old);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Still in use, perhaps by an installer that is running; it goes next time.
+            }
+        }
+
         var name = Path.GetFileName(update.InstallerName ?? update.InstallerUrl!.AbsolutePath);
         var target = Path.Combine(folder, name);
         var partial = target + ".partial";
@@ -245,7 +276,7 @@ public sealed partial class UpdateChecker(HttpClient http, string currentVersion
     /// <summary>The link if it is https on github.com under this repository, otherwise null.</summary>
     private static Uri? InRepository(string link) =>
         Uri.TryCreate(link, UriKind.Absolute, out var uri)
-        && uri.AbsoluteUri.StartsWith(RepositoryUrl, StringComparison.OrdinalIgnoreCase)
+        && RepositoryUrls.Any(repository => uri.AbsoluteUri.StartsWith(repository, StringComparison.OrdinalIgnoreCase))
         && !uri.AbsolutePath.Contains("..", StringComparison.Ordinal)
             ? uri
             : null;

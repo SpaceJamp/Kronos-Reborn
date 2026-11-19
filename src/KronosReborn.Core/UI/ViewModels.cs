@@ -48,7 +48,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _statusText = "Ready";
 
     private readonly DownloadsViewModel _downloads;
-    private readonly HttpClient _http = VendorDownloader.CreateClient();
+    private readonly HttpClient _http;
+    private readonly VendorDownloader _vendor;
     private readonly DiagnosticsViewModel _diagnostics;
     private bool _isDiagnosticsOpen;
 
@@ -58,8 +59,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Settings settings,
         DataPaths paths,
         IFilePicker? filePicker = null,
-        IReadOnlyList<ScanProblem>? startupProblems = null)
+        IReadOnlyList<ScanProblem>? startupProblems = null,
+        HttpClient? http = null)
     {
+        _http = http ?? VendorDownloader.CreateClient();
         _catalog = catalog;
         _persistence = persistence;
         _settings = settings;
@@ -70,9 +73,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         _executor = new SwapExecutor(persistence, catalog, paths);
         _undo = new UndoEngine(persistence, paths);
+        _vendor = new VendorDownloader(_http, catalog, paths);
         _downloads = new DownloadsViewModel(
-            new VendorDownloader(_http, catalog, paths),
+            _vendor,
             () => _games.SelectMany(g => g.Snapshot?.Runtimes ?? []).Where(r => r.Exists).Select(r => r.Kind));
+
+        _downloads.PropertyChanged += (_, e) =>
+        {
+            if (_followDownloads && e.PropertyName == nameof(DownloadsViewModel.StatusText))
+            {
+                StatusText = _downloads.StatusText;
+            }
+        };
 
         // A downloaded version is offered in every game's picker straight away.
         _downloads.CollectionChanged += (_, _) => RebuildAllChoices();
@@ -94,6 +106,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
         ChooseNewestCommand = new RelayCommand(_ => ChooseNewest(), _ => !IsBusy && HasGames);
+        UpdateAllCommand = new RelayCommand(async _ => await UpdateAllAsync(), _ => !IsBusy && HasGames);
         ApplySwapCommand = new RelayCommand(_ => _ = ApplySwapAsync(), _ => _pendingPlans.Count > 0 && !IsBusy);
         // Each takes the game it is for, from a card's menu, or acts on the selected game without one.
         UndoCommand = new RelayCommand(async g => await RevertAsync(GameFor(g), redo: false), g => GameFor(g) is not null && !IsBusy);
@@ -124,7 +137,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             g => !IsBusy && GameFor(g) is { } game && StorePosterFinder.Chosen(_paths.PostersDirectory, game.GameId) is not null);
         UnhideGameCommand = new RelayCommand(g => SetHidden(g as GameRow, hide: false), g => g is GameRow);
         CancelCommand = new RelayCommand(
-            _ => _operationCancellation.Cancel(), _ => IsBusy);
+            _ =>
+            {
+                _operationCancellation.Cancel();
+                // Update all's download runs on the Downloads page's own stop.
+                if (_downloads.StopCommand.CanExecute(null))
+                {
+                    _downloads.StopCommand.Execute(null);
+                }
+            },
+            _ => IsBusy);
 
         // Choosing a file needs the window, which the view model does not have. The picker is supplied to
         // it, so the command can stay a command and every command the model exposes is one the window
@@ -438,6 +460,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private void RaiseSwapCommandStates()
     {
         ((RelayCommand)ChooseNewestCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)UpdateAllCommand).RaiseCanExecuteChanged();
         ((RelayCommand)AddGameCommand).RaiseCanExecuteChanged();
         ((RelayCommand)AddFolderCommand).RaiseCanExecuteChanged();
         ((RelayCommand)RemoveFolderCommand).RaiseCanExecuteChanged();
@@ -497,6 +520,105 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public ICommand RefreshCommand { get; }
     public ICommand ChooseNewestCommand { get; }
+    public ICommand UpdateAllCommand { get; }
+
+    /// <summary>Whether NVIDIA or Intel has released a version newer than any held for your games.</summary>
+    public bool HasNewRuntimes => NewRuntimesText.Length > 0;
+
+    /// <summary>What the status bar says about new runtime versions, such as "New DLSS version available".</summary>
+    public string NewRuntimesText
+    {
+        get => _newRuntimesText;
+        private set
+        {
+            _newRuntimesText = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasNewRuntimes));
+        }
+    }
+
+    private string _newRuntimesText = string.Empty;
+
+    /// <summary>While Update all downloads, the download's progress is shown in the status bar.</summary>
+    private bool _followDownloads;
+
+    /// <summary>Asks the vendors, from their release lists alone, whether anything newer is out for your games.</summary>
+    internal async System.Threading.Tasks.Task CheckForNewRuntimesAsync()
+    {
+        var kinds = _games.SelectMany(g => g.Snapshot?.Runtimes ?? []).Where(r => r.Exists).Select(r => r.Kind).ToList();
+        var newer = await _vendor.NewerAvailableAsync(kinds);
+
+        // DLSS's parts share one name here, as they are released together.
+        var names = newer.Select(k => RuntimeKindNames.Display(k).Split(' ')[0]).Distinct().ToArray();
+        NewRuntimesText = names.Length == 0
+            ? string.Empty
+            : $"New {string.Join(" and ", names)} version{(names.Length > 1 ? "s" : "")}: update all games";
+    }
+
+    /// <summary>
+    /// Brings every game up to date in one go: downloads the newest signed versions of the runtimes
+    /// your games use, chooses the newest for every game, and applies.
+    /// </summary>
+    /// <remarks>
+    /// The same choices ⬆ Newest makes, so only signed upgrades and no hidden games. If the download
+    /// fails, the versions already held are still applied. Undo last apply puts everything back.
+    /// </remarks>
+    internal async System.Threading.Tasks.Task UpdateAllAsync()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        // Only its own choices are applied without review; a deliberate downgrade or an untrusted
+        // pick waiting in the pane is the user's to apply.
+        if (PendingChangeCount > 0)
+        {
+            StatusText = "You have your own picks waiting. Apply or clear them first, then Update all.";
+            return;
+        }
+
+        if (_downloads.IsBusy)
+        {
+            StatusText = "A download is already running. Wait for it to finish, then Update all.";
+            return;
+        }
+
+        // Busy for the whole download, so nothing else can change these games meanwhile.
+        IsWorking = true;
+        _followDownloads = true;
+        string downloads;
+        try
+        {
+            StatusText = "Getting the newest versions for your games…";
+            await _downloads.GetNewestForGamesAsync();
+            downloads = _downloads.StatusText;
+        }
+        finally
+        {
+            _followDownloads = false;
+            IsWorking = false;
+        }
+
+        ChooseNewest();
+
+        if (_pendingPlans.Any(p => p.HasWarning))
+        {
+            StatusText = $"{downloads} Some changes carry a warning, so nothing was applied: review them, then Apply.".Trim();
+        }
+        else if (_pendingPlans.Count == 0)
+        {
+            StatusText = $"{StatusText} {downloads}".Trim();
+        }
+        else
+        {
+            await ApplySwapAsync();
+            StatusText = $"{StatusText} {downloads}".Trim();
+        }
+
+        // Asked again rather than cleared: the download may not have got the new version.
+        await CheckForNewRuntimesAsync();
+    }
     public ICommand AddGameCommand { get; }
     public ICommand AddFolderCommand { get; }
     public ICommand RemoveFolderCommand { get; }
@@ -1149,6 +1271,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// </remarks>
     private async System.Threading.Tasks.Task ApplySwapAsync()
     {
+        // Never beside another swap, undo or scan on the same games.
+        if (IsBusy)
+        {
+            return;
+        }
+
         if (_pendingPlans.Count == 0)
         {
             return;

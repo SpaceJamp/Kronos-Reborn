@@ -235,6 +235,76 @@ public sealed class UpdateCheckerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACheckThatGetsNoAnswerGivesUpWithAReason()
+    {
+        // A network that drops requests silently used to keep "Check now" greyed out for ten minutes.
+        using var http = new HttpClient(new Silent());
+        var checker = new UpdateChecker(http, "0.1.0", PublicKey) { CheckTimeout = TimeSpan.FromMilliseconds(200) };
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var result = await checker.CheckAsync(CancellationToken.None);
+
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5));
+        Assert.Null(result.Update);
+        Assert.Contains("did not answer", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADownloadClearsOutEarlierInstallersAndPartialFiles()
+    {
+        using var temp = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(temp.Root, "KronosReborn-build-6-installer.exe"), "old");
+        File.WriteAllText(Path.Combine(temp.Root, "Spellweaver-build-7-installer.exe.partial"), "cut short");
+        using var http = Client(null, "installer", Sign("0.2.0", "installer"));
+
+        var path = await Checker(http).DownloadAsync(Update("installer"), temp.Root, null, CancellationToken.None);
+
+        Assert.Equal([path], Directory.GetFiles(temp.Root));
+    }
+
+    private sealed class Silent : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new InvalidOperationException("unreachable");
+        }
+    }
+
+    [Fact]
+    public async Task ReleasesStillInstallAfterTheRepositoryIsRenamedToSpellweaver()
+    {
+        // GitHub redirects the old API address after a rename, but the links it returns use the new name.
+        const string base_ = "https://github.com/SpaceJamp/Spellweaver/releases";
+        var json = JsonSerializer.Serialize(new
+        {
+            tag_name = "v9",
+            html_url = base_ + "/tag/v9",
+            assets = new object[]
+            {
+                new { name = "Spellweaver-build-9-installer.exe", browser_download_url = base_ + "/download/v9/Spellweaver-build-9-installer.exe", digest = "sha256:" + Sha256Hex("x") },
+                new { name = "Spellweaver-build-9-installer.exe.sig", browser_download_url = base_ + "/download/v9/Spellweaver-build-9-installer.exe.sig", digest = (string?)null },
+            },
+        });
+        using var http = Client(json);
+
+        var update = Assert.IsType<AvailableUpdate>((await Checker(http).CheckAsync(CancellationToken.None)).Update);
+
+        Assert.True(update.CanInstall);
+        Assert.Equal(new Uri(base_ + "/tag/v9"), update.PageUrl);
+    }
+
+    [Theory]
+    [InlineData("https://github.com/SomeoneElse/Spellweaver/releases/tag/v9")]
+    [InlineData("https://github.com/SpaceJamp/Spellweaver-Evil/releases/tag/v9")]
+    public async Task OnlyThisOwnersRepositoriesAreTrusted(string page)
+    {
+        using var http = Client(JsonSerializer.Serialize(new { tag_name = "v9", html_url = page, assets = Array.Empty<object>() }));
+
+        Assert.Null((await Checker(http).CheckAsync(CancellationToken.None)).Update);
+    }
+
+    [Fact]
     public void TheSignedTextIsFixed()
     {
         // package/sign-release.ps1 builds the same text; if this changes, that script must too.

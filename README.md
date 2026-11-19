@@ -37,6 +37,9 @@ files it shipped with.
 Don't have a newer version yet? Open **Download** and press **Get newest for my games**. Files come
 straight from NVIDIA, AMD and Intel's own GitHub repositories.
 
+Or press **✨ Update all** to do everything at once: it downloads the newest signed versions for your
+games, chooses them for every game, and applies. **Undo last apply** puts it all back.
+
 ## Handy extras
 
 - **Needs update** shows only the games you hold a newer version for.
@@ -48,6 +51,8 @@ straight from NVIDIA, AMD and Intel's own GitHub repositories.
 - **It keeps itself up to date.** When a new release is out, the status bar offers it. An installed
   copy updates in one click; a portable one opens the release page. Turn the check off in Settings.
   Updates are signed (see below), so a tampered one is refused.
+- **It tells you when NVIDIA or Intel release a new DLSS or XeSS version** your games could use, with
+  a button to update them all.
 
 ## Where it finds games
 

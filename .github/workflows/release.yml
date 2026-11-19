@@ -68,7 +68,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           gh release create "${{ github.ref_name }}"
-          --title "Build $('${{ github.ref_name }}'.TrimStart('v'))"
+          --title "Spellweaver build $('${{ github.ref_name }}'.TrimStart('v'))"
           --draft
           --generate-notes
           "${{ steps.package.outputs.portable }}"

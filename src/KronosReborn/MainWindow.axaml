@@ -92,6 +92,9 @@
                 <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                            ToolTip.Tip="{Binding StatusText}" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="{Binding NewRuntimesText}" Command="{Binding UpdateAllCommand}" IsVisible="{Binding HasNewRuntimes}"
+                            Margin="12,0,0,0" Padding="8,2"
+                            ToolTip.Tip="Download it and update every game that can use it. Undo last apply puts it all back." />
                     <Button Content="{Binding Updates.Update.Version, StringFormat='Update to build {0}', FallbackValue=''}"
                             Command="{Binding Updates.InstallCommand}" IsVisible="{Binding Updates.CanInstall}"
                             Classes="accent" Margin="12,0,0,0" Padding="8,2"
@@ -122,6 +125,8 @@
                                 ToolTip.Tip="Add a game by choosing the folder it is installed in" />
                         <Button Content="+ Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,6,6"
                                 ToolTip.Tip="Add a folder that holds games, one per subfolder, such as where repacks are installed" />
+                        <Button Content="✨ Update all" Command="{Binding UpdateAllCommand}" Margin="0,0,6,6"
+                                ToolTip.Tip="Download the newest signed versions for your games and apply them to every game in one go. Undo last apply puts it all back." />
                         <Button Content="⬆ Newest" Command="{Binding ChooseNewestCommand}" Margin="0,0,6,6"
                                 ToolTip.Tip="Choose the newest version you hold of every runtime in every game. Nothing changes until Apply." />
                         <Button Content="Import…" Command="{Binding BeginImportCommand}" Margin="0,0,6,6"
@@ -468,7 +473,7 @@
                     </ItemsControl>
 
                     <TextBlock Text="Updates" FontWeight="SemiBold" Margin="0,24,0,4" />
-                    <CheckBox Content="Check for updates when Spellweaver starts" IsChecked="{Binding CheckForUpdates}" />
+                    <CheckBox Content="Check for updates and new DLSS and XeSS versions when Spellweaver starts" IsChecked="{Binding CheckForUpdates}" />
                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                         <Button Content="Check now" Command="{Binding Updates.CheckCommand}" />
                         <Button Content="{Binding Updates.Update.Version, StringFormat='Install build {0}', FallbackValue=''}"

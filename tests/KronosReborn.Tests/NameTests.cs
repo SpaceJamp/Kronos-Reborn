@@ -54,6 +54,12 @@ public class NameTests
     }
 
     [Fact]
+    public void ReleasesAreTitledWithTheNewName()
+    {
+        Assert.Contains("--title \"Spellweaver build $(", Read(".github", "workflows", "release.yml"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnUpgradeRemovesTheShortcutsNamedAfterTheOldName()
     {
         // Inno keeps an upgraded copy's Start menu folder and desktop-icon choice, so without these an

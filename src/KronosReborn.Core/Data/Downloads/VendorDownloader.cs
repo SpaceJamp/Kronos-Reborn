@@ -145,6 +145,63 @@ public sealed class VendorDownloader
         return tags;
     }
 
+    /// <summary>
+    /// The runtimes whose vendor has released a newer version than any held, told from the release
+    /// tags alone, so nothing is downloaded to find out.
+    /// </summary>
+    /// <remarks>
+    /// Only DLSS's parts and XeSS: their tags are the DLL's own version. AMD's tags name the SDK, and
+    /// XeSS Frame Generation and XeLL carry their own numbers, so for those a newer one cannot be told
+    /// without downloading, and guessing would be a false alarm. Never throws for a network problem:
+    /// it only feeds a notice.
+    /// </remarks>
+    public async Task<IReadOnlyList<RuntimeKind>> NewerAvailableAsync(
+        IEnumerable<RuntimeKind> kinds, CancellationToken cancellation = default)
+    {
+        var newer = new List<RuntimeKind>();
+
+        // Its own time limit: it runs at startup, and a silent network would otherwise hold it for minutes.
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        limit.CancelAfter(TimeSpan.FromSeconds(30));
+
+        foreach (var kind in kinds.Distinct().Where(TaggedByVersion.Contains).ToList())
+        {
+            try
+            {
+                var tags = await ListReleasesAsync(kind, limit.Token).ConfigureAwait(false);
+                if (tags.Count == 0
+                    || _catalog.Entries.Any(e => e.Kind == kind && e.Trust == RuntimeTrust.Trusted && File.Exists(e.FilePath)
+                                                 && !VersionNumber.IsOlder(e.Version, VersionOf(tags[0]))))
+                {
+                    continue;
+                }
+
+                // Only when the newest release really has this DLL; Get newest would otherwise fall back
+                // to an older release already held, and the notice would never go away. A HEAD to the
+                // raw file does not count against GitHub's API limit.
+                var source = Sources[kind];
+                var raw = new Uri($"https://raw.githubusercontent.com/{source.Repository}/{Uri.EscapeDataString(tags[0])}/{source.Folder}/{RuntimeDlls.ByKind[kind][0]}");
+                using var head = await _http.SendAsync(new HttpRequestMessage(HttpMethod.Head, raw), limit.Token).ConfigureAwait(false);
+                if (head.IsSuccessStatusCode)
+                {
+                    newer.Add(kind);
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException
+                                           or KeyNotFoundException
+                                       || (ex is OperationCanceledException && !cancellation.IsCancellationRequested))
+            {
+                // Only a notice: a vendor that cannot be asked now is asked next time.
+            }
+        }
+
+        return newer;
+    }
+
+    /// <summary>The runtimes whose release tags are the DLL's own version number.</summary>
+    private static readonly HashSet<RuntimeKind> TaggedByVersion =
+        [RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR, RuntimeKind.Xess];
+
     /// <summary>Downloads the newest release that includes this kind's DLL, unless it is already held.</summary>
     public async Task<DownloadOutcome> DownloadNewestAsync(
         RuntimeKind kind,

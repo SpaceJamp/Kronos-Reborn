@@ -86,6 +86,7 @@ public sealed partial class MainWindow : Window, IFilePicker
                 if (vm.CheckForUpdates)
                 {
                     await vm.Updates.CheckAsync(automatic: true);
+                    await vm.CheckForNewRuntimesAsync();
                 }
             }
         };

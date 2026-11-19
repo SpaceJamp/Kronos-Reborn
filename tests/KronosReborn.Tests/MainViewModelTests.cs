@@ -196,6 +196,140 @@ public class MainViewModelTests
         Assert.Null(KronosReborn.Data.Libraries.StorePosterFinder.Chosen(fixture.Paths.PostersDirectory, "a"));
     }
 
+    [Fact]
+    public async Task UpdateAllGetsTheNewestDownloadsFirstAndChangesNothingWhenAllAreCurrent()
+    {
+        var asked = new System.Collections.Generic.List<string>();
+        using var fixture = new Fixture(http: new System.Net.Http.HttpClient(new Offline(asked)));
+        fixture.Vm.Games = Rows("a");
+        foreach (var row in fixture.Vm.Games)
+        {
+            row.RebuildChoices([Entry("310.2.1")]);
+        }
+
+        await fixture.Vm.UpdateAllAsync();
+
+        // The vendors were asked for their newest first, then nothing needed changing.
+        Assert.Contains(asked, url => url.Contains("NVIDIA/DLSS", StringComparison.OrdinalIgnoreCase));
+        Assert.False(fixture.Vm.HasPreview);
+        Assert.Contains("newest", fixture.Vm.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.True(fixture.Vm.UpdateAllCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task UpdateAllCountsAsBusyWhileItDownloads()
+    {
+        var gate = new TaskCompletionSource();
+        using var fixture = new Fixture(http: new System.Net.Http.HttpClient(new Held(gate.Task)));
+        fixture.Vm.Games = Rows("a");
+
+        var running = fixture.Vm.UpdateAllAsync();
+
+        // A second click, Undo, or Refresh during the download used to run beside the apply.
+        Assert.True(fixture.Vm.IsBusy);
+        Assert.False(fixture.Vm.UpdateAllCommand.CanExecute(null));
+        Assert.False(fixture.Vm.UndoLastApplyCommand.CanExecute(null));
+        Assert.False(fixture.Vm.RefreshCommand.CanExecute(null));
+
+        gate.SetResult();
+        await running;
+        Assert.False(fixture.Vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task UpdateAllLeavesYourOwnPicksForYouToReview()
+    {
+        var asked = new System.Collections.Generic.List<string>();
+        using var fixture = new Fixture(http: new System.Net.Http.HttpClient(new Offline(asked)));
+        fixture.Vm.Games = Rows("a");
+        var row = fixture.Vm.Games[0];
+        row.RebuildChoices([Entry("310.2.1"), Entry("310.1.0")]);
+        var dlss = row.Choices.Single(c => c.Kind == RuntimeKind.Dlss);
+        dlss.Selected = dlss.Options.Single(o => o.Version == "310.1.0");  // a deliberate downgrade
+
+        await fixture.Vm.UpdateAllAsync();
+
+        Assert.Empty(asked);
+        Assert.Contains("own picks", fixture.Vm.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFailedDownloadIsSaidAndTheNoticeStays()
+    {
+        var asked = new System.Collections.Generic.List<string>();
+        using var fixture = new Fixture(http: new System.Net.Http.HttpClient(new Offline(asked,
+            ("https://api.github.com/repos/NVIDIA/DLSS/tags?per_page=100", """[{"name":"v310.9.1"}]"""),
+            ("https://raw.githubusercontent.com/NVIDIA/DLSS/v310.9.1/lib/Windows_x86_64/rel/nvngx_dlss.dll", "not a dll"))));
+        fixture.Vm.Games = Rows("a");
+        await fixture.Vm.CheckForNewRuntimesAsync();
+        Assert.True(fixture.Vm.HasNewRuntimes);
+
+        await fixture.Vm.UpdateAllAsync();
+
+        // The download did not give a new version, so the notice is still true.
+        Assert.True(fixture.Vm.HasNewRuntimes);
+        // And why is said, not hidden behind what was applied.
+        Assert.Contains("nvngx_dlss.dll", fixture.Vm.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AWebPageInsteadOfGitHubsAnswerDoesNotCrashUpdateAll()
+    {
+        // Such as a hotel or airport sign-in page answering in GitHub's place.
+        var asked = new System.Collections.Generic.List<string>();
+        using var fixture = new Fixture(http: new System.Net.Http.HttpClient(new Offline(asked,
+            ("https://api.github.com/repos/NVIDIA/DLSS/tags?per_page=100", "<html>sign in</html>"))));
+        fixture.Vm.Games = Rows("a");
+
+        var ex = await Record.ExceptionAsync(fixture.Vm.UpdateAllAsync);
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task ANewDlssReleaseIsAnnouncedWithAWayToGetIt()
+    {
+        var asked = new System.Collections.Generic.List<string>();
+        using var fixture = new Fixture(http: new System.Net.Http.HttpClient(new Offline(asked,
+            ("https://api.github.com/repos/NVIDIA/DLSS/tags?per_page=100", """[{"name":"v310.9.1"}]"""),
+            ("https://raw.githubusercontent.com/NVIDIA/DLSS/v310.9.1/lib/Windows_x86_64/rel/nvngx_dlss.dll", "x"))));
+        fixture.Vm.Games = Rows("a");
+        Assert.False(fixture.Vm.HasNewRuntimes);
+
+        await fixture.Vm.CheckForNewRuntimesAsync();
+
+        Assert.True(fixture.Vm.HasNewRuntimes);
+        Assert.Equal("New DLSS version: update all games", fixture.Vm.NewRuntimesText);
+        Assert.True(fixture.Vm.UpdateAllCommand.CanExecute(null));
+    }
+
+    private sealed class Offline(System.Collections.Generic.List<string> asked, params (string Url, string Json)[] answers) : System.Net.Http.HttpMessageHandler
+    {
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
+        {
+            asked.Add(request.RequestUri!.AbsoluteUri);
+            foreach (var (url, json) in answers)
+            {
+                if (url == request.RequestUri.AbsoluteUri)
+                {
+                    return Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.StringContent(json) });
+                }
+            }
+
+            return Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+        }
+    }
+
+    /// <summary>Holds every request until the test lets it go, then answers 404.</summary>
+    private sealed class Held(Task gate) : System.Net.Http.HttpMessageHandler
+    {
+        protected override async Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
+        {
+            await gate;
+            return new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+        }
+    }
+
     private sealed class UnreadableImagePicker : IFilePicker
     {
         public Task<string?> AskForImageFileAsync(string title) =>
@@ -228,12 +362,12 @@ public class MainViewModelTests
         private readonly DataPaths _paths;
         private readonly PersistenceService _persistence;
 
-        public Fixture(IFilePicker? picker = null)
+        public Fixture(IFilePicker? picker = null, System.Net.Http.HttpClient? http = null)
         {
             _paths = new DataPaths(Path.Combine(_temp.Root, "data"));
             _persistence = new PersistenceService(_paths);
             Catalog = new RuntimeCatalog(_paths.CatalogPath);
-            Vm = new MainViewModel(Catalog, _persistence, Settings.Default, _paths, picker);
+            Vm = new MainViewModel(Catalog, _persistence, Settings.Default, _paths, picker, http: http);
         }
 
         public MainViewModel Vm { get; }

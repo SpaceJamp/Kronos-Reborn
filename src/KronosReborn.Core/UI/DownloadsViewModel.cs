@@ -115,7 +115,7 @@ public sealed class DownloadsViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>Downloads the newest version of every runtime any game carries.</summary>
-    private async Task GetNewestForGamesAsync()
+    internal async Task GetNewestForGamesAsync()
     {
         var kinds = _kindsInGames().Distinct().Where(VendorDownloader.Sources.ContainsKey).ToList();
         if (kinds.Count == 0)
@@ -217,6 +217,12 @@ public sealed class DownloadsViewModel : INotifyPropertyChanged, IDisposable
         catch (HttpRequestException ex)
         {
             StatusText = $"Could not reach GitHub: {ex.Message}";
+            return null;
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            // Such as a sign-in page answering in GitHub's place.
+            StatusText = $"GitHub's answer could not be read: {ex.Message}";
             return null;
         }
         finally
