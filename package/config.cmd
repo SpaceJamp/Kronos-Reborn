@@ -9,7 +9,7 @@ REM agree, and a test checks that they do. Handing the real value to ISCC rather
 REM the .iss is what stops the installer's name drifting from the project's.
 REM
 
-set app_version=7
+set app_version=8
 
 set project_name=Spellweaver
 set project_id=KronosReborn
