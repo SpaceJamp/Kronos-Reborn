@@ -6,7 +6,7 @@
         xmlns:log="using:KronosReborn.Data.Logging"
         x:Class="KronosReborn.MainWindow"
         x:DataType="vm:MainViewModel"
-        Title="Kronos Reborn"
+        Title="Spellweaver"
         Icon="/Assets/kronos.ico"
         Classes.magic="{Binding MagicBackground}"
         RequestedThemeVariant="{Binding MagicBackground, Converter={x:Static local:MainWindow.MagicTheme}}"
@@ -468,7 +468,7 @@
                     </ItemsControl>
 
                     <TextBlock Text="Updates" FontWeight="SemiBold" Margin="0,24,0,4" />
-                    <CheckBox Content="Check for updates when Kronos Reborn starts" IsChecked="{Binding CheckForUpdates}" />
+                    <CheckBox Content="Check for updates when Spellweaver starts" IsChecked="{Binding CheckForUpdates}" />
                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                         <Button Content="Check now" Command="{Binding Updates.CheckCommand}" />
                         <Button Content="{Binding Updates.Update.Version, StringFormat='Install build {0}', FallbackValue=''}"

@@ -1,4 +1,4 @@
-# Kronos Reborn — Specification
+# Spellweaver — Specification (formerly Kronos Reborn)
 
 ## About this document
 

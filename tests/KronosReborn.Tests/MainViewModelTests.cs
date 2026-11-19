@@ -199,7 +199,7 @@ public class MainViewModelTests
     private sealed class UnreadableImagePicker : IFilePicker
     {
         public Task<string?> AskForImageFileAsync(string title) =>
-            throw new ArgumentException("cover.jpg is not an image Kronos Reborn can show.");
+            throw new ArgumentException("cover.jpg is not an image Spellweaver can show.");
 
         public Task<string?> AskForRuntimeFileAsync() => throw new NotSupportedException();
         public Task<string?> AskWhereToSaveDiagnosticsAsync(string suggestedName) => throw new NotSupportedException();

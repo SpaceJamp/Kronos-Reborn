@@ -148,7 +148,7 @@ public sealed class DiagnosticsViewModel : INotifyPropertyChanged
     private async Task ExportAsync()
     {
         var target = _filePicker is null ? null : await _filePicker.AskWhereToSaveDiagnosticsAsync(
-            $"kronos-diagnostics-{DateTime.Now:yyyyMMdd-HHmmss}.zip");
+            $"spellweaver-diagnostics-{DateTime.Now:yyyyMMdd-HHmmss}.zip");
 
         if (target is null)
         {

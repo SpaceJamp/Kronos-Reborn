@@ -1,5 +1,6 @@
-<p align="center"><img src="docs/icon.png" width="128" alt="Kronos Reborn icon: a glowing magic circle"></p>
-<h2 align="center">Kronos Reborn</h2>
+<p align="center"><img src="docs/icon.png" width="128" alt="Spellweaver icon: a glowing magic circle"></p>
+<h2 align="center">Spellweaver</h2>
+<p align="center"><i>Formerly Kronos Reborn</i></p>
 <p align="center">Swap the DLSS, FSR and XeSS version any game runs, in a couple of clicks, and undo it just as easily.</p>
 <p align="center"><a href="https://github.com/SpaceJamp/Kronos-Reborn/releases/latest"><b>Download</b></a> · Windows 10 and 11, 64-bit</p>
 
@@ -7,13 +8,13 @@
 
 Games ship with whatever version of NVIDIA DLSS, AMD FSR or Intel XeSS was current when they were
 made, as DLL files in the game's folder. Newer versions often look sharper, ghost less or run faster,
-but a game rarely updates them. Kronos Reborn finds your games, shows what each one runs, and puts in
+but a game rarely updates them. Spellweaver finds your games, shows what each one runs, and puts in
 the version you choose. Every file it replaces is backed up first, so nothing is ever lost.
 
 ## Getting started
 
 1. **Download** the [latest release](https://github.com/SpaceJamp/Kronos-Reborn/releases/latest).
-   Take the installer (`KronosReborn-build-<N>-installer.exe`), or the portable zip if you'd rather
+   Take the installer (`Spellweaver-build-<N>-installer.exe`), or the portable zip if you'd rather
    not install anything.
 2. **Run it.** The builds aren't code-signed yet, so Windows SmartScreen may say the publisher is
    unknown. Choose **More info**, then **Run anyway**.
@@ -74,7 +75,7 @@ of a DLL, all of them are swapped.
 ## Questions
 
 **Is it safe for my games?**
-Every file is backed up before it's replaced, and undo checks the game still holds what Kronos Reborn
+Every file is backed up before it's replaced, and undo checks the game still holds what Spellweaver
 put there before restoring. If a game update changed the file since, undo leaves it alone rather than
 overwrite it.
 
@@ -111,7 +112,8 @@ Planned. Windows comes first.
 
 ## Your data
 
-Everything lives in `%LOCALAPPDATA%\KronosReborn` as plain files you can read:
+Everything lives in `%LOCALAPPDATA%\KronosReborn` as plain files you can read. The folder keeps the
+app's former name, so settings and backups carry over:
 
 | | |
 | --- | --- |
@@ -155,7 +157,7 @@ docs/spec.md               the specification; requirements are cited by number i
 ## Licence
 
 [Personal and Non-Commercial Use License (PNC-1.2)](LICENSE). In short, you may use, study and change
-Kronos Reborn for personal, non-commercial use. You may share it, or your changed version, free of
+Spellweaver for personal, non-commercial use. You may share it, or your changed version, free of
 charge. A changed version you share must come with its full source, under the same licence.
 Commercial use of any kind needs the author's written permission.
 

@@ -392,7 +392,7 @@ public sealed partial class MainWindow : Window, IFilePicker
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            throw new ArgumentException($"{Path.GetFileName(path)} is not an image Kronos Reborn can show.", ex);
+            throw new ArgumentException($"{Path.GetFileName(path)} is not an image Spellweaver can show.", ex);
         }
 
         return path;
@@ -412,7 +412,9 @@ public sealed partial class MainWindow : Window, IFilePicker
     public void RunInstallerAndExit(string installerPath)
     {
         var arguments = UpdatesViewModel.InstallerArguments(
-            AppContext.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
+            AppContext.BaseDirectory,
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(installerPath, arguments)
         {
             UseShellExecute = true,

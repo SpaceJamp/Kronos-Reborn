@@ -36,7 +36,7 @@ public sealed class App : Application
                 e.SetObserved();
             };
 
-            Log.Instance.Information("Kronos Reborn starting", category: "App.Startup");
+            Log.Instance.Information("Spellweaver starting", category: "App.Startup");
             Log.Instance.Information($"Data directory: {paths.Root}", category: "App.Startup");
             Log.Instance.Information($"Build: {BuildInfo.InformationalVersion}", category: "App.Startup");
 

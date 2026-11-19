@@ -17,9 +17,11 @@
     <RootNamespace>KronosReborn</RootNamespace>
 
     <!-- The name shown to users. Distinct from the assembly name, which cannot contain a space. -->
-    <Product>Kronos Reborn</Product>
-    <Company>Kronos Reborn</Company>
-    <Authors>Kronos Reborn contributors</Authors>
+    <Product>Spellweaver</Product>
+    <Company>Spellweaver</Company>
+    <Authors>Spellweaver contributors</Authors>
+    <!-- The exe's description, shown by Task Manager; the file keeps its old name, KronosReborn.exe. -->
+    <AssemblyTitle>Spellweaver</AssemblyTitle>
 
     <!-- Bindings are checked when the XAML compiles, so a misspelt property fails the build. -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>

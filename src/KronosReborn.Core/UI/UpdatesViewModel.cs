@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -63,14 +64,17 @@ public sealed class UpdatesViewModel : INotifyPropertyChanged
     /// </summary>
     /// <remarks>
     /// The mode is passed rather than left to Inno to remember, because a copy in Program Files
-    /// upgraded per-user would leave the old one in place and be offered the update forever.
+    /// upgraded per-user would leave the old one in place and be offered the update forever. Both
+    /// Program Files folders count: the installer installs in 32-bit mode, so a copy for everyone is
+    /// in Program Files (x86).
     /// </remarks>
-    public static string InstallerArguments(string appFolder, string programFilesFolder)
+    public static string InstallerArguments(string appFolder, params string[] programFilesFolders)
     {
-        var forEveryone = !string.IsNullOrEmpty(programFilesFolder)
-            && Path.GetFullPath(appFolder).StartsWith(
-                Path.TrimEndingDirectorySeparator(Path.GetFullPath(programFilesFolder)) + Path.DirectorySeparatorChar,
-                StringComparison.OrdinalIgnoreCase);
+        var forEveryone = programFilesFolders
+            .Where(folder => !string.IsNullOrEmpty(folder))
+            .Any(folder => Path.GetFullPath(appFolder).StartsWith(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase));
 
         return $"/SILENT /SUPPRESSMSGBOXES /NORESTART {(forEveryone ? "/ALLUSERS" : "/CURRENTUSER")} /update=1";
     }

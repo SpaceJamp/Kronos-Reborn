@@ -300,7 +300,7 @@ public static class Log
 
     static Log()
     {
-        Instance.SetGlobalProperty("Application", "KronosReborn");
+        Instance.SetGlobalProperty("Application", "Spellweaver");
         Instance.SetGlobalProperty("Version", typeof(Log).Assembly.GetName().Version?.ToString() ?? "unknown");
     }
 }

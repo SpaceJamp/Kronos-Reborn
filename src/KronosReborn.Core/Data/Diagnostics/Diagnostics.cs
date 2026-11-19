@@ -80,7 +80,7 @@ public sealed record DiagnosticsReport(
     public string ToText()
     {
         var text = new StringBuilder();
-        text.AppendLine(CultureInfo.InvariantCulture, $"Kronos Reborn diagnostics — {CreatedAt:u}");
+        text.AppendLine(CultureInfo.InvariantCulture, $"Spellweaver diagnostics — {CreatedAt:u}");
         text.AppendLine(Summary);
         text.AppendLine();
 

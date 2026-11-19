@@ -1,4 +1,4 @@
-"""Draws the Kronos Reborn icon, a glowing magic circle, and writes .ico and .png files."""
+"""Draws the Spellweaver icon, a glowing magic circle, and writes .ico and .png files."""
 import math
 import sys
 from PIL import Image, ImageDraw, ImageFilter

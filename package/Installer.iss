@@ -1,4 +1,4 @@
-; Inno Setup script for Kronos Reborn.
+; Inno Setup script for Spellweaver (called Kronos Reborn up to build 7).
 ;
 ; The version arrives as /DAppVersion from package\package.cmd, which reads it from config.cmd. That
 ; indirection is the point: a literal here is a second place for the installer's name to drift from
@@ -9,16 +9,16 @@
   #define AppVersion "7"
 #endif
 
-#define AppName "Kronos Reborn"
+#define AppName "Spellweaver"
 #define AppId "{{6C3D9E24-1B7A-4E58-9F0C-2D5A83B71E40}}"
-#define AppPublisher "Kronos Reborn"
+#define AppPublisher "Spellweaver"
 #define AppExeName "KronosReborn.exe"
 
 [Setup]
 AppId={#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
-; Shown in Windows' installed-apps list as "Kronos Reborn build 4" rather than "version 4".
+; Shown in Windows' installed-apps list as "Spellweaver build 8" rather than "version 8".
 AppVerName={#AppName} build {#AppVersion}
 AppPublisher={#AppPublisher}
 VersionInfoVersion={#AppVersion}.0
@@ -44,9 +44,12 @@ DirExistsWarning=no
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
+; Nobody chose the Start menu folder (there is no page for it), so an update moves it to the app's
+; current name instead of keeping the old "Kronos Reborn" folder.
+UsePreviousGroup=no
 UninstallDisplayIcon={app}\{#AppExeName}
 OutputDir=Output
-OutputBaseFilename=KronosReborn-build-{#AppVersion}-installer
+OutputBaseFilename=Spellweaver-build-{#AppVersion}-installer
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -79,6 +82,15 @@ Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
+; The app was Kronos Reborn up to build 7. An update keeps its desktop-icon choice, so without this the
+; old shortcuts would sit beside the new ones. Upgrades keep their install folder, and the AppId, data
+; folder and executable name are unchanged, so settings, history and backups carry over.
+[InstallDelete]
+Type: files; Name: "{autodesktop}\Kronos Reborn.lnk"
+Type: files; Name: "{autoprograms}\Kronos Reborn\Kronos Reborn.lnk"
+Type: files; Name: "{autoprograms}\Kronos Reborn\Uninstall Kronos Reborn.lnk"
+Type: dirifempty; Name: "{autoprograms}\Kronos Reborn"
+
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 ; After an update the app started itself again, so the user is back where they were.
@@ -90,8 +102,28 @@ Filename: "{app}\{#AppExeName}"; Flags: nowait runasoriginaluser; Check: IsUpdat
 ; install, which means asking the user first.
 
 [Code]
+const
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6C3D9E24-1B7A-4E58-9F0C-2D5A83B71E40}_is1';
+
 // Set by the app's update button, which runs this installer with /update=1.
 function IsUpdate: Boolean;
 begin
   Result := ExpandConstant('{param:update|0}') = '1';
+end;
+
+// An update started for the current user on a PC where the app is installed for everyone runs again
+// for everyone, so the machine-wide copy is upgraded rather than a second, per-user copy added beside
+// it. Build 7 and earlier passed /CURRENTUSER for copies in Program Files (x86). If the Windows admin
+// prompt is declined, nothing is installed.
+function InitializeSetup: Boolean;
+var
+  ErrorCode: Integer;
+begin
+  Result := True;
+  if IsUpdate and not IsAdminInstallMode and RegKeyExists(HKLM32, UninstallKey) then
+  begin
+    ShellExec('runas', ExpandConstant('{srcexe}'), '/SILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS /update=1',
+      '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+    Result := False;
+  end;
 end;

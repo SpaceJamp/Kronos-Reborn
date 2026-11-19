@@ -110,10 +110,12 @@ public class UpdatesViewModelTests
 
     [Theory]
     [InlineData(@"C:\Program Files\Kronos Reborn\", "/ALLUSERS")]
+    // Where the installer really puts a copy for everyone: it installs in 32-bit mode.
+    [InlineData(@"C:\Program Files (x86)\Kronos Reborn\", "/ALLUSERS")]
     [InlineData(@"C:\Users\a\AppData\Local\Programs\Kronos Reborn\", "/CURRENTUSER")]
     public void TheInstallerIsToldHowThisCopyWasInstalled(string appFolder, string mode)
     {
-        var arguments = UpdatesViewModel.InstallerArguments(appFolder, @"C:\Program Files");
+        var arguments = UpdatesViewModel.InstallerArguments(appFolder, @"C:\Program Files", @"C:\Program Files (x86)");
 
         Assert.Contains(mode, arguments);
         Assert.Contains("/update=1", arguments);

@@ -197,7 +197,7 @@ public sealed partial class UpdateChecker(HttpClient http, string currentVersion
             if (!IsSignedByMaintainer(update.Version, actual, signature))
             {
                 throw new InvalidDataException(
-                    $"The installer for build {update.Version} is not signed with Kronos Reborn's release key.");
+                    $"The installer for build {update.Version} is not signed with Spellweaver's release key.");
             }
 
             File.Move(partial, target, overwrite: true);
