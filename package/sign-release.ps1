@@ -27,7 +27,7 @@ param(
     [Parameter(Position = 0)][string]$Tag,
     [switch]$NewKey,
     [string]$KeyPath = (Join-Path $env:USERPROFILE '.kronos-reborn\update-signing-key.pem'),
-    [string]$Repo = 'SpaceJamp/Kronos-Reborn'
+    [string]$Repo = 'SpaceJamp/Spellweaver'
 )
 
 $ErrorActionPreference = 'Stop'

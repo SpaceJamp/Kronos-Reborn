@@ -2,7 +2,7 @@
 <h2 align="center">Spellweaver</h2>
 <p align="center"><i>Formerly Kronos Reborn</i></p>
 <p align="center">Swap the DLSS, FSR and XeSS version any game runs, in a couple of clicks, and undo it just as easily.</p>
-<p align="center"><a href="https://github.com/SpaceJamp/Kronos-Reborn/releases/latest"><b>Download</b></a> · Windows 10 and 11, 64-bit</p>
+<p align="center"><a href="https://github.com/SpaceJamp/Spellweaver/releases/latest"><b>Download</b></a> · Windows 10 and 11, 64-bit</p>
 
 ---
 
@@ -13,7 +13,7 @@ the version you choose. Every file it replaces is backed up first, so nothing is
 
 ## Getting started
 
-1. **Download** the [latest release](https://github.com/SpaceJamp/Kronos-Reborn/releases/latest).
+1. **Download** the [latest release](https://github.com/SpaceJamp/Spellweaver/releases/latest).
    Take the installer (`Spellweaver-build-<N>-installer.exe`), or the portable zip if you'd rather
    not install anything.
 2. **Run it.** The builds aren't code-signed yet, so Windows SmartScreen may say the publisher is
@@ -110,7 +110,7 @@ Nothing about you is sent.
 **Something went wrong. How do I report it?**
 Open **Diagnostics**. It checks your collection, backups and undo history, and shows recent errors
 and crashes. **Export…** saves a zip of the logs and data that you can attach to an
-[issue](https://github.com/SpaceJamp/Kronos-Reborn/issues).
+[issue](https://github.com/SpaceJamp/Spellweaver/issues).
 
 **Linux?**
 Planned. Windows comes first.

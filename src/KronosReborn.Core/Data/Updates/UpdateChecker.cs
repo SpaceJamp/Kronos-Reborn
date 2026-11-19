@@ -49,14 +49,14 @@ public sealed record UpdateCheckResult(AvailableUpdate? Update, string? Error);
 public sealed partial class UpdateChecker(HttpClient http, string currentVersion, string publicKey = UpdateChecker.ReleasePublicKey)
 {
     /// <summary>The latest published release; GitHub leaves out drafts and pre-releases.</summary>
-    public const string LatestReleaseUrl = "https://api.github.com/repos/SpaceJamp/Kronos-Reborn/releases/latest";
+    public const string LatestReleaseUrl = "https://api.github.com/repos/SpaceJamp/Spellweaver/releases/latest";
 
     /// <summary>How long a check waits for GitHub before giving up for this time.</summary>
     public TimeSpan CheckTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// The only places a release page, installer or signature may come from: this repository, and its
-    /// planned new name, so renaming it never leaves installed copies unable to update.
+    /// The only places a release page, installer or signature may come from: this repository under its
+    /// name since build 9, and its old name, which GitHub still redirects.
     /// </summary>
     private static readonly string[] RepositoryUrls =
         ["https://github.com/SpaceJamp/Kronos-Reborn/", "https://github.com/SpaceJamp/Spellweaver/"];

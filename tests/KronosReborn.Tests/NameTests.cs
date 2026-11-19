@@ -92,8 +92,10 @@ public class NameTests
     {
         // The installer's AppId makes an update replace the old install rather than add a second one.
         Assert.Contains("6C3D9E24-1B7A-4E58-9F0C-2D5A83B71E40", Read("package", "Installer.iss"), StringComparison.Ordinal);
-        // Installed copies look for updates here and accept only links into it.
-        Assert.Contains("repos/SpaceJamp/Kronos-Reborn/releases/latest", Read("src", "KronosReborn.Core", "Data", "Updates", "UpdateChecker.cs"), StringComparison.Ordinal);
+        // The repository is SpaceJamp/Spellweaver since build 9; copies from before ask the old address,
+        // which GitHub redirects, so links under both names stay accepted.
+        Assert.Equal("https://api.github.com/repos/SpaceJamp/Spellweaver/releases/latest", KronosReborn.Data.Updates.UpdateChecker.LatestReleaseUrl);
+        Assert.Contains("\"https://github.com/SpaceJamp/Kronos-Reborn/\"", Read("src", "KronosReborn.Core", "Data", "Updates", "UpdateChecker.cs"), StringComparison.Ordinal);
         Assert.Equal("KronosReborn", KronosReborn.Data.Persistence.DataPaths.AppFolderName);
         // Renaming the exe would leave the old one behind on an upgrade.
         Assert.Contains("#define AppExeName \"KronosReborn.exe\"", Read("package", "Installer.iss"), StringComparison.Ordinal);
