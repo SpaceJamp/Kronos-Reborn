@@ -268,7 +268,7 @@ public sealed partial class MainWindow : Window, IFilePicker
         new(on => on ? ThemeVariant.Dark : ThemeVariant.Default);
 
     /// <summary>Covers already decoded, by path: the grid is rebuilt on every search keystroke.</summary>
-    private static readonly Dictionary<string, Bitmap> Posters = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, Bitmap?> Posters = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Turns a poster path into an image, or nothing when it cannot be read.</summary>
     public static FuncValueConverter<string?, Bitmap?> PosterImage { get; } = new(path =>
@@ -291,8 +291,9 @@ public sealed partial class MainWindow : Window, IFilePicker
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
+            // Remembered, so a bad file is not reopened on every search keystroke.
             Log.Instance.Warning($"Poster could not be read: {path} ({ex.Message})", category: "UI");
-            return null;
+            return Posters[path] = null;
         }
     });
 
@@ -366,6 +367,36 @@ public sealed partial class MainWindow : Window, IFilePicker
     private void OnUndoGame(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.UndoCommand);
     private void OnRestoreGame(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.RestoreOriginalCommand);
     private void OnHideGame(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.HideGameCommand);
+    private void OnChooseCover(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.ChooseCoverCommand);
+    private void OnForgetCover(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.ForgetCoverCommand);
+
+    public async Task<string?> AskForImageFileAsync(string title)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.ImageAll],
+        });
+
+        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } path)
+        {
+            return null;
+        }
+
+        // Decoded once here: a file that cannot be shown would leave the card blank.
+        try
+        {
+            using var stream = File.OpenRead(path);
+            using var _ = new Bitmap(stream);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            throw new ArgumentException($"{Path.GetFileName(path)} is not an image Kronos Reborn can show.", ex);
+        }
+
+        return path;
+    }
     private void OnRemoveGame(object? sender, RoutedEventArgs e) => ForCard(sender, vm => vm.RemoveGameCommand);
 
     public async Task OpenFolderAsync(string path)

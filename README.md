@@ -39,7 +39,7 @@ straight from NVIDIA, AMD and Intel's own GitHub repositories.
 ## Handy extras
 
 - **Needs update** shows only the games you hold a newer version for.
-- **Right-click a cover** to open its folder, undo, restore or hide it. Hidden games come back from
+- **Right-click a cover** to open its folder, undo, restore, hide it, or **choose a cover** of your own. Hidden games come back from
   **Settings**.
 - **Drop a `.dll`** on the window to add it to your collection.
 - **Keys:** F5 refresh · Ctrl+F search · Ctrl+Z / Ctrl+Y undo and redo · Ctrl+Enter apply.
@@ -95,7 +95,8 @@ release key that lives offline on the maintainer's PC and is never uploaded. Som
 GitHub account still couldn't ship an update the app would run. A failed check deletes the download.
 
 **What does it send over the internet?**
-- A game's name to Steam's store, once, to find a cover when Steam doesn't have one cached.
+- A game's name to Steam's store and, if Steam doesn't sell it, to the Microsoft Store, to find a cover
+  when Steam doesn't have one cached. A game no store has is asked about again after a week.
 - A request to GitHub to check for app updates, and to the vendors' repositories when you download.
 
 Nothing about you is sent.
@@ -119,7 +120,7 @@ Everything lives in `%LOCALAPPDATA%\KronosReborn` as plain files you can read:
 | `runtimes\` | Imported and downloaded DLLs |
 | `backups\`, `history\` | Copies of replaced files, and the undo history for each game |
 | `manual-games.json`, `game-folders.json` | Games and folders you added |
-| `posters\` | Covers fetched from Steam's store. Delete it to look them up again |
+| `posters\` | Covers fetched from the stores, and covers you chose. Delete it to look them up again (this also forgets covers you chose) |
 | `logs\` | The log |
 
 A file that can't be read is set aside as `*.unreadable-*`, never overwritten, so it can still be

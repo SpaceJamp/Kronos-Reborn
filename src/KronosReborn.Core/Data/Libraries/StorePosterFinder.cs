@@ -6,7 +6,8 @@ using KronosReborn.Data.Logging;
 namespace KronosReborn.Data.Libraries;
 
 /// <summary>
-/// Finds a cover for a game Steam's own cache has none for, from Steam's public store.
+/// Finds a cover for a game Steam's own cache has none for, from Steam's public store, then from the
+/// Microsoft Store's.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -17,8 +18,13 @@ namespace KronosReborn.Data.Libraries;
 /// cover rather than someone else's.
 /// </para>
 /// <para>
-/// Each cover is downloaded once and kept. A game with no match is remembered too, so a refresh does
-/// not ask Steam again. A failure to reach Steam is not remembered, so the next refresh retries.
+/// Games Steam does not sell, such as Xbox games and older console ports, are looked up the same way in
+/// the Microsoft Store's catalogue, whose posters are the same 2:3 shape as the cards.
+/// </para>
+/// <para>
+/// Each cover is downloaded once and kept. A game with no match is remembered for a week, so a refresh
+/// does not ask again, but a game that reaches a store later still gets its cover. A failure to reach
+/// a store is not remembered, so the next refresh retries.
 /// </para>
 /// </remarks>
 public sealed partial class StorePosterFinder(HttpClient http, string cacheFolder)
@@ -26,54 +32,172 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
     /// <summary>How long one request may take before the game is left without a cover this time.</summary>
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>How long a game no store had is left before the stores are asked again.</summary>
+    private static readonly TimeSpan MissLasts = TimeSpan.FromDays(7);
+
+    /// <summary>Microsoft Store image kinds that are covers, best first: the 2:3 poster, then square box art.</summary>
+    private static readonly string[] PosterPurposes = ["Poster", "BoxArt"];
+
+    /// <summary>The image types a cover can be chosen from.</summary>
+    private static readonly string[] ImageExtensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"];
+
     /// <summary>The cover for a game, downloading it if needed, or null when there is none.</summary>
     /// <param name="gameId">The game's library id, which names the cached file.</param>
-    /// <param name="name">The game's name or folder name, searched for on Steam.</param>
+    /// <param name="name">The game's name or folder name, searched for in the stores.</param>
     /// <param name="steamAppId">The Steam app id when it is already known, which skips the search.</param>
+    /// <remarks>Never throws for a store or file problem: it runs inside the library scan.</remarks>
     public string? Find(string gameId, string name, string? steamAppId, CancellationToken cancellation)
     {
         var file = Path.Combine(cacheFolder, KronosReborn.Data.Persistence.DataPaths.SafeName(gameId));
         var cover = file + ".jpg";
-        var none = file + ".none";
+        var miss = file + ".miss";
 
         if (File.Exists(cover))
         {
             return cover;
         }
 
-        // Once Steam has failed this refresh, the rest wait for the next one: where Steam is blocked
-        // rather than offline, each attempt would sit out its whole timeout.
-        if (File.Exists(none) || _unreachable)
-        {
-            return null;
-        }
-
         try
         {
-            var appId = steamAppId ?? Search(name, cancellation);
-            Directory.CreateDirectory(cacheFolder);
-
-            if (appId is null || Download(appId, cancellation) is not { } image)
+            // Older versions remembered a miss forever, before the Microsoft Store was searched; those
+            // are dropped so each such game is asked about once more.
+            if (File.Exists(file + ".none"))
             {
-                File.WriteAllText(none, name);
+                File.Delete(file + ".none");
+            }
+
+            if (File.Exists(miss) && DateTime.UtcNow - File.GetLastWriteTimeUtc(miss) < MissLasts)
+            {
                 return null;
             }
 
+            // Each store is skipped only once it has failed this refresh, so one being blocked never
+            // stops the other: where a store is blocked rather than offline, each attempt would sit out
+            // its whole timeout.
+            var unanswered = false;
+            var image = Ask(ref _steamDown, ref unanswered, name, () =>
+                (steamAppId ?? Search(name, cancellation)) is { } appId ? Download(appId, cancellation) : null, cancellation);
+            image ??= Ask(ref _microsoftDown, ref unanswered, name, () => MicrosoftStorePoster(name, cancellation), cancellation);
+
+            if (image is null)
+            {
+                // Remembered only when every store really answered; a store that could not be asked
+                // says nothing about whether it has the game.
+                if (!unanswered)
+                {
+                    Directory.CreateDirectory(cacheFolder);
+                    File.WriteAllText(miss, name);
+                }
+
+                return null;
+            }
+
+            Directory.CreateDirectory(cacheFolder);
             File.WriteAllBytes(cover, image);
             return cover;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException
-                                      or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            cancellation.ThrowIfCancellationRequested();
-            _unreachable |= ex is HttpRequestException or TaskCanceledException;
             Log.Instance.Warning($"No cover for {name} this time: {ex.Message}", category: "Posters");
             return null;
         }
     }
 
-    /// <summary>Set once Steam could not be reached; a finder lives for one refresh.</summary>
-    private bool _unreachable;
+    /// <summary>Asks one store, unless it has already failed this refresh, and notes when it could not answer.</summary>
+    private static byte[]? Ask(ref bool down, ref bool unanswered, string name, Func<byte[]?> ask, CancellationToken cancellation)
+    {
+        if (down)
+        {
+            unanswered = true;
+            return null;
+        }
+
+        try
+        {
+            return ask();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            down |= ex is HttpRequestException or TaskCanceledException;
+            unanswered = true;
+            Log.Instance.Warning($"No cover for {name} from one store this time: {ex.Message}", category: "Posters");
+            return null;
+        }
+    }
+
+    /// <summary>The cover the user chose for a game, which wins over any found one, or null.</summary>
+    /// <remarks>Never throws: it runs for every game in the library scan.</remarks>
+    public static string? Chosen(string cacheFolder, string gameId)
+    {
+        try
+        {
+            return Directory.Exists(cacheFolder)
+                ? Directory.GetFiles(cacheFolder, ChosenPrefix(gameId) + "*").OrderDescending(StringComparer.Ordinal).FirstOrDefault()
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Keeps a copy of an image the user chose as a game's cover, replacing any earlier choice.</summary>
+    /// <returns>The kept copy, under a new name each time so no cached image of the old one is shown.</returns>
+    /// <exception cref="ArgumentException">The file is not an image.</exception>
+    public static string Choose(string cacheFolder, string gameId, string imagePath)
+    {
+        var extension = Path.GetExtension(imagePath).ToLowerInvariant();
+        if (!ImageExtensions.Contains(extension))
+        {
+            throw new ArgumentException($"{Path.GetFileName(imagePath)} is not an image.", nameof(imagePath));
+        }
+
+        Directory.CreateDirectory(cacheFolder);
+        var earlier = Directory.GetFiles(cacheFolder, ChosenPrefix(gameId) + "*");
+        var kept = Path.Combine(cacheFolder, $"{ChosenPrefix(gameId)}{DateTime.UtcNow.Ticks:D19}{extension}");
+        File.Copy(imagePath, kept);
+
+        // The new cover is already kept and wins by name, so an old one that cannot go yet is harmless.
+        foreach (var old in earlier)
+        {
+            try
+            {
+                File.Delete(old);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Instance.Warning($"An earlier cover could not be removed: {ex.Message}", category: "Posters");
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>Forgets the cover the user chose for a game, so the automatic one is used again.</summary>
+    public static void Unchoose(string cacheFolder, string gameId)
+    {
+        if (!Directory.Exists(cacheFolder))
+        {
+            return;
+        }
+
+        foreach (var chosen in Directory.GetFiles(cacheFolder, ChosenPrefix(gameId) + "*"))
+        {
+            File.Delete(chosen);
+        }
+    }
+
+    private static string ChosenPrefix(string gameId) =>
+        KronosReborn.Data.Persistence.DataPaths.SafeName(gameId) + ".chosen-";
+
+    /// <summary>Set once that store could not be reached; a finder lives for one refresh.</summary>
+    private bool _steamDown;
+
+    private bool _microsoftDown;
+
+    /// <summary>The largest cover kept; a store's posters are a few megabytes at most.</summary>
+    private const long MaxImageBytes = 20 * 1024 * 1024;
 
     /// <summary>The words of a name worth searching for.</summary>
     /// <remarks>
@@ -112,28 +236,91 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
         var url = $"https://store.steampowered.com/api/storesearch/?l=english&cc=US&term={Uri.EscapeDataString(string.Join(' ', words))}";
         using var json = JsonDocument.Parse(Get(url, cancellation) ?? "{}"u8.ToArray());
 
-        if (!json.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
-        {
-            return null;
-        }
-
         // The shortest matching name is the game itself rather than its demo, soundtrack or DLC; an
         // exact name, when there is one, is always the shortest.
-        return items.EnumerateArray()
-            .Select(i => (Id: i.TryGetProperty("id", out var id) ? id.ToString() : null,
-                          Name: i.TryGetProperty("name", out var n) ? n.GetString() ?? "" : ""))
+        return Array(json.RootElement, "items")
+            .Select(i => (Id: i.ValueKind == JsonValueKind.Object && i.TryGetProperty("id", out var id)
+                                  && id.ValueKind is JsonValueKind.Number or JsonValueKind.String ? id.ToString() : null,
+                          Name: Text(i, "name") ?? ""))
             .Where(i => i.Id is not null && Matches(words, i.Name))
             .OrderBy(i => i.Name.Length)
             .Select(i => i.Id)
             .FirstOrDefault();
     }
 
+    /// <summary>The game's poster from the Microsoft Store's public catalogue, or null.</summary>
+    private byte[]? MicrosoftStorePoster(string name, CancellationToken cancellation)
+    {
+        var words = SearchWords(name);
+        if (words.Length == 0)
+        {
+            return null;
+        }
+
+        var search = $"https://displaycatalog.mp.microsoft.com/v7.0/productFamilies/autosuggest?market=US&languages=en-US&query={Uri.EscapeDataString(string.Join(' ', words))}&productFamilyNames=Games,Apps";
+        using var found = JsonDocument.Parse(Get(search, cancellation) ?? "{}"u8.ToArray());
+
+        // The same strict match as Steam's, and the shortest name, which is the game rather than its add-ons.
+        var productId = Array(found.RootElement, "Results")
+            .SelectMany(r => Array(r, "Products"))
+            .Select(p => (Id: Text(p, "ProductId"), Title: Text(p, "Title") ?? ""))
+            .Where(p => p.Id is not null && Matches(words, p.Title))
+            .OrderBy(p => p.Title.Length)
+            .Select(p => p.Id)
+            .FirstOrDefault();
+
+        if (productId is null)
+        {
+            return null;
+        }
+
+        var details = $"https://displaycatalog.mp.microsoft.com/v7.0/products?bigIds={Uri.EscapeDataString(productId)}&market=US&languages=en-US";
+        using var product = JsonDocument.Parse(Get(details, cancellation) ?? "{}"u8.ToArray());
+
+        // The 2:3 poster first, then the square box art; never screenshots or banners.
+        var images = Array(product.RootElement, "Products")
+            .SelectMany(p => Array(p, "LocalizedProperties"))
+            .SelectMany(l => Array(l, "Images"))
+            .Select(i => (Purpose: Text(i, "ImagePurpose"), Uri: Text(i, "Uri")))
+            .ToArray();
+
+        var image = PosterPurposes
+            .Select(purpose => images.FirstOrDefault(i => i.Purpose == purpose).Uri)
+            .FirstOrDefault(uri => uri is not null);
+
+        // Downloaded only from Microsoft's own image server, over https.
+        return image is not null
+               && Uri.TryCreate(image.StartsWith("//", StringComparison.Ordinal) ? "https:" + image : image, UriKind.Absolute, out var uri)
+               && uri.Scheme == Uri.UriSchemeHttps
+               && (uri.Host == "store-images.s-microsoft.com" || uri.Host == "store-images.microsoft.com")
+            ? Get(uri.AbsoluteUri, cancellation, image: true)
+            : null;
+    }
+
+    private static IEnumerable<JsonElement> Array(JsonElement element, string property) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(property, out var value)
+        && value.ValueKind == JsonValueKind.Array
+            ? value.EnumerateArray()
+            : [];
+
+    private static string? Text(JsonElement element, string property) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(property, out var value)
+        && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
     private byte[]? Download(string appId, CancellationToken cancellation) =>
-        Get($"https://shared.steamstatic.com/store_item_assets/steam/apps/{appId}/library_600x900.jpg", cancellation)
-        ?? Get($"https://shared.steamstatic.com/store_item_assets/steam/apps/{appId}/header.jpg", cancellation);
+        Get($"https://shared.steamstatic.com/store_item_assets/steam/apps/{appId}/library_600x900.jpg", cancellation, image: true)
+        ?? Get($"https://shared.steamstatic.com/store_item_assets/steam/apps/{appId}/header.jpg", cancellation, image: true);
 
     /// <summary>The body of a successful response, or null for a missing one.</summary>
-    private byte[]? Get(string url, CancellationToken cancellation)
+    /// <param name="image">
+    /// Whether it must be an image: a web page in its place, such as a hotel or airport sign-in page,
+    /// or anything too large, is treated as no image rather than kept as a cover.
+    /// </param>
+    private byte[]? Get(string url, CancellationToken cancellation, bool image = false)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         timeout.CancelAfter(Timeout);
@@ -146,7 +333,14 @@ public sealed partial class StorePosterFinder(HttpClient http, string cacheFolde
         }
 
         response.EnsureSuccessStatusCode();
-        return response.Content.ReadAsByteArrayAsync(timeout.Token).GetAwaiter().GetResult();
+        if (image && (response.Content.Headers.ContentType?.MediaType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) != true
+                      || response.Content.Headers.ContentLength > MaxImageBytes))
+        {
+            return null;
+        }
+
+        var body = response.Content.ReadAsByteArrayAsync(timeout.Token).GetAwaiter().GetResult();
+        return image && body.Length > MaxImageBytes ? null : body;
     }
 
     [GeneratedRegex(@"\[[^\]]*\]|\([^)]*\)")]

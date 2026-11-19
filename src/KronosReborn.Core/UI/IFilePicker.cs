@@ -18,6 +18,11 @@ public interface IFilePicker
     /// <returns>The chosen path, or null if the user cancelled.</returns>
     Task<string?> AskForRuntimeFileAsync();
 
+    /// <summary>Shows a chooser for an image, to use as a game's cover.</summary>
+    /// <param name="title">What the chooser asks for.</param>
+    /// <returns>The chosen path, or null if the user cancelled.</returns>
+    Task<string?> AskForImageFileAsync(string title);
+
     /// <summary>
     /// Shows a save dialog for a diagnostics bundle.
     /// </summary>

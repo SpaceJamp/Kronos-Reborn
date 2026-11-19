@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using KronosReborn.Data.Libraries;
 using KronosReborn.Data.Persistence;
 using KronosReborn.Data.Runtimes;
@@ -182,6 +183,33 @@ public class MainViewModelTests
         Assert.Matches($"^Build {build}( · |$)", fixture.Vm.BuildInfoText);
     }
 
+    [Fact]
+    public async Task AnImageThatCannotBeShownIsRefusedWithAReason()
+    {
+        using var fixture = new Fixture(new UnreadableImagePicker());
+        fixture.Vm.Games = Rows("a");
+
+        await fixture.Vm.ChooseCoverAsync(fixture.Vm.Games[0]);
+
+        // Kept as a cover, it would have left a blank card that no automatic cover could replace.
+        Assert.StartsWith("Could not use that cover:", fixture.Vm.StatusText);
+        Assert.Null(KronosReborn.Data.Libraries.StorePosterFinder.Chosen(fixture.Paths.PostersDirectory, "a"));
+    }
+
+    private sealed class UnreadableImagePicker : IFilePicker
+    {
+        public Task<string?> AskForImageFileAsync(string title) =>
+            throw new ArgumentException("cover.jpg is not an image Kronos Reborn can show.");
+
+        public Task<string?> AskForRuntimeFileAsync() => throw new NotSupportedException();
+        public Task<string?> AskWhereToSaveDiagnosticsAsync(string suggestedName) => throw new NotSupportedException();
+        public Task<string?> AskForGameFolderAsync(string title) => throw new NotSupportedException();
+        public Task SetClipboardTextAsync(string text) => throw new NotSupportedException();
+        public Task OpenFolderAsync(string path) => throw new NotSupportedException();
+        public Task OpenUrlAsync(Uri url) => throw new NotSupportedException();
+        public void RunInstallerAndExit(string installerPath) => throw new NotSupportedException();
+    }
+
     private static ObservableCollection<GameRow> Rows(params string[] ids) =>
         [.. ids.Select(id => new GameRow(
             new GameRecord("Steam", id, $"Game {id}", Path.Combine("C:", id), true),
@@ -200,12 +228,12 @@ public class MainViewModelTests
         private readonly DataPaths _paths;
         private readonly PersistenceService _persistence;
 
-        public Fixture()
+        public Fixture(IFilePicker? picker = null)
         {
             _paths = new DataPaths(Path.Combine(_temp.Root, "data"));
             _persistence = new PersistenceService(_paths);
             Catalog = new RuntimeCatalog(_paths.CatalogPath);
-            Vm = new MainViewModel(Catalog, _persistence, Settings.Default, _paths);
+            Vm = new MainViewModel(Catalog, _persistence, Settings.Default, _paths, picker);
         }
 
         public MainViewModel Vm { get; }

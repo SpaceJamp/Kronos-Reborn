@@ -231,6 +231,7 @@ public class UpdatesViewModelTests
         }
 
         public Task<string?> AskForRuntimeFileAsync() => throw new NotSupportedException();
+        public Task<string?> AskForImageFileAsync(string title) => throw new NotSupportedException();
         public Task<string?> AskWhereToSaveDiagnosticsAsync(string suggestedName) => throw new NotSupportedException();
         public Task<string?> AskForGameFolderAsync(string title) => throw new NotSupportedException();
         public Task SetClipboardTextAsync(string text) => throw new NotSupportedException();

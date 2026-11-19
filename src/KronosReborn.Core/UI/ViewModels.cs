@@ -117,6 +117,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             },
             g => GameFor(g)?.ExistsOnDisk == true && _filePicker is not null);
         HideGameCommand = new RelayCommand(g => SetHidden(GameFor(g), hide: true), g => GameFor(g) is not null);
+        ChooseCoverCommand = new RelayCommand(
+            async g => await ChooseCoverAsync(GameFor(g)), g => GameFor(g) is not null && !IsBusy && _filePicker is not null);
+        ForgetCoverCommand = new RelayCommand(
+            async g => await ForgetCoverAsync(GameFor(g)),
+            g => !IsBusy && GameFor(g) is { } game && StorePosterFinder.Chosen(_paths.PostersDirectory, game.GameId) is not null);
         UnhideGameCommand = new RelayCommand(g => SetHidden(g as GameRow, hide: false), g => g is GameRow);
         CancelCommand = new RelayCommand(
             _ => _operationCancellation.Cancel(), _ => IsBusy);
@@ -444,6 +449,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ((RelayCommand)UndoLastApplyCommand).RaiseCanExecuteChanged();
         ((RelayCommand)OpenFolderCommand).RaiseCanExecuteChanged();
         ((RelayCommand)HideGameCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)ChooseCoverCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)ForgetCoverCommand).RaiseCanExecuteChanged();
         ((RelayCommand)BeginImportCommand).RaiseCanExecuteChanged();
         ((RelayCommand)ConfirmImportCommand).RaiseCanExecuteChanged();
         ((RelayCommand)DiscardImportCommand).RaiseCanExecuteChanged();
@@ -504,6 +511,69 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand UndoLastApplyCommand { get; }
     public ICommand OpenFolderCommand { get; }
     public ICommand HideGameCommand { get; }
+    public ICommand ChooseCoverCommand { get; }
+    public ICommand ForgetCoverCommand { get; }
+
+    /// <summary>Uses an image the user picks as a game's cover, then shows it.</summary>
+    internal async System.Threading.Tasks.Task ChooseCoverAsync(GameRow? game)
+    {
+        if (game is null || _filePicker is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // The window refuses an image it cannot show, which would otherwise leave a blank card.
+            if (await _filePicker.AskForImageFileAsync($"Choose a cover for {game.GameName}") is not { } image)
+            {
+                return;
+            }
+
+            StorePosterFinder.Choose(_paths.PostersDirectory, game.GameId, image);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            StatusText = $"Could not use that cover: {ex.Message}";
+            return;
+        }
+
+        await ShowCoverChangeAsync($"New cover for {game.GameName}.");
+    }
+
+    /// <summary>Forgets a chosen cover, so the game shows its automatic one again.</summary>
+    internal async System.Threading.Tasks.Task ForgetCoverAsync(GameRow? game)
+    {
+        if (game is null)
+        {
+            return;
+        }
+
+        try
+        {
+            StorePosterFinder.Unchoose(_paths.PostersDirectory, game.GameId);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusText = $"Could not remove that cover: {ex.Message}";
+            return;
+        }
+
+        await ShowCoverChangeAsync($"{game.GameName} uses its automatic cover again.");
+    }
+
+    /// <summary>A row's cover is fixed when it is built, so the games are read again to show a change.</summary>
+    private async System.Threading.Tasks.Task ShowCoverChangeAsync(string done)
+    {
+        if (IsBusy)
+        {
+            StatusText = "Cover saved. It shows after the current refresh, or press F5.";
+            return;
+        }
+
+        await RefreshAsync();
+        StatusText = done;
+    }
     public ICommand UnhideGameCommand { get; }
     public ICommand CancelCommand { get; }
     public ICommand BeginImportCommand { get; }
@@ -805,9 +875,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         // Games Steam's cache has no art for get a cover from Steam's store, fetched once and kept.
         // A finder per refresh, so one that found Steam unreachable tries again next time.
         var posters = new StorePosterFinder(_http, _paths.PostersDirectory);
-        games = [.. games.Select(g => g.PosterPath is not null ? g : g with
+        games = [.. games.Select(g => g with
         {
-            PosterPath = posters.Find(g.Id, g.Name, g.LibraryName == "Steam" ? g.Id : null, token),
+            // A cover the user chose wins over Steam's cache and the stores.
+            PosterPath = StorePosterFinder.Chosen(_paths.PostersDirectory, g.Id)
+                         ?? g.PosterPath
+                         ?? posters.Find(g.Id, g.Name, g.LibraryName == "Steam" ? g.Id : null, token),
         })];
 #else
         // On non-Windows platforms, library discovery is not available.
