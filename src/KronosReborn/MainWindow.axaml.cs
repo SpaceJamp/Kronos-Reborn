@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Rendering.Composition;
@@ -56,10 +57,15 @@ public sealed partial class MainWindow : Window, IFilePicker
                     {
                         UpdateMotion();
                     }
+                    else if (e.PropertyName == nameof(MainViewModel.RedScheme))
+                    {
+                        UpdateAccent();
+                    }
                 };
             }
 
             UpdateMotion();
+            UpdateAccent();
         };
 
         // A runtime file dropped anywhere on the window is offered for import, as Import… does.
@@ -264,9 +270,35 @@ public sealed partial class MainWindow : Window, IFilePicker
         public static extern bool SystemParametersInfo(uint action, uint param, ref int value, uint winIni);
     }
 
-    /// <summary>Dark while the magic background is on, so text stays readable on it; the system's otherwise.</summary>
-    public static FuncValueConverter<bool, ThemeVariant> MagicTheme { get; } =
-        new(on => on ? ThemeVariant.Dark : ThemeVariant.Default);
+    /// <summary>The red accent Fluent's highlights use in the black, white and red scheme, lightest last.</summary>
+    private static readonly (string Key, Color Color)[] RedAccent =
+    [
+        ("SystemAccentColorDark3", Color.Parse("#640F13")),
+        ("SystemAccentColorDark2", Color.Parse("#8A151B")),
+        ("SystemAccentColorDark1", Color.Parse("#B01C23")),
+        ("SystemAccentColor", Color.Parse("#D7262E")),
+        ("SystemAccentColorLight1", Color.Parse("#E5484F")),
+        ("SystemAccentColorLight2", Color.Parse("#EE6E73")),
+        ("SystemAccentColorLight3", Color.Parse("#F59598")),
+    ];
+
+    /// <summary>Overrides the Windows accent colour with red while the scheme is on.</summary>
+    /// <remarks>Application resources, not the window's: Fluent's accent brushes look their colours up from there.</remarks>
+    private void UpdateAccent()
+    {
+        var red = DataContext is MainViewModel { RedScheme: true };
+        foreach (var (key, color) in RedAccent)
+        {
+            if (red)
+            {
+                Application.Current!.Resources[key] = color;
+            }
+            else
+            {
+                Application.Current!.Resources.Remove(key);
+            }
+        }
+    }
 
     /// <summary>Covers already decoded, by path: the grid is rebuilt on every search keystroke.</summary>
     private static readonly Dictionary<string, Bitmap?> Posters = new(StringComparer.OrdinalIgnoreCase);

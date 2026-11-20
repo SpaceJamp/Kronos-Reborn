@@ -1515,6 +1515,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>Whether the window is black, white and red instead of following Windows.</summary>
+    public bool RedScheme
+    {
+        get => _settings.RedScheme;
+        set
+        {
+            if (_settings.RedScheme == value) return;
+            _settings = _settings.With(redScheme: value);
+            _persistence.SaveSettings(_settings);
+            OnPropertyChanged(nameof(RedScheme));
+        }
+    }
+
     public int MaxHistoryPerGame
     {
         get => _settings.MaxHistoryPerGame;

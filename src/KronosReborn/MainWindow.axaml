@@ -9,7 +9,7 @@
         Title="Spellweaver"
         Icon="/Assets/kronos.ico"
         Classes.magic="{Binding MagicBackground}"
-        RequestedThemeVariant="{Binding MagicBackground, Converter={x:Static local:MainWindow.MagicTheme}}"
+        Classes.red="{Binding RedScheme}"
         Width="1320" Height="820" MinWidth="960" MinHeight="600">
 
     <Window.Styles>
@@ -51,34 +51,63 @@
         <Style Selector="Window.magic Border.statusbar">
             <Setter Property="Background" Value="#E60C0624" />
         </Style>
+        <!-- Both the magic background and the black, white and red scheme are dark. -->
+        <Style Selector="Window.magic, Window.red">
+            <Setter Property="RequestedThemeVariant" Value="Dark" />
+        </Style>
+        <Style Selector="Window.magic.red Border.pane">
+            <Setter Property="Background" Value="#F0140A0A" />
+        </Style>
+        <Style Selector="Window.magic.red Border.statusbar">
+            <Setter Property="Background" Value="#E6060606" />
+        </Style>
+        <!-- The magic circle's colours: the icon's by default, black, white and red in that scheme. -->
+        <Style Selector="Panel#MagicLayer">
+            <Setter Property="Background">
+                <RadialGradientBrush Center="50%,45%" GradientOrigin="50%,45%" RadiusX="85%" RadiusY="85%">
+                    <GradientStop Offset="0" Color="#3A1C78" />
+                    <GradientStop Offset="1" Color="#0C0624" />
+                </RadialGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="Window.red Panel#MagicLayer">
+            <Setter Property="Background">
+                <RadialGradientBrush Center="50%,45%" GradientOrigin="50%,45%" RadiusX="85%" RadiusY="85%">
+                    <GradientStop Offset="0" Color="#3A0A0E" />
+                    <GradientStop Offset="1" Color="#050505" />
+                </RadialGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="Path.glow"><Setter Property="Stroke" Value="#9670FF" /></Style>
+        <Style Selector="Window.red Path.glow"><Setter Property="Stroke" Value="#E0202A" /></Style>
+        <Style Selector="Path.line"><Setter Property="Stroke" Value="#BEE1FF" /></Style>
+        <Style Selector="Window.red Path.line"><Setter Property="Stroke" Value="White" /></Style>
+        <Style Selector="Path.dot"><Setter Property="Fill" Value="#BEE1FF" /></Style>
+        <Style Selector="Window.red Path.dot"><Setter Property="Fill" Value="White" /></Style>
+        <Style Selector="Path.star"><Setter Property="Fill" Value="#FFECAA" /></Style>
+        <Style Selector="Window.red Path.star"><Setter Property="Fill" Value="White" /></Style>
     </Window.Styles>
 
     <Panel>
         <!-- The magic background: the icon's circle, large and faint, turning slowly behind everything. -->
         <Panel x:Name="MagicLayer" Classes="magic" IsVisible="{Binding MagicBackground}"
                IsHitTestVisible="False" ClipToBounds="True">
-            <Panel.Background>
-                <RadialGradientBrush Center="50%,45%" GradientOrigin="50%,45%" RadiusX="85%" RadiusY="85%">
-                    <GradientStop Offset="0" Color="#3A1C78" />
-                    <GradientStop Offset="1" Color="#0C0624" />
-                </RadialGradientBrush>
-            </Panel.Background>
             <Viewbox Stretch="Uniform" Margin="-60">
                 <Panel Width="1000" Height="1000">
                     <Canvas x:Name="SpinRing" Width="1000" Height="1000">
-                        <Path Stroke="#9670FF" StrokeThickness="18" Opacity="0.05" Data="M 30,500 A 470,470 0 1 1 970,500 A 470,470 0 1 1 30,500 Z M 80,500 A 420,420 0 1 1 920,500 A 420,420 0 1 1 80,500 Z M 500,75 L 500,34 M 717.5,123.3 L 733,96.4 M 876.7,282.5 L 903.6,267 M 925,500 L 966,500 M 876.7,717.5 L 903.6,733 M 717.5,876.7 L 733,903.6 M 500,925 L 500,966 M 282.5,876.7 L 267,903.6 M 123.3,717.5 L 96.4,733 M 75,500 L 34,500 M 123.3,282.5 L 96.4,267 M 282.5,123.3 L 267,96.4" />
-                        <Path Stroke="#BEE1FF" StrokeThickness="3" Opacity="0.08" Data="M 30,500 A 470,470 0 1 1 970,500 A 470,470 0 1 1 30,500 Z M 80,500 A 420,420 0 1 1 920,500 A 420,420 0 1 1 80,500 Z M 500,75 L 500,34 M 717.5,123.3 L 733,96.4 M 876.7,282.5 L 903.6,267 M 925,500 L 966,500 M 876.7,717.5 L 903.6,733 M 717.5,876.7 L 733,903.6 M 500,925 L 500,966 M 282.5,876.7 L 267,903.6 M 123.3,717.5 L 96.4,733 M 75,500 L 34,500 M 123.3,282.5 L 96.4,267 M 282.5,123.3 L 267,96.4" />
-                        <Path Fill="#BEE1FF" Opacity="0.08" Data="M 615.2,58.2 L 624.2,70.2 L 615.2,82.2 L 606.2,70.2 Z M 808.7,185.3 A 6,6 0 1 1 820.7,185.3 A 6,6 0 1 1 808.7,185.3 Z M 929.8,372.8 L 938.8,384.8 L 929.8,396.8 L 920.8,384.8 Z M 923.8,615.2 A 6,6 0 1 1 935.8,615.2 A 6,6 0 1 1 923.8,615.2 Z M 814.7,802.7 L 823.7,814.7 L 814.7,826.7 L 805.7,814.7 Z M 609.2,929.8 A 6,6 0 1 1 621.2,929.8 A 6,6 0 1 1 609.2,929.8 Z M 384.8,917.8 L 393.8,929.8 L 384.8,941.8 L 375.8,929.8 Z M 179.3,814.7 A 6,6 0 1 1 191.3,814.7 A 6,6 0 1 1 179.3,814.7 Z M 70.2,603.2 L 79.2,615.2 L 70.2,627.2 L 61.2,615.2 Z M 64.2,384.8 A 6,6 0 1 1 76.2,384.8 A 6,6 0 1 1 64.2,384.8 Z M 185.3,173.3 L 194.3,185.3 L 185.3,197.3 L 176.3,185.3 Z M 378.8,70.2 A 6,6 0 1 1 390.8,70.2 A 6,6 0 1 1 378.8,70.2 Z" />
+                        <Path Classes="glow" StrokeThickness="18" Opacity="0.05" Data="M 30,500 A 470,470 0 1 1 970,500 A 470,470 0 1 1 30,500 Z M 80,500 A 420,420 0 1 1 920,500 A 420,420 0 1 1 80,500 Z M 500,75 L 500,34 M 717.5,123.3 L 733,96.4 M 876.7,282.5 L 903.6,267 M 925,500 L 966,500 M 876.7,717.5 L 903.6,733 M 717.5,876.7 L 733,903.6 M 500,925 L 500,966 M 282.5,876.7 L 267,903.6 M 123.3,717.5 L 96.4,733 M 75,500 L 34,500 M 123.3,282.5 L 96.4,267 M 282.5,123.3 L 267,96.4" />
+                        <Path Classes="line" StrokeThickness="3" Opacity="0.08" Data="M 30,500 A 470,470 0 1 1 970,500 A 470,470 0 1 1 30,500 Z M 80,500 A 420,420 0 1 1 920,500 A 420,420 0 1 1 80,500 Z M 500,75 L 500,34 M 717.5,123.3 L 733,96.4 M 876.7,282.5 L 903.6,267 M 925,500 L 966,500 M 876.7,717.5 L 903.6,733 M 717.5,876.7 L 733,903.6 M 500,925 L 500,966 M 282.5,876.7 L 267,903.6 M 123.3,717.5 L 96.4,733 M 75,500 L 34,500 M 123.3,282.5 L 96.4,267 M 282.5,123.3 L 267,96.4" />
+                        <Path Classes="dot" Opacity="0.08" Data="M 615.2,58.2 L 624.2,70.2 L 615.2,82.2 L 606.2,70.2 Z M 808.7,185.3 A 6,6 0 1 1 820.7,185.3 A 6,6 0 1 1 808.7,185.3 Z M 929.8,372.8 L 938.8,384.8 L 929.8,396.8 L 920.8,384.8 Z M 923.8,615.2 A 6,6 0 1 1 935.8,615.2 A 6,6 0 1 1 923.8,615.2 Z M 814.7,802.7 L 823.7,814.7 L 814.7,826.7 L 805.7,814.7 Z M 609.2,929.8 A 6,6 0 1 1 621.2,929.8 A 6,6 0 1 1 609.2,929.8 Z M 384.8,917.8 L 393.8,929.8 L 384.8,941.8 L 375.8,929.8 Z M 179.3,814.7 A 6,6 0 1 1 191.3,814.7 A 6,6 0 1 1 179.3,814.7 Z M 70.2,603.2 L 79.2,615.2 L 70.2,627.2 L 61.2,615.2 Z M 64.2,384.8 A 6,6 0 1 1 76.2,384.8 A 6,6 0 1 1 64.2,384.8 Z M 185.3,173.3 L 194.3,185.3 L 185.3,197.3 L 176.3,185.3 Z M 378.8,70.2 A 6,6 0 1 1 390.8,70.2 A 6,6 0 1 1 378.8,70.2 Z" />
                     </Canvas>
                     <Canvas x:Name="SpinBackRing" Width="1000" Height="1000">
-                        <Path Stroke="#9670FF" StrokeThickness="16" Opacity="0.05" Data="M 500,110 L 837.7,695 L 162.3,695 Z M 837.7,305 L 500,890 L 162.3,305 Z M 305,500 A 195,195 0 1 1 695,500 A 195,195 0 1 1 305,500 Z" />
-                        <Path Stroke="#BEE1FF" StrokeThickness="3" Opacity="0.08" Data="M 500,110 L 837.7,695 L 162.3,695 Z M 837.7,305 L 500,890 L 162.3,305 Z M 305,500 A 195,195 0 1 1 695,500 A 195,195 0 1 1 305,500 Z" />
-                        <Path Fill="#BEE1FF" Opacity="0.08" Data="M 484,110 A 16,16 0 1 1 516,110 A 16,16 0 1 1 484,110 Z M 821.7,305 A 16,16 0 1 1 853.7,305 A 16,16 0 1 1 821.7,305 Z M 821.7,695 A 16,16 0 1 1 853.7,695 A 16,16 0 1 1 821.7,695 Z M 484,890 A 16,16 0 1 1 516,890 A 16,16 0 1 1 484,890 Z M 146.3,695 A 16,16 0 1 1 178.3,695 A 16,16 0 1 1 146.3,695 Z M 146.3,305 A 16,16 0 1 1 178.3,305 A 16,16 0 1 1 146.3,305 Z" />
+                        <Path Classes="glow" StrokeThickness="16" Opacity="0.05" Data="M 500,110 L 837.7,695 L 162.3,695 Z M 837.7,305 L 500,890 L 162.3,305 Z M 305,500 A 195,195 0 1 1 695,500 A 195,195 0 1 1 305,500 Z" />
+                        <Path Classes="line" StrokeThickness="3" Opacity="0.08" Data="M 500,110 L 837.7,695 L 162.3,695 Z M 837.7,305 L 500,890 L 162.3,305 Z M 305,500 A 195,195 0 1 1 695,500 A 195,195 0 1 1 305,500 Z" />
+                        <Path Classes="dot" Opacity="0.08" Data="M 484,110 A 16,16 0 1 1 516,110 A 16,16 0 1 1 484,110 Z M 821.7,305 A 16,16 0 1 1 853.7,305 A 16,16 0 1 1 821.7,305 Z M 821.7,695 A 16,16 0 1 1 853.7,695 A 16,16 0 1 1 821.7,695 Z M 484,890 A 16,16 0 1 1 516,890 A 16,16 0 1 1 484,890 Z M 146.3,695 A 16,16 0 1 1 178.3,695 A 16,16 0 1 1 146.3,695 Z M 146.3,305 A 16,16 0 1 1 178.3,305 A 16,16 0 1 1 146.3,305 Z" />
                     </Canvas>
                     <!-- The star pulses every five seconds: brighter (12% to 30%) and larger (90% to 110%).
                          At rest it sits where a pulse starts, dim and small, so pausing and resuming never jump. -->
                     <Canvas x:Name="StarGlow" Width="1000" Height="1000" Opacity="0.3">
-                        <Path Classes="pulse" Opacity="0.4" Fill="#FFECAA" Data="M 500,350 L 524,476 L 650,500 L 524,524 L 500,650 L 476,524 L 350,500 L 476,476 Z" />
+                        <Path Classes="pulse star" Opacity="0.4" Data="M 500,350 L 524,476 L 650,500 L 524,524 L 500,650 L 476,524 L 350,500 L 476,476 Z" />
                     </Canvas>
                 </Panel>
             </Viewbox>
@@ -432,6 +461,9 @@
                               ToolTip.Tip="A slowly turning magic circle behind the window, in the icon's colours" />
                     <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,12"
                                Text="Turn off for a plain window that follows your Windows light or dark setting." />
+                    <CheckBox Content="Black, white and red" IsChecked="{Binding RedScheme}" Margin="0,0,0,4" />
+                    <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,12"
+                               Text="A dark window with red highlights, and a black and red magic circle." />
                     <CheckBox Content="Allow untrusted runtimes" IsChecked="{Binding AllowUntrustedRuntimes}" Margin="0,0,0,4" />
                     <TextBlock Classes="muted" FontSize="12" Margin="28,0,0,12"
                                Text="Import files that are not signed by NVIDIA, AMD or Intel without asking each time. A warning is still shown before one goes into a game." />

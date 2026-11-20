@@ -174,6 +174,21 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public void TheRedSchemeIsOffByDefaultAndTurningItOnIsSaved()
+    {
+        using var fixture = new Fixture();
+        Assert.False(fixture.Vm.RedScheme);
+
+        var changed = new System.Collections.Generic.List<string?>();
+        fixture.Vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        fixture.Vm.RedScheme = true;
+
+        Assert.Contains(nameof(MainViewModel.RedScheme), changed);
+        using var reloaded = new PersistenceService(fixture.Paths);
+        Assert.True(reloaded.Load().Settings.RedScheme);
+    }
+
+    [Fact]
     public void TheStatusBarSaysWhichBuildThisIs()
     {
         using var fixture = new Fixture();
