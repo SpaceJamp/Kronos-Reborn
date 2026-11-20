@@ -402,14 +402,21 @@ public sealed class RuntimeChoice : INotifyPropertyChanged
                 .OrderBy(RuntimeKindNames.Display)
                 .Select(kind =>
                 {
-                    var detected = snapshot?.Runtimes.FirstOrDefault(r => r.Kind == kind);
+                    // A set such as Streamline has a row per file; the version is read from one the game has.
+                    var detected = snapshot?.Runtimes.Where(r => r.Kind == kind).OrderByDescending(r => r.Exists).FirstOrDefault();
 
                     // Newest first, so the version most people want is at the top. One option per
                     // version: the same number found in a game and imported is one choice, and the
                     // trusted, owned copy is the one offered. Sorted as numbers, since as text
                     // "310.2.1" sorted before "4.0.0".
+                    // A set's version is offered only if it holds every plugin the game has; planning
+                    // refuses the rest, so offering one would end in "nothing to do".
+                    var gameFiles = RuntimeDlls.IsPartialSet(kind) && snapshot is not null
+                        ? snapshot.Runtimes.Where(r => r.Kind == kind && r.Exists).Select(r => r.FileName).ToArray()
+                        : [];
                     var options = catalogEntries
                         .Where(e => e.Kind == kind)
+                        .Where(e => gameFiles.Length == 0 || HoldsAll(e, gameFiles))
                         .GroupBy(e => VersionNumber.Normalize(e.Version) ?? e.Version)
                         .Select(g => g
                             .OrderBy(e => e.Trust == RuntimeTrust.Trusted ? 0 : 1)
@@ -433,6 +440,13 @@ public sealed class RuntimeChoice : INotifyPropertyChanged
                         available);
                 }),
         ];
+    }
+
+    private static bool HoldsAll(CatalogEntry entry, string[] fileNames)
+    {
+        var held = SwapPlanner.ResolveSourceFiles(entry, entry.Kind);
+        return held is not null && fileNames.All(name =>
+            held.Any(path => Path.GetFileName(path).Equals(name, StringComparison.OrdinalIgnoreCase)));
     }
 }
 

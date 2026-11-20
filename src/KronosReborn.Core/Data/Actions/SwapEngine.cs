@@ -221,7 +221,7 @@ public static class SwapPlanner
                 continue;
             }
 
-            var currentRuntime = snapshot.Runtimes.FirstOrDefault(r => r.Kind == runtimeKind);
+            var currentRuntime = snapshot.Runtimes.Where(r => r.Kind == runtimeKind).OrderByDescending(r => r.Exists).FirstOrDefault();
             var currentVersion = currentRuntime?.Version;
             var hasCurrentVersion = currentRuntime?.Exists == true;
 
@@ -233,6 +233,14 @@ public static class SwapPlanner
             if (targets.Count == 0)
             {
                 continue; // Can't install if we don't know where to put it
+            }
+
+            // Every plugin of a set the game loads has to come from the chosen version: one left
+            // behind would run beside the others at a different version, which Streamline refuses.
+            if (targets.Any(target => !sourceFiles.Any(source =>
+                    Path.GetFileName(source).Equals(Path.GetFileName(target), SwapPlan.PathComparison))))
+            {
+                continue;
             }
 
             // The snapshot reads the first copy only. Another copy, often the one the game loads, can
@@ -381,13 +389,18 @@ public static class SwapPlanner
         foreach (var fileName in RuntimeDlls.ByKind[kind])
         {
             var candidate = Path.Combine(directory, fileName);
-            if (!File.Exists(candidate))
+            if (File.Exists(candidate))
+            {
+                paths.Add(candidate);
+            }
+            else if (!RuntimeDlls.IsPartialSet(kind))
             {
                 return null;
             }
-            paths.Add(candidate);
         }
 
+        // A set's version holds the plugins it was released with; which of them a game needs is
+        // checked against the game's own files when planning.
         return paths;
     }
 
@@ -408,7 +421,9 @@ public static class SwapPlanner
     {
         var located = RuntimeDllLocator.FindAll(gamePath);
 
+        // A set replaces only the plugins the game already has; a file it lacks is never added.
         return RuntimeDlls.ByKind[kind]
+            .Where(fileName => !RuntimeDlls.IsPartialSet(kind) || located.ContainsKey(fileName))
             .SelectMany(fileName => RuntimeDllLocator.TargetPathsFor(gamePath, fileName, located))
             .ToArray();
     }

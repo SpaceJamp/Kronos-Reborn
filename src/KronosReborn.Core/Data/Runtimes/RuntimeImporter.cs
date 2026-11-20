@@ -157,7 +157,10 @@ public sealed class RuntimeImporter
         var folder = Path.GetDirectoryName(filePath) ?? string.Empty;
         var wanted = RuntimeDlls.ByKind[kind.Value];
         var present = wanted.Where(name => File.Exists(Path.Combine(folder, name))).ToArray();
-        var missing = wanted.Where(name => !present.Contains(name, StringComparer.OrdinalIgnoreCase)).ToArray();
+        // A set such as Streamline is whatever plugins sit together; the rest are not required.
+        var missing = RuntimeDlls.IsPartialSet(kind.Value)
+            ? []
+            : wanted.Where(name => !present.Contains(name, StringComparer.OrdinalIgnoreCase)).ToArray();
 
         var files = present.Select(name => Path.Combine(folder, name)).ToArray();
 

@@ -59,7 +59,8 @@ public class RuntimeDetectionTests
     public void RuntimeDllsAllFileNamesIsFlatList()
     {
         var all = RuntimeDlls.AllFileNames;
-        Assert.Equal(11, all.Count);
+        Assert.Equal(22, all.Count);
+        Assert.Contains("sl.interposer.dll", all);
         Assert.Contains("nvngx_dlss.dll", all);
         Assert.Contains("nvngx_dlssg.dll", all);
         Assert.Contains("nvngx_dlssd.dll", all);

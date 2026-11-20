@@ -364,9 +364,12 @@ public static class DiagnosticsRunner
                 continue;
             }
 
-            var missing = RuntimeDlls.ByKind[entry.Kind]
-                .Where(file => !File.Exists(Path.Combine(folder, file)))
-                .ToArray();
+            // A set such as Streamline is complete with whichever plugins it has.
+            var missing = RuntimeDlls.IsPartialSet(entry.Kind)
+                ? []
+                : RuntimeDlls.ByKind[entry.Kind]
+                    .Where(file => !File.Exists(Path.Combine(folder, file)))
+                    .ToArray();
 
             if (missing.Length > 0)
             {

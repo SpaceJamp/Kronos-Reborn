@@ -161,6 +161,46 @@ public class VendorDownloaderTests
         Assert.Null(ex);
     }
 
+    [Fact]
+    public async Task NewestStreamlineFallsBackPastAReleaseWithoutAnSdkZip()
+    {
+        using var fixture = new Fixture();
+        fixture.Responses["https://api.github.com/repos/NVIDIA-RTX/Streamline/tags?per_page=100"] =
+            Json("""[{"name":"v2.14.16"},{"name":"v2.14.1"}]""");
+
+        var outcome = await fixture.Downloader.DownloadNewestAsync(RuntimeKind.Streamline, cancellation: TestContext.Current.CancellationToken);
+
+        // Neither has a zip here, so both are tried, newest first, and nothing is added.
+        Assert.False(outcome.Succeeded);
+        Assert.Contains(fixture.Requested, u => u.EndsWith("/v2.14.16/streamline-sdk-v2.14.16.zip", StringComparison.Ordinal));
+        Assert.Contains(fixture.Requested, u => u.EndsWith("/v2.14.1/streamline-sdk-v2.14.1.zip", StringComparison.Ordinal));
+        Assert.Empty(fixture.Catalog.Entries);
+    }
+
+    [Fact]
+    public async Task AServerThatSendsTheWholeSdkIsAFailedDownloadNotACrash()
+    {
+        using var fixture = new Fixture();
+        // The fake ignores partial requests and answers with the whole file.
+        fixture.Responses["https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.16/streamline-sdk-v2.14.16.zip"] = Json("whole");
+
+        var outcome = await fixture.Downloader.DownloadAsync(RuntimeKind.Streamline, "v2.14.16", cancellation: TestContext.Current.CancellationToken);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("270 MB", outcome.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ANewerStreamlineIsReportedWhenItsSdkZipIsPublished()
+    {
+        using var fixture = new Fixture();
+        fixture.Responses["https://api.github.com/repos/NVIDIA-RTX/Streamline/tags?per_page=100"] = Json("""[{"name":"v2.14.16"}]""");
+        fixture.Responses["https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.16/streamline-sdk-v2.14.16.zip"] = Json("zip");
+        Hold(fixture, RuntimeKind.Streamline, "2.14.1");
+
+        Assert.Equal([RuntimeKind.Streamline], await fixture.Downloader.NewerAvailableAsync([RuntimeKind.Streamline], TestContext.Current.CancellationToken));
+    }
+
     private static string Hold(Fixture fixture, RuntimeKind kind, string version)
     {
         var folder = Path.Combine(fixture.Paths.Root, "held-" + version);

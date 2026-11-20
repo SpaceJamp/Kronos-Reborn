@@ -24,6 +24,7 @@ public static class RuntimeKindNames
         RuntimeKind.Xell => "XeLL",
         RuntimeKind.FsrUpscaler => "FSR Upscaler",
         RuntimeKind.FsrFg => "FSR Frame Gen",
+        RuntimeKind.Streamline => "Streamline",
         _ => kind.ToString(),
     };
 }

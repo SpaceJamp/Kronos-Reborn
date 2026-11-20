@@ -59,6 +59,8 @@ public sealed class VendorDownloader
             [RuntimeKind.XessFg] = new("intel/xess", "bin"),
             [RuntimeKind.XessDx11] = new("intel/xess", "bin"),
             [RuntimeKind.Xell] = new("intel/xess", "bin"),
+            // Taken from the SDK zip each release publishes; see StreamlineSdk.
+            [RuntimeKind.Streamline] = new("NVIDIA-RTX/Streamline", "bin/x64"),
         };
 
     /// <summary>How many releases "newest" looks back through for one that includes the file.</summary>
@@ -180,7 +182,9 @@ public sealed class VendorDownloader
                 // to an older release already held, and the notice would never go away. A HEAD to the
                 // raw file does not count against GitHub's API limit.
                 var source = Sources[kind];
-                var raw = new Uri($"https://raw.githubusercontent.com/{source.Repository}/{Uri.EscapeDataString(tags[0])}/{source.Folder}/{RuntimeDlls.ByKind[kind][0]}");
+                var raw = kind == RuntimeKind.Streamline
+                    ? StreamlineSdk.ZipFor(tags[0])
+                    : new Uri($"https://raw.githubusercontent.com/{source.Repository}/{Uri.EscapeDataString(tags[0])}/{source.Folder}/{RuntimeDlls.ByKind[kind][0]}");
                 using var head = await _http.SendAsync(new HttpRequestMessage(HttpMethod.Head, raw), limit.Token).ConfigureAwait(false);
                 if (head.IsSuccessStatusCode)
                 {
@@ -200,7 +204,7 @@ public sealed class VendorDownloader
 
     /// <summary>The runtimes whose release tags are the DLL's own version number.</summary>
     private static readonly HashSet<RuntimeKind> TaggedByVersion =
-        [RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR, RuntimeKind.Xess];
+        [RuntimeKind.Dlss, RuntimeKind.DlssG, RuntimeKind.DlssR, RuntimeKind.Xess, RuntimeKind.Streamline];
 
     /// <summary>Downloads the newest release that includes this kind's DLL, unless it is already held.</summary>
     public async Task<DownloadOutcome> DownloadNewestAsync(
@@ -257,8 +261,18 @@ public sealed class VendorDownloader
         {
             Directory.CreateDirectory(folder);
 
-            using (var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellation).ConfigureAwait(false))
+            if (kind == RuntimeKind.Streamline)
             {
+                // A whole set of plugins, read out of the release's SDK zip without downloading all of it.
+                url = StreamlineSdk.ZipFor(release);
+                if (!await StreamlineSdk.ExtractProductionPluginsAsync(_http, url, folder, progress, cancellation).ConfigureAwait(false))
+                {
+                    return new DownloadOutcome(false, $"Release {release} has no Streamline SDK.", NotInRelease: true);
+                }
+            }
+            else
+            {
+                using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellation).ConfigureAwait(false);
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {
                     return new DownloadOutcome(false, $"Release {release} does not include {fileName}.", NotInRelease: true);
@@ -288,6 +302,11 @@ public sealed class VendorDownloader
         catch (HttpRequestException ex)
         {
             return new DownloadOutcome(false, $"Could not download {name} {release}: {ex.Message}");
+        }
+        catch (InvalidDataException ex)
+        {
+            // A Streamline SDK that could not be read in parts; checked before IOException, which it is not.
+            return new DownloadOutcome(false, $"Could not get {name} {release}: {ex.Message}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

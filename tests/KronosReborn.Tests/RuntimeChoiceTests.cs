@@ -235,7 +235,7 @@ public class RuntimeChoiceTests
 
         Assert.Equal(
             ["DLSS", "DLSS Frame Gen", "DLSS Ray Recon", "FSR", "FSR (Vulkan)", "FSR Frame Gen", "FSR Upscaler",
-             "XeLL", "XeSS", "XeSS (DX11)", "XeSS Frame Gen"],
+             "Streamline", "XeLL", "XeSS", "XeSS (DX11)", "XeSS Frame Gen"],
             labels);
         Assert.DoesNotContain(labels, l => l.Contains(".dll", StringComparison.Ordinal));
         Assert.DoesNotContain(labels, l => l.Contains("nvngx", StringComparison.OrdinalIgnoreCase));
@@ -413,4 +413,52 @@ public class RuntimeChoiceTests
 
         return versions;
     }
+
+    [Fact]
+    public void StreamlineIsOfferedFromAnyOfItsFilesTheGameHas()
+    {
+        using var held = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(held.Root, "sl.interposer.dll"), "x");
+        File.WriteAllText(Path.Combine(held.Root, "sl.common.dll"), "x");
+        // The game has no interposer row that exists here, only sl.common.dll: still Streamline 2.9.
+        var snapshot = new GameRuntimeSnapshot("g", "Game", @"C:\g",
+        [
+            new DetectedRuntime(RuntimeKind.Streamline, "sl.interposer.dll", "sl.interposer.dll", @"C:\g\sl.interposer.dll", null, null, false),
+            new DetectedRuntime(RuntimeKind.Streamline, "sl.common.dll", "sl.common.dll", @"C:\g\sl.common.dll", "2.9.0", null, true),
+        ]);
+
+        var streamline = RuntimeChoice.Build(snapshot, [Streamline("2.14.16", held.Root)]).Single(c => c.Kind == RuntimeKind.Streamline);
+
+        Assert.True(streamline.IsAvailable);
+        Assert.Equal("2.9.0", streamline.CurrentVersion);
+    }
+
+    [Fact]
+    public void AStreamlineVersionMissingAPluginTheGameHasIsNotOffered()
+    {
+        // Planning refuses such a version, so offering it (or picking it as Newest) would end in
+        // "nothing to do" while the game stays on its old version.
+        using var complete = new TemporaryDirectory();
+        using var lacking = new TemporaryDirectory();
+        foreach (var name in new[] { "sl.interposer.dll", "sl.pcl.dll" })
+        {
+            File.WriteAllText(Path.Combine(complete.Root, name), "x");
+        }
+
+        File.WriteAllText(Path.Combine(lacking.Root, "sl.interposer.dll"), "x");
+        var snapshot = new GameRuntimeSnapshot("g", "Game", @"C:\g",
+        [
+            new DetectedRuntime(RuntimeKind.Streamline, "sl.interposer.dll", "sl.interposer.dll", @"C:\g\sl.interposer.dll", "2.9.0", null, true),
+            new DetectedRuntime(RuntimeKind.Streamline, "sl.pcl.dll", "sl.pcl.dll", @"C:\g\sl.pcl.dll", "2.9.0", null, true),
+        ]);
+
+        var streamline = RuntimeChoice.Build(snapshot, [Streamline("2.14.16", lacking.Root), Streamline("2.12.0", complete.Root)])
+            .Single(c => c.Kind == RuntimeKind.Streamline);
+
+        Assert.Equal(["2.12.0"], streamline.Options.Select(o => o.Version));
+    }
+
+    private static CatalogEntry Streamline(string version, string folder) =>
+        new(CatalogId.For(RuntimeKind.Streamline, version, RuntimeSource.Imported), RuntimeKind.Streamline, version, null,
+            RuntimeSource.Imported, "test", Path.Combine(folder, "sl.interposer.dll"), RuntimeTrust.Trusted, DateTimeOffset.UnixEpoch);
 }

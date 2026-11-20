@@ -48,12 +48,14 @@ internal static class Authenticode
     private const uint WTD_UI_NONE = 2;
     private const uint WTD_REVOKE_NONE = 0x00000000;
     private const uint WTD_REVOKE_WHOLECHAIN = 0x00000001;
-    private const uint WTD_SAFER_FLAG = 0x00000100;
     private const uint WTD_STATEACTION_VERIFY = 0x00000001;
     private const uint WTD_STATEACTION_CLOSE = 0x00000002;
 
     /// <summary>TRUST_E_NOSIGNATURE: the file carries no signature at all.</summary>
     private const uint TrustENoSignature = 0x800B0100;
+
+    /// <summary>TRUST_E_SUBJECT_FORM_UNKNOWN: the file is not in a format that can be signed.</summary>
+    private const uint TrustESubjectFormUnknown = 0x800B0003;
 
     /// <summary>CERT_E_REVOCATION_FAILURE: whether the certificate was revoked could not be checked.</summary>
     private const uint CertERevocationFailure = 0x800B010E;
@@ -109,7 +111,10 @@ internal static class Authenticode
                     dwUnionChoice = 1, // WTD_CHOICE_FILE
                     pFile = fileInfoPointer,
                     dwStateAction = WTD_STATEACTION_VERIFY,
-                    dwProvFlags = WTD_SAFER_FLAG,
+                    // Not WTD_SAFER_FLAG: with it Windows also judges a file's extra signatures, and
+                    // Streamline plugins carry one from NVIDIA's private root beside the real one.
+                    // The primary signature, whose signer is the publisher checked, is still verified.
+                    dwProvFlags = 0,
                 },
                 dataPointer,
                 fDeleteOld: false);
@@ -150,7 +155,8 @@ internal static class Authenticode
             return new AuthenticodeResult(IsSigned: true, IsValid: true, status, "signed and trusted");
         }
 
-        if (unchecked((uint)status) == TrustENoSignature)
+        // A file Windows cannot read as a signable format carries no signature either.
+        if (unchecked((uint)status) is TrustENoSignature or TrustESubjectFormUnknown)
         {
             // "Not signed" and "signed but not trusted" are different problems. Reporting them the
             // same way tells the user something false about the file they have.

@@ -39,6 +39,11 @@ public enum RuntimeKind
 
     /// <summary>FSR frame generation from the FidelityFX SDK 2.</summary>
     FsrFg,
+
+    /// <summary>
+    /// NVIDIA Streamline, the plugin layer many games load DLSS, Reflex and frame generation through.
+    /// </summary>
+    Streamline,
 }
 
 /// <summary>
@@ -65,7 +70,22 @@ public static class RuntimeDlls
             { RuntimeKind.Xell,  ["libxell.dll"] },
             { RuntimeKind.FsrUpscaler, ["amd_fidelityfx_upscaler_dx12.dll"] },
             { RuntimeKind.FsrFg, ["amd_fidelityfx_framegeneration_dx12.dll"] },
+            // The interposer first: it is in every game that uses Streamline, so it names the version.
+            {
+                RuntimeKind.Streamline,
+                [
+                    "sl.interposer.dll", "sl.common.dll", "sl.dlss.dll", "sl.dlss_g.dll", "sl.dlss_d.dll",
+                    "sl.reflex.dll", "sl.pcl.dll", "sl.nis.dll", "sl.deepdvc.dll", "sl.directsr.dll", "sl.nvperf.dll",
+                ]
+            },
         }.AsReadOnly();
+
+    /// <summary>
+    /// Whether a kind is a set a game carries only part of, such as Streamline: each game has the
+    /// plugins it uses, and only those are replaced, all at one version. Every other kind is all of
+    /// its files.
+    /// </summary>
+    public static bool IsPartialSet(RuntimeKind kind) => kind == RuntimeKind.Streamline;
 
     /// <summary>Reverse lookup: file name to kind.</summary>
     public static IReadOnlyDictionary<string, RuntimeKind> ByFileName { get; } =

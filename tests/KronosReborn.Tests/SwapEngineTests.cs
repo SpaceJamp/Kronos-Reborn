@@ -288,6 +288,7 @@ public class SwapEngineTests
     [InlineData(RuntimeKind.Xell)]
     [InlineData(RuntimeKind.FsrUpscaler)]
     [InlineData(RuntimeKind.FsrFg)]
+    [InlineData(RuntimeKind.Streamline)]
     public void SwapPlannerTargetsEveryDllOfTheKind(RuntimeKind kind)
     {
         using var fixture = new SwapFixture(kind);
@@ -321,6 +322,57 @@ public class SwapEngineTests
         Assert.Equal(existing, Assert.Single(plan.TargetFiles));
     }
 
+    // ------------------------------------------------------------ Streamline
+
+    [Fact]
+    public void StreamlineReplacesOnlyTheFilesTheGameHasAndAddsNone()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Streamline);
+        fixture.InstallRuntime("2.14.16");
+        // Like PRAGMATA: no NIS, DeepDVC, DirectSR or NvPerf plugin.
+        foreach (var absent in new[] { "sl.nis.dll", "sl.deepdvc.dll", "sl.directsr.dll", "sl.nvperf.dll" })
+        {
+            fixture.RemoveFromGame(absent);
+        }
+
+        var result = Assert.Single(fixture.Swap().Results);
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.Equal(SwapFixture.NewContent("sl.interposer.dll"), File.ReadAllText(Path.Combine(fixture.GameFolder, "sl.interposer.dll")));
+        Assert.Equal(SwapFixture.NewContent("sl.reflex.dll"), File.ReadAllText(Path.Combine(fixture.GameFolder, "sl.reflex.dll")));
+        Assert.False(File.Exists(Path.Combine(fixture.GameFolder, "sl.nis.dll")));
+        Assert.False(File.Exists(Path.Combine(fixture.GameFolder, "sl.directsr.dll")));
+    }
+
+    [Fact]
+    public void AStreamlineVersionLackingAPluginTheGameUsesIsNotOffered()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Streamline);
+        fixture.InstallRuntime("2.14.16");
+        // An older SDK without a plugin the game loads would leave that plugin on the old version.
+        File.Delete(Path.Combine(fixture.CollectionFolder, "sl.pcl.dll"));
+
+        Assert.Empty(fixture.Plan());
+    }
+
+    [Fact]
+    public void UndoPutsBackEveryStreamlineFileTheSwapReplaced()
+    {
+        using var fixture = new SwapFixture(RuntimeKind.Streamline);
+        fixture.InstallRuntime("2.14.16");
+        fixture.RemoveFromGame("sl.nis.dll");
+        Assert.True(Assert.Single(fixture.Swap().Results).Succeeded);
+
+        Assert.True(fixture.Undo().Succeeded);
+
+        foreach (var name in RuntimeDlls.ByKind[RuntimeKind.Streamline].Where(n => n != "sl.nis.dll"))
+        {
+            Assert.Equal(SwapFixture.OldContent(name), File.ReadAllText(Path.Combine(fixture.GameFolder, name)));
+        }
+
+        Assert.False(File.Exists(Path.Combine(fixture.GameFolder, "sl.nis.dll")));
+    }
+
     // ------------------------------------------------------------ SwapExecutor
 
     [Theory]
@@ -335,6 +387,7 @@ public class SwapEngineTests
     [InlineData(RuntimeKind.Xell)]
     [InlineData(RuntimeKind.FsrUpscaler)]
     [InlineData(RuntimeKind.FsrFg)]
+    [InlineData(RuntimeKind.Streamline)]
     public void SwapInstallsEveryDllOfTheKind(RuntimeKind kind)
     {
         using var fixture = new SwapFixture(kind);
@@ -522,6 +575,7 @@ public class SwapEngineTests
     [InlineData(RuntimeKind.Xell)]
     [InlineData(RuntimeKind.FsrUpscaler)]
     [InlineData(RuntimeKind.FsrFg)]
+    [InlineData(RuntimeKind.Streamline)]
     public void UndoRestoresEveryDllOfTheKind(RuntimeKind kind)
     {
         using var fixture = new SwapFixture(kind);
@@ -862,6 +916,13 @@ internal sealed class SwapFixture : IDisposable
             Exists: true);
 
         Entry = Catalog.AddFromDiscovery(detected, GameId, "Test Game", "Steam");
+    }
+
+    /// <summary>Takes one of the kind's files out of the game, as a game that does not use that plugin.</summary>
+    public void RemoveFromGame(string fileName)
+    {
+        File.Delete(Path.Combine(GameFolder, fileName));
+        GameVersions[fileName] = false;
     }
 
     /// <summary>Adds another version to the collection and makes it the one <see cref="Plan"/> installs.</summary>

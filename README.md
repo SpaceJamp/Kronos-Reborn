@@ -1,7 +1,7 @@
 <p align="center"><img src="docs/icon.png" width="128" alt="Spellweaver icon: a glowing magic circle"></p>
 <h2 align="center">Spellweaver</h2>
 <p align="center"><i>Formerly Kronos Reborn</i></p>
-<p align="center">Swap the DLSS, FSR and XeSS version any game runs, in a couple of clicks, and undo it just as easily.</p>
+<p align="center">Swap the DLSS, FSR, XeSS and Streamline version any game runs, in a couple of clicks, and undo it just as easily.</p>
 <p align="center"><a href="https://github.com/SpaceJamp/Spellweaver/releases/latest"><b>Download</b></a> · Windows 10 and 11, 64-bit</p>
 
 ---
@@ -73,9 +73,16 @@ Removing either from **Settings** never touches the game's files.
 | FSR 3.1 (DirectX 12, Vulkan) | `amd_fidelityfx_dx12.dll`, `amd_fidelityfx_vk.dll` |
 | FSR upscaler and frame generation (FidelityFX SDK 2) | `amd_fidelityfx_upscaler_dx12.dll`, `amd_fidelityfx_framegeneration_dx12.dll` |
 | XeSS, XeSS Frame Generation, XeSS DX11, XeLL | `libxess.dll`, `libxess_fg.dll`, `libxess_dx11.dll`, `libxell.dll` |
+| NVIDIA Streamline | `sl.interposer.dll`, `sl.common.dll`, `sl.dlss*.dll`, `sl.reflex.dll`, `sl.pcl.dll` and the other `sl.*.dll` plugins |
 
 DLLs are found up to ten folders deep, which covers Unreal Engine games. If a game has several copies
 of a DLL, all of them are swapped.
+
+**Streamline** is the plugin layer many newer games load DLSS, Reflex and frame generation through. It
+is swapped as one set: every `sl.*.dll` the game has is replaced at the chosen version, and a plugin the
+game doesn't use is never added. A version that lacks a plugin the game loads isn't offered. Downloads
+take only the production plugins out of NVIDIA's Streamline SDK release (about 2.5 MB, not the whole
+270 MB SDK), and each must be signed by NVIDIA.
 
 ## Questions
 
